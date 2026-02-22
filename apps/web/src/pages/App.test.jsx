@@ -5,6 +5,8 @@ import App from "./App";
 import { CATEGORY_ENTRY, CATEGORY_EXIT } from "../components/DatabaseUtils";
 import { transactionsService } from "../services/transactions.service";
 import { analyticsService } from "../services/analytics.service";
+import { forecastService } from "../services/forecast.service";
+import { profileService } from "../services/profile.service";
 
 vi.mock("../hooks/useTheme", () => ({
   useTheme: () => ({ theme: "light", toggleTheme: vi.fn() }),
@@ -39,6 +41,20 @@ vi.mock("../components/TrendChart", () => ({
 vi.mock("../services/analytics.service", () => ({
   analyticsService: {
     getMonthlyTrend: vi.fn(),
+  },
+}));
+
+vi.mock("../services/forecast.service", () => ({
+  forecastService: {
+    getCurrent: vi.fn(),
+    recompute: vi.fn(),
+  },
+}));
+
+vi.mock("../services/profile.service", () => ({
+  profileService: {
+    getMe: vi.fn(),
+    updateProfile: vi.fn(),
   },
 }));
 
@@ -242,6 +258,25 @@ describe("App", () => {
     transactionsService.update.mockResolvedValue({});
     transactionsService.restore.mockResolvedValue({});
     analyticsService.getMonthlyTrend.mockResolvedValue(buildTrendResponse());
+    forecastService.getCurrent.mockResolvedValue(null);
+    forecastService.recompute.mockResolvedValue({
+      month: "2026-02",
+      projectedBalance: 1200,
+      spendingToDate: 300,
+      dailyAvgSpending: 10,
+      daysRemaining: 6,
+      flipDetected: false,
+      flipDirection: null,
+      engineVersion: "v1",
+      incomeExpected: null,
+    });
+    profileService.getMe.mockResolvedValue({
+      id: 1,
+      name: "Test User",
+      email: "test@test.dev",
+      profile: null,
+    });
+    profileService.updateProfile.mockResolvedValue({});
     transactionsService.exportCsv.mockResolvedValue({
       blob: new Blob(["id,type\n1,Entrada"], { type: "text/csv;charset=utf-8" }),
       fileName: "transacoes.csv",
