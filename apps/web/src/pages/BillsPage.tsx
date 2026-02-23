@@ -75,6 +75,7 @@ const BillsPage = ({
   const [statusFilter, setStatusFilter] = useState<BillStatusFilter>(undefined);
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<Bill[]>([]);
+  const [paginationTotal, setPaginationTotal] = useState(0);
   const [summary, setSummary] = useState<BillsSummary | null>(null);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
@@ -112,8 +113,10 @@ const BillsPage = ({
           offset: currentOffset,
         });
         setItems(result.items);
+        setPaginationTotal(result.pagination.total);
       } catch (error) {
         setItems([]);
+        setPaginationTotal(0);
         setPageError(getApiErrorMessage(error, "Nao foi possivel carregar as pendencias."));
       } finally {
         setIsLoadingList(false);
@@ -157,7 +160,7 @@ const BillsPage = ({
   // ─── Pagination ─────────────────────────────────────────────────────────────
 
   const hasPreviousPage = offset > 0;
-  const hasNextPage = items.length === DEFAULT_LIMIT;
+  const hasNextPage = offset + DEFAULT_LIMIT < paginationTotal;
   const rangeStart = items.length > 0 ? offset + 1 : 0;
   const rangeEnd = offset + items.length;
 
@@ -451,7 +454,7 @@ const BillsPage = ({
         {!isLoadingList && items.length > 0 ? (
           <div className="mt-4 flex items-center justify-between gap-3">
             <span className="text-xs text-cf-text-secondary">
-              Mostrando {rangeStart}–{rangeEnd}
+              Mostrando {rangeStart}–{rangeEnd} de {paginationTotal}
             </span>
             <div className="flex gap-2">
               <button
