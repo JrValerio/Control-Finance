@@ -461,6 +461,9 @@ const App = ({
   const mobileActionsButtonRef = useRef<HTMLButtonElement | null>(null);
   const mobileActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const firstMobileActionsItemRef = useRef<HTMLButtonElement | null>(null);
+  const contaButtonRef = useRef<HTMLButtonElement | null>(null);
+  const contaMenuRef = useRef<HTMLDivElement | null>(null);
+  const firstContaItemRef = useRef<HTMLButtonElement | null>(null);
   const [selectedSummaryMonth, setSelectedSummaryMonth] = useState(() => getInitialSummaryMonth());
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [hasLoadedCategories, setHasLoadedCategories] = useState(false);
@@ -477,6 +480,7 @@ const App = ({
   const [isImportModalOpen, setImportModalOpen] = useState(false);
   const [isImportHistoryModalOpen, setImportHistoryModalOpen] = useState(false);
   const [isMobileActionsMenuOpen, setMobileActionsMenuOpen] = useState(false);
+  const [isContaMenuOpen, setContaMenuOpen] = useState(false);
   const [useMobileActionsMenu, setUseMobileActionsMenu] = useState(() =>
     isCompactHeaderActionsMode(),
   );
@@ -683,6 +687,42 @@ const App = ({
 
     focusFirstMenuItem();
   }, [isMobileActionsMenuOpen]);
+
+  // ─── Conta dropdown (desktop) ────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!isContaMenuOpen || typeof window === "undefined") return undefined;
+
+    const handleMouseDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (contaMenuRef.current?.contains(target) || contaButtonRef.current?.contains(target)) return;
+      setContaMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setContaMenuOpen(false);
+        contaButtonRef.current?.focus();
+      }
+    };
+
+    window.addEventListener("mousedown", handleMouseDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", handleMouseDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isContaMenuOpen]);
+
+  useEffect(() => {
+    if (!isContaMenuOpen) return;
+    const focus = () => firstContaItemRef.current?.focus();
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(focus);
+      return;
+    }
+    focus();
+  }, [isContaMenuOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -1542,6 +1582,29 @@ const App = ({
                     ref={mobileActionsMenuRef}
                     className="absolute right-0 top-full z-20 mt-1 flex w-44 flex-col gap-1 rounded border border-cf-border bg-cf-surface p-1 shadow-lg"
                   >
+                    {onOpenBills ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleOpenBills}
+                        className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                      >
+                        Pendencias
+                      </button>
+                    ) : null}
+                    {onOpenCategoriesSettings ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleOpenCategoriesSettings}
+                        className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                      >
+                        Categorias
+                      </button>
+                    ) : null}
+                    {(onOpenBills || onOpenCategoriesSettings) ? (
+                      <div className="my-1 h-px bg-cf-border" role="separator" />
+                    ) : null}
                     <button
                       type="button"
                       role="menuitem"
@@ -1568,24 +1631,17 @@ const App = ({
                     >
                       Historico de imports
                     </button>
-                    {onOpenBills ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={handleOpenBills}
-                        className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                      >
-                        Pendencias
-                      </button>
+                    {(onOpenProfileSettings || onOpenBillingSettings || onOpenSecuritySettings) ? (
+                      <div className="my-1 h-px bg-cf-border" role="separator" />
                     ) : null}
-                    {onOpenCategoriesSettings ? (
+                    {onOpenProfileSettings ? (
                       <button
                         type="button"
                         role="menuitem"
-                        onClick={handleOpenCategoriesSettings}
+                        onClick={handleOpenProfileSettings}
                         className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                       >
-                        Categorias
+                        Perfil
                       </button>
                     ) : null}
                     {onOpenBillingSettings ? (
@@ -1596,16 +1652,6 @@ const App = ({
                         className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                       >
                         Assinatura
-                      </button>
-                    ) : null}
-                    {onOpenProfileSettings ? (
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={handleOpenProfileSettings}
-                        className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                      >
-                        Perfil
                       </button>
                     ) : null}
                     {onOpenSecuritySettings ? (
@@ -1652,14 +1698,6 @@ const App = ({
                 >
                   {theme === "dark" ? "☀ Claro" : "☾ Escuro"}
                 </button>
-                {onLogout ? (
-                  <button
-                    onClick={onLogout}
-                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                  >
-                    Sair
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   onClick={handleExportCsv}
@@ -1700,32 +1738,75 @@ const App = ({
                     Categorias
                   </button>
                 ) : null}
-                {onOpenBillingSettings ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenBillingSettings}
-                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                  >
-                    Assinatura
-                  </button>
-                ) : null}
-                {onOpenProfileSettings ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenProfileSettings}
-                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                  >
-                    Perfil
-                  </button>
-                ) : null}
-                {onOpenSecuritySettings ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenSecuritySettings}
-                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                  >
-                    Seguranca
-                  </button>
+                {(onOpenProfileSettings || onOpenBillingSettings || onOpenSecuritySettings || onLogout) ? (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      ref={contaButtonRef}
+                      aria-haspopup="menu"
+                      aria-expanded={isContaMenuOpen ? "true" : "false"}
+                      onClick={() => setContaMenuOpen((v) => !v)}
+                      className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                    >
+                      Conta
+                    </button>
+                    {isContaMenuOpen ? (
+                      <div
+                        role="menu"
+                        aria-label="Conta"
+                        ref={contaMenuRef}
+                        className="absolute right-0 top-full z-20 mt-1 flex w-40 flex-col gap-1 rounded border border-cf-border bg-cf-surface p-1 shadow-lg"
+                      >
+                        {onOpenProfileSettings ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            ref={firstContaItemRef}
+                            onClick={() => { setContaMenuOpen(false); onOpenProfileSettings(); }}
+                            className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                          >
+                            Perfil
+                          </button>
+                        ) : null}
+                        {onOpenBillingSettings ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            ref={onOpenProfileSettings ? undefined : firstContaItemRef}
+                            onClick={() => { setContaMenuOpen(false); onOpenBillingSettings(); }}
+                            className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                          >
+                            Assinatura
+                          </button>
+                        ) : null}
+                        {onOpenSecuritySettings ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            ref={!onOpenProfileSettings && !onOpenBillingSettings ? firstContaItemRef : undefined}
+                            onClick={() => { setContaMenuOpen(false); onOpenSecuritySettings(); }}
+                            className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                          >
+                            Seguranca
+                          </button>
+                        ) : null}
+                        {onLogout ? (
+                          <>
+                            <div className="my-1 h-px bg-cf-border" role="separator" />
+                            <button
+                              type="button"
+                              role="menuitem"
+                              ref={!onOpenProfileSettings && !onOpenBillingSettings && !onOpenSecuritySettings ? firstContaItemRef : undefined}
+                              onClick={() => { setContaMenuOpen(false); onLogout(); }}
+                              className="rounded px-2 py-2 text-left text-xs font-semibold text-red-700 hover:bg-red-50"
+                            >
+                              Sair
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
             )}

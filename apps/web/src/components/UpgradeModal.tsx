@@ -8,10 +8,10 @@ interface UpgradeModalProps {
 }
 
 const FEATURES = [
-  { label: "Budget tracking", free: "✓", pro: "✓" },
+  { label: "Controle de metas", free: "✓", pro: "✓" },
   { label: "Analytics (histórico)", free: "6 meses", pro: "24 meses" },
-  { label: "CSV Export", free: "—", pro: "✓" },
-  { label: "CSV Import", free: "—", pro: "✓" },
+  { label: "Exportar CSV", free: "—", pro: "✓" },
+  { label: "Importar CSV", free: "—", pro: "✓" },
 ];
 
 const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
