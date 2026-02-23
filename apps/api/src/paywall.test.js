@@ -22,7 +22,11 @@ import {
 } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 import { authMiddleware } from "./middlewares/auth.middleware.js";
-import { requireActiveTrialOrPaidPlan } from "./middlewares/entitlement.middleware.js";
+import {
+  requireActiveTrialOrPaidPlan,
+  requireFeature,
+  attachEntitlements,
+} from "./middlewares/entitlement.middleware.js";
 
 // Mount a minimal app just for testing this middleware
 const testApp = express();
@@ -32,6 +36,18 @@ testApp.get(
   authMiddleware,
   requireActiveTrialOrPaidPlan,
   (_req, res) => res.json({ ok: true }),
+);
+testApp.get(
+  "/feature-gated",
+  authMiddleware,
+  requireFeature("csv_import"),
+  (_req, res) => res.json({ ok: true }),
+);
+testApp.get(
+  "/entitlements",
+  authMiddleware,
+  attachEntitlements,
+  (req, res) => res.json(req.entitlements),
 );
 // eslint-disable-next-line no-unused-vars
 testApp.use((err, _req, res, next) => {
@@ -141,5 +157,101 @@ describe("requireActiveTrialOrPaidPlan", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(402);
+  });
+});
+
+describe("paywall bypass (PAYWALL_BYPASS_ENABLED)", () => {
+  const BYPASS_EMAIL = "bypass-dev@test.dev";
+
+  beforeAll(async () => { await setupTestDb(); });
+  afterAll(async () => { await clearDbClientForTests(); });
+  beforeEach(resetState);
+
+  it("bypass ignora paywall em requireActiveTrialOrPaidPlan (trial expirado)", async () => {
+    const token = await registerAndLogin(BYPASS_EMAIL);
+    const userId = await getUserIdByEmail(BYPASS_EMAIL);
+    await dbQuery(`UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [userId]);
+
+    const originalEnabled = process.env.PAYWALL_BYPASS_ENABLED;
+    const originalEmails  = process.env.PAYWALL_BYPASS_EMAILS;
+    process.env.PAYWALL_BYPASS_ENABLED = "true";
+    process.env.PAYWALL_BYPASS_EMAILS  = BYPASS_EMAIL;
+
+    try {
+      const res = await request(testApp)
+        .get("/trial-gated")
+        .set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+    } finally {
+      process.env.PAYWALL_BYPASS_ENABLED = originalEnabled;
+      process.env.PAYWALL_BYPASS_EMAILS  = originalEmails;
+    }
+  });
+
+  it("bypass ignora paywall em requireFeature (csv_import bloqueado no plano free)", async () => {
+    const token = await registerAndLogin(BYPASS_EMAIL);
+    const userId = await getUserIdByEmail(BYPASS_EMAIL);
+    await dbQuery(`UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [userId]);
+
+    const originalEnabled = process.env.PAYWALL_BYPASS_ENABLED;
+    const originalEmails  = process.env.PAYWALL_BYPASS_EMAILS;
+    process.env.PAYWALL_BYPASS_ENABLED = "true";
+    process.env.PAYWALL_BYPASS_EMAILS  = BYPASS_EMAIL;
+
+    try {
+      const res = await request(testApp)
+        .get("/feature-gated")
+        .set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+    } finally {
+      process.env.PAYWALL_BYPASS_ENABLED = originalEnabled;
+      process.env.PAYWALL_BYPASS_EMAILS  = originalEmails;
+    }
+  });
+
+  it("bypass em attachEntitlements retorna features PRO (analytics_months_max=24)", async () => {
+    const token = await registerAndLogin(BYPASS_EMAIL);
+
+    const originalEnabled = process.env.PAYWALL_BYPASS_ENABLED;
+    const originalEmails  = process.env.PAYWALL_BYPASS_EMAILS;
+    process.env.PAYWALL_BYPASS_ENABLED = "true";
+    process.env.PAYWALL_BYPASS_EMAILS  = BYPASS_EMAIL;
+
+    try {
+      const res = await request(testApp)
+        .get("/entitlements")
+        .set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.csv_import).toBe(true);
+      expect(res.body.csv_export).toBe(true);
+      expect(res.body.analytics_months_max).toBe(24);
+    } finally {
+      process.env.PAYWALL_BYPASS_ENABLED = originalEnabled;
+      process.env.PAYWALL_BYPASS_EMAILS  = originalEmails;
+    }
+  });
+
+  it("bypass NAO se aplica quando NODE_ENV=production", async () => {
+    const token = await registerAndLogin(BYPASS_EMAIL);
+    const userId = await getUserIdByEmail(BYPASS_EMAIL);
+    await dbQuery(`UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [userId]);
+
+    const originalEnabled = process.env.PAYWALL_BYPASS_ENABLED;
+    const originalEmails  = process.env.PAYWALL_BYPASS_EMAILS;
+    const originalEnv     = process.env.NODE_ENV;
+    process.env.PAYWALL_BYPASS_ENABLED = "true";
+    process.env.PAYWALL_BYPASS_EMAILS  = BYPASS_EMAIL;
+    process.env.NODE_ENV = "production";
+
+    try {
+      const res = await request(testApp)
+        .get("/trial-gated")
+        .set("Authorization", `Bearer ${token}`);
+      expect(res.status).toBe(402);
+    } finally {
+      process.env.PAYWALL_BYPASS_ENABLED = originalEnabled;
+      process.env.PAYWALL_BYPASS_EMAILS  = originalEmails;
+      process.env.NODE_ENV = originalEnv;
+    }
   });
 });

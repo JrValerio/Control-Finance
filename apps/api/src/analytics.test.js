@@ -13,6 +13,7 @@ import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 import {
   expectErrorResponseWithRequestId,
   getExpectedTrendMonths,
+  getUserIdByEmail,
   registerAndLogin,
   setupTestDb,
 } from "./test-helpers.js";
@@ -55,8 +56,11 @@ describe("analytics", () => {
     },
   );
 
-  it("GET /analytics/trend retorna 3 meses por padrao para usuario free (limite do plano)", async () => {
-    const token = await registerAndLogin("analytics-trend-default@controlfinance.dev");
+  it("GET /analytics/trend retorna 6 meses por padrao para usuario em trial ativo (limite do plano)", async () => {
+    const email = "analytics-trend-default@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    // Active trial: TRIAL_FEATURES gives analytics_months_max=6, so default cap = min(6,6) = 6
+    await getUserIdByEmail(email); // ensure user exists
 
     const response = await request(app)
       .get("/analytics/trend")
@@ -64,8 +68,8 @@ describe("analytics", () => {
 
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body)).toBe(true);
-    expect(response.body).toHaveLength(3);
-    expect(response.body.map((item) => item.month)).toEqual(getExpectedTrendMonths(3));
+    expect(response.body).toHaveLength(6);
+    expect(response.body.map((item) => item.month)).toEqual(getExpectedTrendMonths(6));
     response.body.forEach((item) => {
       expect(typeof item.month).toBe("string");
       expect(item.month).toMatch(/^\d{4}-\d{2}$/);

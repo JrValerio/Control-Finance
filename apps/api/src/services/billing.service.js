@@ -6,6 +6,15 @@ const createError = (status, message) => {
   return error;
 };
 
+// Features available during an active trial.
+// csv_import/export remain PRO-only; analytics cap is set to 6 months.
+const TRIAL_FEATURES = {
+  csv_import: false,
+  csv_export: false,
+  analytics_months_max: 6,
+  budget_tracking: true,
+};
+
 const normalizeUserId = (value) => {
   const parsed = Number(value);
 
@@ -37,6 +46,18 @@ export const getActivePlanFeaturesForUser = async (userId) => {
 
   if (subscriptionResult.rows.length > 0) {
     return subscriptionResult.rows[0].features;
+  }
+
+  // Check for an active trial
+  const trialResult = await dbQuery(
+    `SELECT trial_ends_at FROM users WHERE id = $1 LIMIT 1`,
+    [normalizedUserId],
+  );
+  const trialEndsAt =
+    trialResult.rows.length > 0 ? trialResult.rows[0].trial_ends_at : null;
+
+  if (trialEndsAt && new Date(trialEndsAt) > new Date()) {
+    return TRIAL_FEATURES;
   }
 
   const freePlanResult = await dbQuery(
