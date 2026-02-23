@@ -237,6 +237,7 @@ if (-not $DbConnectionString) {
     $dbParsed  = $false
   }
 
+  Write-Host "API       : $BaseUrl" -ForegroundColor Yellow
   Write-Host "DB target : $dbDisplay" -ForegroundColor Yellow
   Write-Host "psql      : $PsqlPath" -ForegroundColor Yellow
 
