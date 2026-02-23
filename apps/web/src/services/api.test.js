@@ -8,6 +8,7 @@ import {
   resolveApiUrl,
   setStoredToken,
   setUnauthorizedHandler,
+  setPaymentRequiredHandler,
 } from "./api";
 
 var requestInterceptor;
@@ -43,6 +44,7 @@ describe("api service", () => {
   beforeEach(() => {
     window.localStorage.clear();
     setUnauthorizedHandler(undefined);
+    setPaymentRequiredHandler(undefined);
   });
 
   it("consulta o healthcheck da API", async () => {
@@ -150,5 +152,27 @@ describe("api service", () => {
 
     expect(getStoredToken()).toBe("");
     expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("chama paymentRequiredHandler com a mensagem quando status e 402", async () => {
+    const onPaymentRequired = vi.fn();
+    setPaymentRequiredHandler(onPaymentRequired);
+
+    await expect(
+      responseErrorInterceptor({
+        response: { status: 402, data: { message: "Periodo de teste encerrado." } },
+      }),
+    ).rejects.toBeTruthy();
+
+    expect(onPaymentRequired).toHaveBeenCalledWith("Periodo de teste encerrado.");
+  });
+
+  it("nao falha se paymentRequiredHandler nao estiver definido (status 402)", async () => {
+    await expect(
+      responseErrorInterceptor({
+        response: { status: 402, data: {} },
+      }),
+    ).rejects.toBeTruthy();
+    // nenhum erro de "is not a function"
   });
 });
