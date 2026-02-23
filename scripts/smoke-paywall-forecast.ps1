@@ -223,6 +223,18 @@ if (-not $DbConnectionString) {
     goto_summary
   }
 
+  # 3-sanity. GET /me -> trialExpired: true (verify SQL actually took effect)
+  $r3s = Invoke-Api "GET" "/me" -Headers $auth
+  Assert-Code $r3s.StatusCode 200 "GET /me (post-expiry) -> 200"
+  if ($r3s.Body.trialExpired -eq $true) {
+    Pass "GET /me (post-expiry): trialExpired = true"
+  } else {
+    Fail "GET /me (post-expiry): trialExpired" "Expected true -- SQL may not have applied. Got: $($r3s.Body.trialExpired)"
+    Skip "POST /forecasts/recompute (expired trial) -> 402" "trialExpired still false after SQL"
+    Skip "GET /forecasts/current (expired trial) -> 402" ""
+    goto_summary
+  }
+
   # 3a. POST /forecasts/recompute -> 402
   $r3a = Invoke-Api "POST" "/forecasts/recompute" -Headers $auth
   Assert-Code $r3a.StatusCode 402 "POST /forecasts/recompute (expired trial) -> 402"
