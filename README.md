@@ -21,6 +21,7 @@ Aplicacao web para controle financeiro pessoal com entradas/saidas, filtros por 
 - [API (apps/api)](#api-appsapi)
 - [Auth (Architecture Doc)](docs/architecture/v1.3.0-auth.md)
 - [Runbook](docs/runbooks/release-production-checklist.md)
+- [Release Automation](#release-automation)
 - [Roadmap](#roadmap)
 
 ## Links
@@ -301,6 +302,12 @@ npm run dev
 - `npm run build` builda web e valida build da api
 - `npm run preview` sobe preview do web
 
+## Release Automation
+
+- `scripts/release.ps1` — release completo: bump, PR, merge, tag, GitHub Release (veja [Release Automation](#release-automation))
+- `scripts/smoke-categories-v2.ps1` — smoke test de categorias pos-deploy
+- `scripts/warmup-observability.ps1` — aquecimento da API para metricas de observabilidade
+
 ## Scripts (api)
 
 - `npm -w apps/api run db:migrate` aplica migrations do Postgres
@@ -346,6 +353,36 @@ Includes:
 - Post-deploy validation
 - Monitoring window (15-30 min)
 - Rollback awareness
+
+### Release Automation
+
+Releases are automated via `scripts/release.ps1` (PowerShell 5.1+, no `gh` CLI required).
+
+**Prerequisites:** CHANGELOG.md must already contain a `## [X.Y.Z]` section before running.
+
+```powershell
+# Preview — no changes made
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version "1.27.0" -DryRun
+
+# Full release
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version "1.27.0"
+```
+
+What the script does automatically:
+
+1. Validates CHANGELOG has the target section (fails fast if missing)
+2. Bumps `package.json` in root, `apps/api`, and `apps/web`
+3. Creates `chore/release-vX.Y.Z` branch, commits, pushes
+4. Opens a PR via GitHub API and squash-merges it
+5. Tags the squash merge SHA and pushes the tag
+6. Creates the GitHub Release with the CHANGELOG section as body
+7. Deletes the release branch (remote + local) and syncs local `main`
+
+**Environment notes (Windows):**
+
+- `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` but is not in the Git Bash PATH. The script uses `git credential fill` + `Invoke-RestMethod` — no `gh` required.
+- JSON payloads must be written to a temp file before sending via `curl` on Git Bash (inline `-d '{...}'` causes encoding issues). The release.ps1 script handles this transparently via `Invoke-RestMethod`.
+- `python3` is not in PATH; use `node -e` for any ad-hoc JSON processing.
 
 ### Automated Smoke Validation
 
@@ -414,7 +451,17 @@ not as an afterthought.
 - [x] Exportacao CSV com filtros e totais
 - [x] Importacao CSV com dry-run + commit
 - [x] Historico de importacoes (API + Web)
+- [x] Dark mode com sistema de tokens semanticos (PR-N6/N7/N8)
+- [x] Google OAuth — login/registro com conta Google
+- [x] Configuracoes de conta — perfil, senha, Google link, plano
+- [x] Trial inteligente (14 dias, extensivel via payday)
+- [x] Paywall — middleware 402 para trial expirado sem plano pago
+- [x] Motor de forecast — balanco projetado + deteccao de flip
+- [x] Notificacoes por email best-effort (flip negativo + lembrete de payday)
+- [x] Forecast card com onboarding progressivo e estado congelado pos-trial
 - [ ] Importacao JSON
+- [ ] Dark mode para graficos Recharts (cores de eixo/grid dinamicas)
+- [ ] Smoke test automatizado pos-deploy para paywall + forecast
 
 ## Licenca
 
