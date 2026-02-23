@@ -306,6 +306,7 @@ npm run dev
 
 - `scripts/release.ps1` — release completo: bump, PR, merge, tag, GitHub Release (veja [Release Automation](#release-automation))
 - `scripts/smoke-categories-v2.ps1` — smoke test de categorias pos-deploy
+- `scripts/smoke-paywall-forecast.ps1` — smoke test de paywall (401/200/402) e forecast engine
 - `scripts/warmup-observability.ps1` — aquecimento da API para metricas de observabilidade
 
 ## Scripts (api)
@@ -383,6 +384,7 @@ What the script does automatically:
 - `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` but is not in the Git Bash PATH. The script uses `git credential fill` + `Invoke-RestMethod` — no `gh` required.
 - JSON payloads must be written to a temp file before sending via `curl` on Git Bash (inline `-d '{...}'` causes encoding issues). The release.ps1 script handles this transparently via `Invoke-RestMethod`.
 - `python3` is not in PATH; use `node -e` for any ad-hoc JSON processing.
+- All scripts target **PowerShell 5.1** (Windows default). Do not use PS7-only operators (`?.`, `??`, `||=`) — they will cause parse errors on the CI/dev machine.
 
 ### Automated Smoke Validation
 
