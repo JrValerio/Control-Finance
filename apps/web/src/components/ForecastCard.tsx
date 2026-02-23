@@ -11,6 +11,26 @@ interface ForecastCardProps {
 
 type CardState = "loading" | "awaiting-profile" | "active" | "frozen";
 
+const FORECAST_CACHE_KEY = "cf.forecast.last";
+
+const loadCachedForecast = (): Forecast | null => {
+  try {
+    const raw = window.localStorage.getItem(FORECAST_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as Forecast;
+  } catch {
+    return null;
+  }
+};
+
+const persistForecast = (forecast: Forecast) => {
+  try {
+    window.localStorage.setItem(FORECAST_CACHE_KEY, JSON.stringify(forecast));
+  } catch {
+    // Ignore storage errors (private mode / quotas)
+  }
+};
+
 const FlipBanner = ({ direction }: { direction: "pos_to_neg" | "neg_to_pos" }) => {
   if (direction === "pos_to_neg") {
     return (
@@ -39,10 +59,7 @@ const ForecastCard = ({
   const loadForecast = useCallback(async () => {
     try {
       setError("");
-      const [me, current] = await Promise.all([
-        profileService.getMe(),
-        forecastService.getCurrent(),
-      ]);
+      const me = await profileService.getMe();
 
       const hasProfile =
         me.profile !== null &&
@@ -54,16 +71,27 @@ const ForecastCard = ({
         return;
       }
 
-      if (current !== null) {
-        setForecast(current);
-        setCardState(trialExpired ? "frozen" : "active");
+      const trialEnded = Boolean(me.trialExpired || trialExpired);
+      if (trialEnded) {
+        setForecast(loadCachedForecast());
+        setCardState("frozen");
         return;
       }
 
-      // No forecast yet — trigger initial compute
+      const current = await forecastService.getCurrent();
+
+      if (current !== null) {
+        setForecast(current);
+        persistForecast(current);
+        setCardState("active");
+        return;
+      }
+
+      // No forecast yet - trigger initial compute
       const computed = await forecastService.recompute();
       setForecast(computed);
-      setCardState(trialExpired ? "frozen" : "active");
+      persistForecast(computed);
+      setCardState("active");
     } catch {
       setError("Nao foi possivel carregar a projecao.");
       setCardState("active");
@@ -71,7 +99,7 @@ const ForecastCard = ({
   }, [trialExpired]);
 
   useEffect(() => {
-    loadForecast();
+    void loadForecast();
   }, [loadForecast]);
 
   const handleRecompute = useCallback(async () => {
@@ -81,6 +109,7 @@ const ForecastCard = ({
     try {
       const updated = await forecastService.recompute();
       setForecast(updated);
+      persistForecast(updated);
     } catch {
       setError("Erro ao atualizar projecao.");
     } finally {
@@ -120,7 +149,7 @@ const ForecastCard = ({
     );
   }
 
-  if (cardState === "frozen" && forecast !== null) {
+  if (cardState === "frozen") {
     return (
       <div className="rounded border border-cf-border bg-cf-surface p-4 opacity-80">
         <div className="flex items-start justify-between gap-3">
@@ -131,12 +160,20 @@ const ForecastCard = ({
                 Congelado
               </span>
             </div>
-            <p className="mt-2 text-2xl font-bold text-cf-text-primary">
-              {formatCurrency(forecast.projectedBalance)}
-            </p>
-            <p className="mt-1 text-xs text-cf-text-secondary">
-              Projecao do mes {forecast.month} &mdash; congelada no fim do periodo de teste.
-            </p>
+            {forecast ? (
+              <>
+                <p className="mt-2 text-2xl font-bold text-cf-text-primary">
+                  {formatCurrency(forecast.projectedBalance)}
+                </p>
+                <p className="mt-1 text-xs text-cf-text-secondary">
+                  Projecao do mes {forecast.month} - congelada no fim do periodo de teste.
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-cf-text-secondary">
+                Sua ultima projecao esta congelada no plano free. Assine para continuar atualizando.
+              </p>
+            )}
             {txCountSinceFreeze > 0 ? (
               <p className="mt-1 text-xs text-cf-text-secondary">
                 {txCountSinceFreeze}{" "}
