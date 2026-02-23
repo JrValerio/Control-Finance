@@ -241,6 +241,16 @@ if (-not $DbConnectionString) {
   Write-Host "DB target : $dbDisplay" -ForegroundColor Yellow
   Write-Host "psql      : $PsqlPath" -ForegroundColor Yellow
 
+  # Cross-environment sanity check
+  $apiIsNonProd = $BaseUrl   -match '(?i)(staging|localhost|127\.0\.0\.1|\bdev\b|-dev|-test)'
+  $dbIsNonProd  = $dbDisplay -match '(?i)(staging|localhost|127\.0\.0\.1|\bdev\b|\btest\b|\blocal\b)'
+  if ($apiIsNonProd -ne $dbIsNonProd) {
+    $apiEnv = if ($apiIsNonProd) { "non-prod" } else { "prod" }
+    $dbEnv  = if ($dbIsNonProd)  { "non-prod" } else { "prod" }
+    Write-Host ("[WARN] Environment mismatch: API looks {0} but DB target looks {1}." -f $apiEnv, $dbEnv) -ForegroundColor Magenta
+    Write-Host "       Verify both targets before the SQL runs." -ForegroundColor Magenta
+  }
+
   if (-not $dbParsed) {
     Write-Host "[WARN] DB target unparsed -- double-check DbConnectionString before proceeding." -ForegroundColor Magenta
     if (-not $Force) {
