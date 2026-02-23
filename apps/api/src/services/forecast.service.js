@@ -1,4 +1,5 @@
 import { dbQuery } from "../db/index.js";
+import { getPendingBillsDueByDate } from "./bills.service.js";
 
 const ENGINE_VERSION = "v1";
 
@@ -166,6 +167,10 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
     [uid, mStart, ENGINE_VERSION, pb, salaryMonthly, spendingToDate.toFixed(2), da, daysRemaining, flipDetected, flipDirection],
   );
 
+  const monthEnd = monthEndStr(now);
+  const { billsTotal, billsCount } = await getPendingBillsDueByDate(uid, monthEnd);
+  const adjustedProjectedBalance = Number((pb - billsTotal).toFixed(2));
+
   return {
     month: mStart.slice(0, 7),
     engineVersion: ENGINE_VERSION,
@@ -177,6 +182,9 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
     flipDetected,
     flipDirection,
     generatedAt: new Date().toISOString(),
+    billsPendingTotal: Number(billsTotal.toFixed(2)),
+    billsPendingCount: billsCount,
+    adjustedProjectedBalance,
   };
 };
 
@@ -193,5 +201,12 @@ export const getLatestForecast = async (userId, { now = new Date() } = {}) => {
   );
 
   if (result.rows.length === 0) return null;
-  return rowToForecast(result.rows[0]);
+
+  const forecast = rowToForecast(result.rows[0]);
+  const monthEnd = monthEndStr(now);
+  const { billsTotal, billsCount } = await getPendingBillsDueByDate(uid, monthEnd);
+  forecast.billsPendingTotal = Number(billsTotal.toFixed(2));
+  forecast.billsPendingCount = billsCount;
+  forecast.adjustedProjectedBalance = Number((forecast.projectedBalance - billsTotal).toFixed(2));
+  return forecast;
 };
