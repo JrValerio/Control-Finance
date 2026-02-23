@@ -12,6 +12,10 @@ vi.mock("../hooks/useTheme", () => ({
   useTheme: () => ({ theme: "light", toggleTheme: vi.fn() }),
 }));
 
+vi.mock("../components/UpgradeModal", () => ({
+  default: () => null,
+}));
+
 vi.mock("../components/TransactionChart", () => ({
   default: () => <div data-testid="transaction-chart" />,
 }));

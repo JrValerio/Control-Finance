@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import Modal from "../components/Modal";
 import ImportCsvModal from "../components/ImportCsvModal";
 import ImportHistoryModal from "../components/ImportHistoryModal";
+import UpgradeModal from "../components/UpgradeModal";
 import ForecastCard from "../components/ForecastCard";
 import TransactionList from "../components/TransactionList";
 import {
@@ -28,6 +29,7 @@ import {
   normalizeTransactionDate,
 } from "../components/DatabaseUtils";
 import { analyticsService, type TrendPoint } from "../services/analytics.service";
+import { setPaymentRequiredHandler } from "../services/api";
 import {
   useFilters,
   type FilterState,
@@ -476,6 +478,8 @@ const App = ({
     isCompactHeaderActionsMode(),
   );
   const [isBudgetModalOpen, setBudgetModalOpen] = useState(false);
+  const [isUpgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeModalReason, setUpgradeModalReason] = useState("");
   const [editingTransaction, setEditingTransaction] = useState<TransactionWithCategoryName | null>(null);
   const [editingBudget, setEditingBudget] = useState<MonthlyBudget | null>(null);
   const [budgetForm, setBudgetForm] = useState<BudgetFormState>(DEFAULT_BUDGET_FORM);
@@ -591,6 +595,16 @@ const App = ({
       if (budgetSuccessTimeoutRef.current) {
         clearTimeout(budgetSuccessTimeoutRef.current);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    setPaymentRequiredHandler((message: string) => {
+      setUpgradeModalReason(message);
+      setUpgradeModalOpen(true);
+    });
+    return () => {
+      setPaymentRequiredHandler(undefined);
     };
   }, []);
 
@@ -2670,6 +2684,12 @@ const App = ({
         categories={categories}
         hasLoadedCategories={hasLoadedCategories}
         initialTransaction={editingTransaction}
+      />
+
+      <UpgradeModal
+        isOpen={isUpgradeModalOpen}
+        reason={upgradeModalReason}
+        onClose={() => setUpgradeModalOpen(false)}
       />
 
       <ImportCsvModal

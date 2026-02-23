@@ -12,6 +12,7 @@ type EnvConfig = {
 };
 
 type UnauthorizedHandler = (() => void) | undefined;
+type PaymentRequiredHandler = ((message: string) => void) | undefined;
 
 type ApiConfigurationError = Error & {
   code: "API_URL_NOT_CONFIGURED";
@@ -38,6 +39,7 @@ export const AUTH_TOKEN_STORAGE_KEY = "control_finance.auth_token";
 const REQUEST_ID_HEADER_NAME = "x-request-id";
 const isApiConfigured = Boolean(API_URL);
 let unauthorizedHandler: UnauthorizedHandler = undefined;
+let paymentRequiredHandler: PaymentRequiredHandler = undefined;
 
 const createApiConfigurationError = (): ApiConfigurationError => {
   const error = new Error(API_CONFIGURATION_ERROR_MESSAGE) as ApiConfigurationError;
@@ -163,6 +165,10 @@ export const setUnauthorizedHandler = (handler: UnauthorizedHandler) => {
   unauthorizedHandler = typeof handler === "function" ? handler : undefined;
 };
 
+export const setPaymentRequiredHandler = (handler: PaymentRequiredHandler) => {
+  paymentRequiredHandler = typeof handler === "function" ? handler : undefined;
+};
+
 export const api = axios.create({
   baseURL: API_URL || undefined,
   timeout: 8000,
@@ -205,6 +211,17 @@ api.interceptors.response.use(
 
       if (typeof unauthorizedHandler === "function") {
         unauthorizedHandler();
+      }
+    }
+
+    if (error?.response?.status === 402) {
+      const message: string =
+        typeof error?.response?.data?.message === "string"
+          ? error.response.data.message
+          : "";
+
+      if (typeof paymentRequiredHandler === "function") {
+        paymentRequiredHandler(message);
       }
     }
 
