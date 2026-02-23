@@ -4,6 +4,7 @@ import ImportCsvModal from "../components/ImportCsvModal";
 import ImportHistoryModal from "../components/ImportHistoryModal";
 import UpgradeModal from "../components/UpgradeModal";
 import ForecastCard from "../components/ForecastCard";
+import BillsSummaryWidget from "../components/BillsSummaryWidget";
 import TransactionList from "../components/TransactionList";
 import {
   transactionsService,
@@ -2015,6 +2016,8 @@ const App = ({
         </section>
 
         <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+
+        <BillsSummaryWidget onOpenBills={handleOpenBills} />
 
         <div className="space-y-6">
           <section ref={summarySectionRef}>
