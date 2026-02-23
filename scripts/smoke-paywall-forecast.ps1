@@ -98,14 +98,14 @@ function Invoke-Api {
   foreach ($k in $Headers.Keys) { $allHeaders[$k] = $Headers[$k] }
 
   try {
-    $args = @{
+    $reqArgs = @{
       Method          = $Method
       Uri             = $uri
       Headers         = $allHeaders
       UseBasicParsing = $true
     }
-    if ($Body) { $args["Body"] = $Body }
-    $resp = Invoke-WebRequest @args
+    if ($Body) { $reqArgs["Body"] = $Body }
+    $resp = Invoke-WebRequest @reqArgs
     return @{ StatusCode = [int]$resp.StatusCode; Body = $resp.Content | ConvertFrom-Json }
   } catch {
     $statusCode = 0
@@ -223,7 +223,8 @@ if (-not $DbConnectionString) {
     $dbName = if ($DbConnectionString -match 'Database=([^;]+)') { $Matches[1] } else { "?" }
     $dbDisplay = "${dbHost}/${dbName}"
   } else {
-    $dbDisplay = "(unparsed -- verify you are targeting the correct database)"
+    $dbDisplay = "(unparsed)"
+    Write-Host "[WARN] DB target unparsed -- double-check DbConnectionString before proceeding." -ForegroundColor Magenta
   }
   Write-Host "DB target : $dbDisplay" -ForegroundColor Yellow
 
