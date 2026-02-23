@@ -74,15 +74,16 @@ export const registerUser = async ({ name = "", email, password }) => {
 
   const normalizedName = typeof name === "string" ? name.trim() : "";
   const passwordHash = await bcrypt.hash(normalizedPassword, 10);
+  const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
   try {
     const result = await dbQuery(
       `
-        INSERT INTO users (name, email, password_hash)
-        VALUES ($1, $2, $3)
+        INSERT INTO users (name, email, password_hash, trial_ends_at)
+        VALUES ($1, $2, $3, $4)
         RETURNING id, name, email
       `,
-      [normalizedName, normalizedEmail, passwordHash],
+      [normalizedName, normalizedEmail, passwordHash, trialEndsAt.toISOString()],
     );
 
     return createAuthResult(result.rows[0]);
@@ -279,9 +280,10 @@ export const loginOrRegisterWithGoogle = async ({ idToken } = {}) => {
     user = userResult.rows[0];
   } else {
     // 3. New user — create without password
+    const googleTrialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
     const newUserResult = await dbQuery(
-      `INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id, name, email`,
-      [name, email],
+      `INSERT INTO users (name, email, trial_ends_at) VALUES ($1, $2, $3) RETURNING id, name, email`,
+      [name, email, googleTrialEndsAt.toISOString()],
     );
     user = newUserResult.rows[0];
   }

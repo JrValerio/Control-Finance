@@ -13,6 +13,8 @@ export interface MeResponse {
   email: string;
   hasPassword?: boolean;
   linkedProviders?: string[];
+  trialEndsAt: string | null;
+  trialExpired: boolean;
   profile: UserProfile | null;
 }
 

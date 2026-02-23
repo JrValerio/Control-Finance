@@ -54,6 +54,45 @@ describe("GET /me", () => {
     expect(response.body.profile).toBeNull();
   });
 
+  it("retorna trialEndsAt como ISO string e trialExpired false para usuario recem registrado", async () => {
+    const token = await registerAndLogin("me-trial-active@test.dev");
+
+    const response = await request(app)
+      .get("/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(typeof response.body.trialEndsAt).toBe("string");
+    expect(response.body.trialExpired).toBe(false);
+
+    // trialEndsAt should be roughly 14 days from now (± 60s tolerance)
+    const trialEnd = new Date(response.body.trialEndsAt);
+    const expectedEnd = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
+    expect(Math.abs(trialEnd.getTime() - expectedEnd.getTime())).toBeLessThan(60_000);
+  });
+
+  it("retorna trialExpired true para usuario com trial vencido", async () => {
+    const token = await registerAndLogin("me-trial-expired@test.dev");
+    const userResult = await dbQuery(
+      `SELECT id FROM users WHERE email = $1`,
+      ["me-trial-expired@test.dev"],
+    );
+    const userId = userResult.rows[0].id;
+
+    // Force trial to have expired in the past
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.trialExpired).toBe(true);
+  });
+
   it("retorna hasPassword false para usuario Google-only (sem password_hash)", async () => {
     const email = "me-google-only@test.dev";
     const userResult = await dbQuery(
@@ -271,5 +310,59 @@ describe("PATCH /me/profile", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.avatarUrl).toBeNull();
+  });
+
+  it("atualiza trial_ends_at ao configurar payday (MAX entre created_at+14d e proximo payday)", async () => {
+    const token = await registerAndLogin("patch-payday-trial@test.dev");
+    const userResult = await dbQuery(
+      `SELECT id, created_at FROM users WHERE email = $1`,
+      ["patch-payday-trial@test.dev"],
+    );
+    const { id: userId, created_at: createdAt } = userResult.rows[0];
+
+    // Use payday = 31 (always upcoming — day 31 never passes for standard months)
+    await request(app)
+      .patch("/me/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ payday: 31 });
+
+    const updatedUser = await dbQuery(
+      `SELECT trial_ends_at FROM users WHERE id = $1`,
+      [userId],
+    );
+    const trialEndsAt = new Date(updatedUser.rows[0].trial_ends_at);
+    const signupPlus14 = new Date(new Date(createdAt).getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    // trial_ends_at must be >= created_at + 14 days (GREATEST guarantee)
+    expect(trialEndsAt.getTime()).toBeGreaterThanOrEqual(signupPlus14.getTime() - 1000);
+  });
+
+  it("nao altera trial_ends_at quando payday nao e enviado", async () => {
+    const token = await registerAndLogin("patch-no-payday@test.dev");
+    const userResult = await dbQuery(
+      `SELECT id FROM users WHERE email = $1`,
+      ["patch-no-payday@test.dev"],
+    );
+    const userId = userResult.rows[0].id;
+
+    // Record trial before update
+    const before = await dbQuery(
+      `SELECT trial_ends_at FROM users WHERE id = $1`,
+      [userId],
+    );
+
+    await request(app)
+      .patch("/me/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ display_name: "Apenas nome" });
+
+    const after = await dbQuery(
+      `SELECT trial_ends_at FROM users WHERE id = $1`,
+      [userId],
+    );
+
+    const beforeTs = new Date(before.rows[0].trial_ends_at).getTime();
+    const afterTs = new Date(after.rows[0].trial_ends_at).getTime();
+    expect(afterTs).toBe(beforeTs);
   });
 });

@@ -71,11 +71,27 @@ const rowToProfile = (row) => ({
   avatarUrl: row.avatar_url ?? null,
 });
 
+// Returns ISO string for trial end date and whether trial has expired
+const extractTrialInfo = (user) => {
+  const trialEndsAt = user.trial_ends_at ? new Date(user.trial_ends_at).toISOString() : null;
+  const trialExpired = trialEndsAt ? new Date(trialEndsAt) <= new Date() : false;
+  return { trialEndsAt, trialExpired };
+};
+
+// Calculates the next occurrence of `payday` from `referenceDate`
+const calcNextPaydayDate = (payday, referenceDate = new Date()) => {
+  const day = referenceDate.getDate();
+  if (payday > day) {
+    return new Date(referenceDate.getFullYear(), referenceDate.getMonth(), payday);
+  }
+  return new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, payday);
+};
+
 export const getMyProfile = async (userId) => {
   const normalizedUserId = normalizeUserId(userId);
 
   const userResult = await dbQuery(
-    `SELECT id, name, email, (password_hash IS NOT NULL) AS has_password
+    `SELECT id, name, email, (password_hash IS NOT NULL) AS has_password, trial_ends_at
      FROM users WHERE id = $1 LIMIT 1`,
     [normalizedUserId],
   );
@@ -85,6 +101,7 @@ export const getMyProfile = async (userId) => {
   }
 
   const user = userResult.rows[0];
+  const { trialEndsAt, trialExpired } = extractTrialInfo(user);
 
   const [profileResult, identitiesResult] = await Promise.all([
     dbQuery(
@@ -104,6 +121,8 @@ export const getMyProfile = async (userId) => {
     email: user.email,
     hasPassword: Boolean(user.has_password),
     linkedProviders: identitiesResult.rows.map((r) => r.provider),
+    trialEndsAt,
+    trialExpired,
     profile: profileResult.rows.length > 0 ? rowToProfile(profileResult.rows[0]) : null,
   };
 };
@@ -150,6 +169,23 @@ export const updateMyProfile = async (userId, payload = {}) => {
      DO UPDATE SET ${setClauses}`,
     [normalizedUserId, ...vals, now],
   );
+
+  // When payday is set, extend trial_ends_at = MAX(created_at + 14 days, next payday)
+  // so users always see at least one full pay cycle before trial expires.
+  if (normalizedPayday !== undefined && normalizedPayday !== null) {
+    const userRow = await dbQuery(
+      `SELECT created_at, trial_ends_at FROM users WHERE id = $1 LIMIT 1`,
+      [normalizedUserId],
+    );
+    const { created_at: createdAt } = userRow.rows[0];
+    const signupPlus14 = new Date(new Date(createdAt).getTime() + 14 * 24 * 60 * 60 * 1000);
+    const nextPayday = calcNextPaydayDate(normalizedPayday);
+    const newTrialEndsAt = signupPlus14 > nextPayday ? signupPlus14 : nextPayday;
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = $2 WHERE id = $1`,
+      [normalizedUserId, newTrialEndsAt.toISOString()],
+    );
+  }
 
   const result = await dbQuery(
     `SELECT display_name, salary_monthly, payday, avatar_url
