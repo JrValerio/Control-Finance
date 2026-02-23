@@ -2,6 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import Modal from "../components/Modal";
 import ImportCsvModal from "../components/ImportCsvModal";
 import ImportHistoryModal from "../components/ImportHistoryModal";
+import ForecastCard from "../components/ForecastCard";
 import TransactionList from "../components/TransactionList";
 import {
   transactionsService,
@@ -1972,6 +1973,8 @@ const App = ({
             ) : null}
           </div>
         </section>
+
+        <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
 
         <div className="space-y-6">
           <section ref={summarySectionRef}>
