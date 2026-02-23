@@ -1,14 +1,11 @@
 /**
  * Notification orchestration service.
  *
- * Decides WHEN to send emails based on:
+ * Decides when to send emails based on:
  *  - Flip detection (pos_to_neg only)
  *  - 24-hour cooldown between flip_neg emails
  *  - Payday window (5-7 days before payday)
  *  - One payday_reminder per calendar month
- *
- * Actual email delivery is delegated to email.service.js.
- * Sent notifications are recorded in email_notifications for deduplication.
  */
 
 import { dbQuery } from "../db/index.js";
@@ -17,8 +14,6 @@ import { sendFlipNegEmail, sendPaydayReminderEmail } from "./email.service.js";
 const FLIP_NEG_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 h
 const PAYDAY_REMINDER_WINDOW_MIN = 5; // days before payday
 const PAYDAY_REMINDER_WINDOW_MAX = 7; // days before payday
-
-// ─── Internal helpers ─────────────────────────────────────────────────────────
 
 const recordNotification = async (userId, type, metadata = {}) => {
   await dbQuery(
@@ -39,7 +34,6 @@ const getLastNotificationAt = async (userId, type) => {
 };
 
 const hasNotificationThisMonth = async (userId, type, monthStr) => {
-  // monthStr = 'YYYY-MM'; use UTC date arithmetic to avoid AT TIME ZONE (unsupported in pg-mem)
   const [yearPart, monthPart] = monthStr.split("-");
   const monthStart = new Date(Date.UTC(Number(yearPart), Number(monthPart) - 1, 1));
   const nextMonthStart = new Date(Date.UTC(Number(yearPart), Number(monthPart), 1));
@@ -56,7 +50,27 @@ const hasNotificationThisMonth = async (userId, type, monthStr) => {
   return result.rows.length > 0;
 };
 
-// Calculates how many days until the next occurrence of `payday` from `referenceDate`.
+const getUserEmail = async (userId) => {
+  const userResult = await dbQuery(
+    `SELECT email FROM users WHERE id = $1 LIMIT 1`,
+    [userId],
+  );
+  if (userResult.rows.length === 0) return null;
+  return userResult.rows[0].email;
+};
+
+const getUserPayday = async (userId) => {
+  const profileResult = await dbQuery(
+    `SELECT payday FROM user_profiles WHERE user_id = $1 LIMIT 1`,
+    [userId],
+  );
+  if (profileResult.rows.length === 0) return null;
+
+  const payday = profileResult.rows[0].payday;
+  return payday != null ? Number(payday) : null;
+};
+
+// Calculates how many days until the next occurrence of payday from referenceDate.
 // All arithmetic is in UTC to remain timezone-agnostic.
 const daysUntilNextPayday = (payday, referenceDate = new Date()) => {
   const todayDayUTC = referenceDate.getUTCDate();
@@ -74,8 +88,6 @@ const daysUntilNextPayday = (payday, referenceDate = new Date()) => {
   return Math.ceil(diffMs / (24 * 60 * 60 * 1000));
 };
 
-// ─── Public API ───────────────────────────────────────────────────────────────
-
 /**
  * Called after every forecast recompute.
  * Sends a flip_neg email if:
@@ -91,26 +103,21 @@ export const maybeSendFlipNotification = async (
 
   const lastSent = await getLastNotificationAt(userId, "flip_neg");
   if (lastSent && now.getTime() - lastSent.getTime() < FLIP_NEG_COOLDOWN_MS) {
-    return; // Cooldown active — skip
+    return;
   }
 
-  const userResult = await dbQuery(
-    `SELECT email FROM users WHERE id = $1 LIMIT 1`,
-    [userId],
-  );
-  if (userResult.rows.length === 0) return;
-
-  const { email } = userResult.rows[0];
+  const email = await getUserEmail(userId);
+  if (!email) return;
 
   await sendFlipNegEmail({ email, projectedBalance, month, daysRemaining });
   await recordNotification(userId, "flip_neg", { month, projectedBalance });
 };
 
 /**
- * Called by a daily scheduler (or at recompute time as a side-effect).
+ * Called by a daily scheduler or at recompute time as a side-effect.
  * Sends a payday_reminder email if:
  *  1. User has a payday configured
- *  2. Payday is 5–7 days away
+ *  2. Payday is 5-7 days away
  *  3. No payday_reminder sent this calendar month yet
  */
 export const maybeSendPaydayReminder = async (
@@ -118,21 +125,21 @@ export const maybeSendPaydayReminder = async (
   { payday, projectedBalance, month, incomeExpected },
   { now = new Date() } = {},
 ) => {
-  if (!payday) return;
+  const resolvedPayday = payday ?? (await getUserPayday(userId));
+  if (!resolvedPayday) return;
 
-  const days = daysUntilNextPayday(payday, now);
+  const days = daysUntilNextPayday(resolvedPayday, now);
   if (days < PAYDAY_REMINDER_WINDOW_MIN || days > PAYDAY_REMINDER_WINDOW_MAX) return;
 
-  const alreadySentThisMonth = await hasNotificationThisMonth(userId, "payday_reminder", month);
+  const alreadySentThisMonth = await hasNotificationThisMonth(
+    userId,
+    "payday_reminder",
+    month,
+  );
   if (alreadySentThisMonth) return;
 
-  const userResult = await dbQuery(
-    `SELECT email FROM users WHERE id = $1 LIMIT 1`,
-    [userId],
-  );
-  if (userResult.rows.length === 0) return;
-
-  const { email } = userResult.rows[0];
+  const email = await getUserEmail(userId);
+  if (!email) return;
 
   await sendPaydayReminderEmail({
     email,
@@ -141,7 +148,11 @@ export const maybeSendPaydayReminder = async (
     incomeExpected,
     daysUntilPayday: days,
   });
-  await recordNotification(userId, "payday_reminder", { month, payday, projectedBalance });
+  await recordNotification(userId, "payday_reminder", {
+    month,
+    payday: resolvedPayday,
+    projectedBalance,
+  });
 };
 
 export { daysUntilNextPayday };
