@@ -28,20 +28,31 @@
 .PARAMETER PsqlPath
   Path to psql.exe. Default: C:\Program Files\PostgreSQL\16\bin\psql.exe
 
+.PARAMETER Force
+  When DbConnectionString format is unrecognised, the 402 step is skipped
+  by default. Pass -Force to proceed anyway (at your own risk).
+
 .EXAMPLE
   # Steps 1+2 only (no DB)
   .\scripts\smoke-paywall-forecast.ps1 -BaseUrl "https://your-api.onrender.com"
 
-  # All 3 steps (with DB)
+  # All 3 steps (with DB, standard URL format)
   .\scripts\smoke-paywall-forecast.ps1 `
     -BaseUrl "https://your-api.onrender.com" `
     -DbConnectionString "postgresql://user:pass@host/db"
+
+  # All 3 steps, non-standard connection string (force past parse guard)
+  .\scripts\smoke-paywall-forecast.ps1 `
+    -BaseUrl "https://your-api.onrender.com" `
+    -DbConnectionString "some-custom-format" `
+    -Force
 #>
 
 param(
   [string]$BaseUrl = "https://control-finance-react-tailwind.onrender.com",
   [string]$DbConnectionString = "",
-  [string]$PsqlPath = "C:\Program Files\PostgreSQL\16\bin\psql.exe"
+  [string]$PsqlPath = "C:\Program Files\PostgreSQL\16\bin\psql.exe",
+  [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -212,21 +223,32 @@ if (-not $DbConnectionString) {
   Skip "GET /forecasts/current (expired trial) -> 402" ""
 } else {
   # Print DB target (host + database only, no password) before touching anything
-  $dbDisplay = ""
+  $dbDisplay  = ""
+  $dbParsed   = $true
   if ($DbConnectionString -match '^postgres(?:ql)?://([^:@/]+(?::[^@/]+)?@)?([^/:@]+)(?::\d+)?/([^?]+)') {
     # URL format: postgresql://user:pass@host:port/database
-    $dbHost = $Matches[2]
-    $dbName = $Matches[3]
-    $dbDisplay = "${dbHost}/${dbName}"
+    $dbDisplay = "$($Matches[2])/$($Matches[3])"
   } elseif ($DbConnectionString -match 'Host=([^;]+)') {
-    $dbHost = $Matches[1]
-    $dbName = if ($DbConnectionString -match 'Database=([^;]+)') { $Matches[1] } else { "?" }
+    $dbHost    = $Matches[1]
+    $dbName    = if ($DbConnectionString -match 'Database=([^;]+)') { $Matches[1] } else { "?" }
     $dbDisplay = "${dbHost}/${dbName}"
   } else {
     $dbDisplay = "(unparsed)"
-    Write-Host "[WARN] DB target unparsed -- double-check DbConnectionString before proceeding." -ForegroundColor Magenta
+    $dbParsed  = $false
   }
+
   Write-Host "DB target : $dbDisplay" -ForegroundColor Yellow
+
+  if (-not $dbParsed) {
+    Write-Host "[WARN] DB target unparsed -- double-check DbConnectionString before proceeding." -ForegroundColor Magenta
+    if (-not $Force) {
+      Skip "POST /forecasts/recompute (expired trial) -> 402" `
+           "DB format unrecognised. Pass -Force to proceed anyway."
+      Skip "GET /forecasts/current (expired trial) -> 402" ""
+      goto_summary
+    }
+    Write-Host "[WARN] -Force set -- proceeding despite unparsed DB target." -ForegroundColor Magenta
+  }
 
   # Expire the trial via psql
   $sql = "UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE email = '$email';"
