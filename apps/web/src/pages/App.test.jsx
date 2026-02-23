@@ -280,6 +280,9 @@ describe("App", () => {
       flipDirection: null,
       engineVersion: "v1",
       incomeExpected: null,
+      billsPendingTotal: 0,
+      billsPendingCount: 0,
+      adjustedProjectedBalance: 1200,
     });
     profileService.getMe.mockResolvedValue({
       id: 1,

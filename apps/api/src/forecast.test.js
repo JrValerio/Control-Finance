@@ -301,3 +301,163 @@ describe("computeForecast — flip detection (deterministic)", () => {
     expect(typeof result.projectedBalance).toBe("number");
   });
 });
+
+// ─── Forecast + Bills integration ────────────────────────────────────────────
+
+// Helpers for real current-month boundaries (HTTP tests use real `now`)
+const _now = new Date();
+const CURRENT_MONTH_END = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth() + 1, 0))
+  .toISOString()
+  .slice(0, 10);
+const CURRENT_MONTH_START = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth(), 1))
+  .toISOString()
+  .slice(0, 10);
+// A date well beyond the current month to test exclusion
+const NEXT_MONTH_DATE = new Date(Date.UTC(_now.getUTCFullYear(), _now.getUTCMonth() + 1, 15))
+  .toISOString()
+  .slice(0, 10);
+
+describe("forecast — bills integration", () => {
+  beforeAll(async () => { await setupTestDb(); });
+  afterAll(async () => { await clearDbClientForTests(); });
+  beforeEach(async () => {
+    resetLoginProtectionState();
+    resetImportRateLimiterState();
+    resetWriteRateLimiterState();
+    resetHttpMetricsForTests();
+    await dbQuery("DELETE FROM user_forecasts");
+    await dbQuery("DELETE FROM user_profiles");
+    await dbQuery("DELETE FROM transactions");
+    await dbQuery("DELETE FROM bills");
+    await dbQuery("DELETE FROM user_identities");
+    await dbQuery("DELETE FROM users");
+  });
+
+  it("recompute inclui bill pendente do mes na projecao ajustada", async () => {
+    const token = await registerAndLogin("fc-bills-pending@test.dev");
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Aluguel", amount: 1200, dueDate: CURRENT_MONTH_END });
+
+    const res = await request(app)
+      .post("/forecasts/recompute")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.billsPendingTotal).toBe(1200);
+    expect(res.body.billsPendingCount).toBe(1);
+    expect(res.body.adjustedProjectedBalance).toBe(
+      Number((res.body.projectedBalance - 1200).toFixed(2)),
+    );
+  });
+
+  it("recompute com bill paga nao afeta projecao ajustada", async () => {
+    const token = await registerAndLogin("fc-bills-paid@test.dev");
+
+    const createRes = await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Luz", amount: 200, dueDate: CURRENT_MONTH_END });
+    const billId = createRes.body.id;
+
+    await request(app)
+      .patch(`/bills/${billId}/mark-paid`)
+      .set("Authorization", `Bearer ${token}`);
+
+    const res = await request(app)
+      .post("/forecasts/recompute")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.billsPendingTotal).toBe(0);
+    expect(res.body.billsPendingCount).toBe(0);
+    expect(res.body.adjustedProjectedBalance).toBe(res.body.projectedBalance);
+  });
+
+  it("bill vencida ainda pendente e incluida na projecao", async () => {
+    const token = await registerAndLogin("fc-bills-overdue@test.dev");
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Internet", amount: 99.9, dueDate: CURRENT_MONTH_START });
+
+    const res = await request(app)
+      .post("/forecasts/recompute")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.billsPendingTotal).toBeGreaterThan(0);
+    expect(res.body.billsPendingCount).toBe(1);
+  });
+
+  it("bill de proximo mes nao afeta projecao ajustada do mes atual", async () => {
+    const token = await registerAndLogin("fc-bills-nextmonth@test.dev");
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "IPTU", amount: 500, dueDate: NEXT_MONTH_DATE });
+
+    const res = await request(app)
+      .post("/forecasts/recompute")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.billsPendingTotal).toBe(0);
+    expect(res.body.billsPendingCount).toBe(0);
+    expect(res.body.adjustedProjectedBalance).toBe(res.body.projectedBalance);
+  });
+
+  it("GET /forecasts/current enriquece com bills em tempo real", async () => {
+    const token = await registerAndLogin("fc-bills-realtime@test.dev");
+
+    // Recompute without bills — stored projectedBalance has no bills
+    await request(app)
+      .post("/forecasts/recompute")
+      .set("Authorization", `Bearer ${token}`);
+
+    // Add bill AFTER recompute
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Agua", amount: 80, dueDate: CURRENT_MONTH_END });
+
+    // GET /current should reflect the fresh bill even without recompute
+    const res = await request(app)
+      .get("/forecasts/current")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.billsPendingTotal).toBe(80);
+    expect(res.body.billsPendingCount).toBe(1);
+    expect(res.body.adjustedProjectedBalance).toBe(
+      Number((res.body.projectedBalance - 80).toFixed(2)),
+    );
+  });
+
+  it("recompute com multiplas bills soma corretamente", async () => {
+    const token = await registerAndLogin("fc-bills-multi@test.dev");
+
+    await request(app).post("/bills").set("Authorization", `Bearer ${token}`)
+      .send({ title: "Aluguel", amount: 1200, dueDate: CURRENT_MONTH_END });
+    await request(app).post("/bills").set("Authorization", `Bearer ${token}`)
+      .send({ title: "Luz", amount: 150.5, dueDate: CURRENT_MONTH_END });
+    await request(app).post("/bills").set("Authorization", `Bearer ${token}`)
+      .send({ title: "Internet", amount: 99.9, dueDate: CURRENT_MONTH_END });
+
+    const res = await request(app)
+      .post("/forecasts/recompute")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.billsPendingCount).toBe(3);
+    expect(res.body.billsPendingTotal).toBeCloseTo(1450.4, 1);
+    expect(res.body.adjustedProjectedBalance).toBeCloseTo(
+      res.body.projectedBalance - 1450.4,
+      1,
+    );
+  });
+});

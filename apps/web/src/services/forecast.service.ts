@@ -10,6 +10,9 @@ export interface Forecast {
   flipDirection: "pos_to_neg" | "neg_to_pos" | null;
   engineVersion: string;
   incomeExpected: number | null;
+  billsPendingTotal: number;
+  billsPendingCount: number;
+  adjustedProjectedBalance: number;
 }
 
 export const forecastService = {

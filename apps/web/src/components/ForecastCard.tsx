@@ -217,19 +217,27 @@ const ForecastCard = ({
         <>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
-              <p className="text-xs font-medium uppercase text-cf-text-secondary">Projecao fim do mes</p>
+              <p className="text-xs font-medium uppercase text-cf-text-secondary">Projecao ajustada</p>
               <p
                 className={`mt-1 text-lg font-bold ${
-                  forecast.projectedBalance < 0 ? "text-red-600" : "text-cf-text-primary"
+                  forecast.adjustedProjectedBalance < 0 ? "text-red-600" : "text-cf-text-primary"
                 }`}
               >
-                {formatCurrency(forecast.projectedBalance)}
+                {formatCurrency(forecast.adjustedProjectedBalance)}
               </p>
               {forecast.incomeExpected !== null ? (
                 <p className="mt-0.5 text-xs text-cf-text-secondary">
                   Salario esperado: {formatCurrency(forecast.incomeExpected)}
                 </p>
               ) : null}
+              {forecast.billsPendingCount > 0 ? (
+                <p className="mt-0.5 text-xs text-amber-600">
+                  {forecast.billsPendingCount}{" "}
+                  {forecast.billsPendingCount === 1 ? "pendencia incluida" : "pendencias incluidas"}
+                </p>
+              ) : (
+                <p className="mt-0.5 text-xs text-cf-text-secondary">Sem pendencias este mes</p>
+              )}
             </div>
 
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
@@ -251,11 +259,19 @@ const ForecastCard = ({
             </div>
 
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
-              <p className="text-xs font-medium uppercase text-cf-text-secondary">Projecao de gasto</p>
-              <p className="mt-1 text-base font-semibold text-cf-text-primary">
-                {formatCurrency(forecast.dailyAvgSpending * forecast.daysRemaining)}
+              <p className="text-xs font-medium uppercase text-cf-text-secondary">Pendencias do mes</p>
+              <p
+                className={`mt-1 text-base font-semibold ${
+                  forecast.billsPendingCount > 0 ? "text-amber-600" : "text-cf-text-primary"
+                }`}
+              >
+                {formatCurrency(forecast.billsPendingTotal)}
               </p>
-              <p className="mt-0.5 text-xs text-cf-text-secondary">nos proximos dias</p>
+              <p className="mt-0.5 text-xs text-cf-text-secondary">
+                {forecast.billsPendingCount > 0
+                  ? `${forecast.billsPendingCount} ${forecast.billsPendingCount === 1 ? "conta" : "contas"} este mes`
+                  : "Nenhuma pendencia"}
+              </p>
             </div>
           </div>
 

@@ -394,3 +394,26 @@ export const markBillAsPaidForUser = async (userId, billId, payload = {}) => {
     };
   });
 };
+
+/**
+ * Returns the sum and count of pending bills whose due_date <= endDate.
+ * Used by the forecast engine to compute the adjusted projected balance.
+ * @param {number} userId
+ * @param {string} endDate - ISO date string "YYYY-MM-DD"
+ */
+export const getPendingBillsDueByDate = async (userId, endDate) => {
+  const uid = normalizeUserId(userId);
+  const { rows } = await dbQuery(
+    `SELECT COALESCE(SUM(amount), 0)::float AS bills_total,
+            COUNT(*)::int                   AS bills_count
+     FROM bills
+     WHERE user_id  = $1
+       AND status   = 'pending'
+       AND due_date <= $2`,
+    [uid, endDate],
+  );
+  return {
+    billsTotal: rows[0].bills_total,
+    billsCount: rows[0].bills_count,
+  };
+};
