@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
-import { attachEntitlements } from "../middlewares/entitlement.middleware.js";
+import { attachEntitlements, requireActiveTrialOrPaidPlan } from "../middlewares/entitlement.middleware.js";
 import { getMonthlyTrendForUser } from "../services/analytics.service.js";
 
 const router = Router();
@@ -8,7 +8,7 @@ const router = Router();
 const DEFAULT_MONTHS = 6;
 const MAX_MONTHS = 24;
 
-router.use(authMiddleware);
+router.use(authMiddleware, requireActiveTrialOrPaidPlan);
 
 router.get("/trend", attachEntitlements, async (req, res, next) => {
   try {

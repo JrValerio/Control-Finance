@@ -1,6 +1,38 @@
 import { dbQuery } from "../db/index.js";
 import { getActivePlanFeaturesForUser } from "../services/billing.service.js";
 
+// ---------------------------------------------------------------------------
+// Paywall bypass (dev / staging only)
+// ---------------------------------------------------------------------------
+
+const parseBypassEmails = () =>
+  (process.env.PAYWALL_BYPASS_EMAILS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+const isBypassEnabled = () => {
+  const enabled = (process.env.PAYWALL_BYPASS_ENABLED || "").toLowerCase();
+  const isProd = (process.env.NODE_ENV || "").toLowerCase() === "production";
+  if (isProd) return false;
+  return enabled === "true" || enabled === "1";
+};
+
+const canBypass = (userEmail) => {
+  if (!isBypassEnabled()) return false;
+  return parseBypassEmails().includes((userEmail || "").toLowerCase());
+};
+
+// Features granted to bypass users (equivalent to PRO).
+const BYPASS_FEATURES = {
+  csv_import: true,
+  csv_export: true,
+  analytics_months_max: 24,
+  budget_tracking: true,
+};
+
+// ---------------------------------------------------------------------------
+
 const createPaymentRequiredError = (message = "Recurso disponivel apenas no plano Pro.") => {
   const error = new Error(message);
   error.status = 402;
@@ -14,11 +46,19 @@ const TRIAL_EXPIRED_MESSAGE =
  * Middleware factory for boolean feature gates.
  * Returns 402 if the authenticated user's active plan has featureName === false.
  *
+ * Bypass: skipped entirely when PAYWALL_BYPASS_ENABLED=true (non-prod only)
+ * and the user's email is in PAYWALL_BYPASS_EMAILS.
+ *
  * Usage:
  *   router.post("/import/dry-run", requireFeature("csv_import"), handler)
  */
 export const requireFeature = (featureName) => async (req, res, next) => {
   try {
+    if (canBypass(req.user?.email)) {
+      req.log?.info?.({ event: "paywall.bypass", email: req.user.email, feature: featureName, requestId: req.requestId });
+      return next();
+    }
+
     const features = await getActivePlanFeaturesForUser(req.user.id);
 
     if (features[featureName] === false) {
@@ -35,12 +75,19 @@ export const requireFeature = (featureName) => async (req, res, next) => {
  * Middleware that attaches the user's full plan features to req.entitlements.
  * Used for numeric caps (e.g. analytics_months_max) where the route needs the value.
  *
+ * Bypass: sets req.entitlements to PRO-equivalent features (non-prod only).
+ *
  * Usage:
  *   router.get("/trend", attachEntitlements, handler)
  *   // then in handler: req.entitlements.analytics_months_max
  */
 export const attachEntitlements = async (req, res, next) => {
   try {
+    if (canBypass(req.user?.email)) {
+      req.entitlements = BYPASS_FEATURES;
+      return next();
+    }
+
     req.entitlements = await getActivePlanFeaturesForUser(req.user.id);
     return next();
   } catch (error) {
@@ -56,11 +103,19 @@ export const attachEntitlements = async (req, res, next) => {
  * It does NOT grant access to plan-specific features (csv_import, csv_export) —
  * those still require requireFeature().
  *
+ * Bypass: skipped entirely when PAYWALL_BYPASS_ENABLED=true (non-prod only)
+ * and the user's email is in PAYWALL_BYPASS_EMAILS.
+ *
  * Usage:
  *   router.post("/forecasts/recompute", requireActiveTrialOrPaidPlan, handler)
  */
 export const requireActiveTrialOrPaidPlan = async (req, res, next) => {
   try {
+    if (canBypass(req.user?.email)) {
+      req.log?.info?.({ event: "paywall.bypass", email: req.user.email, requestId: req.requestId });
+      return next();
+    }
+
     const userId = req.user.id;
 
     // Check for an active paid subscription

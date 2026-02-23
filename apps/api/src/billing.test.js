@@ -10,6 +10,7 @@ import {
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 import {
   expectErrorResponseWithRequestId,
+  getUserIdByEmail,
   makeProUser,
   registerAndLogin,
   setupTestDb,
@@ -93,8 +94,10 @@ describe("billing", () => {
     expectErrorResponseWithRequestId(response, 402, "Recurso disponivel apenas no plano Pro.");
   });
 
-  it("GET /analytics/trend retorna 3 meses para usuario free (limite do plano)", async () => {
-    const token = await registerAndLogin("billing-trend-free@controlfinance.dev");
+  it("GET /analytics/trend retorna 6 meses para usuario em trial ativo (limite do plano)", async () => {
+    const email = "billing-trend-free@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    // Active trial: TRIAL_FEATURES gives analytics_months_max=6
 
     const response = await request(app)
       .get("/analytics/trend")
@@ -102,18 +105,21 @@ describe("billing", () => {
 
     expect(response.status).toBe(200);
     expect(Array.isArray(response.body)).toBe(true);
-    expect(response.body).toHaveLength(3);
+    expect(response.body).toHaveLength(6);
   });
 
-  it("GET /analytics/trend retorna 402 ao solicitar 6 meses com plano free", async () => {
-    const token = await registerAndLogin("billing-trend-exceeded@controlfinance.dev");
+  it("GET /analytics/trend retorna 402 para usuario com trial expirado (paywall)", async () => {
+    const email = "billing-trend-exceeded@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    const userId = await getUserIdByEmail(email);
+    await dbQuery(`UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [userId]);
 
     const response = await request(app)
       .get("/analytics/trend")
       .query({ months: 6 })
       .set("Authorization", `Bearer ${token}`);
 
-    expectErrorResponseWithRequestId(response, 402, "Limite de historico excedido no plano gratuito.");
+    expectErrorResponseWithRequestId(response, 402, "Periodo de teste encerrado. Ative seu plano para continuar utilizando esta funcionalidade.");
   });
 
   it("usuario pro acessa dry-run normalmente", async () => {
