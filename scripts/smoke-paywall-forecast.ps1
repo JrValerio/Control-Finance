@@ -211,6 +211,22 @@ if (-not $DbConnectionString) {
        "psql not found at $PsqlPath. Set -PsqlPath to enable."
   Skip "GET /forecasts/current (expired trial) -> 402" ""
 } else {
+  # Print DB target (host + database only, no password) before touching anything
+  $dbDisplay = ""
+  if ($DbConnectionString -match '^postgres(?:ql)?://([^:@/]+(?::[^@/]+)?@)?([^/:@]+)(?::\d+)?/([^?]+)') {
+    # URL format: postgresql://user:pass@host:port/database
+    $dbHost = $Matches[2]
+    $dbName = $Matches[3]
+    $dbDisplay = "${dbHost}/${dbName}"
+  } elseif ($DbConnectionString -match 'Host=([^;]+)') {
+    $dbHost = $Matches[1]
+    $dbName = if ($DbConnectionString -match 'Database=([^;]+)') { $Matches[1] } else { "?" }
+    $dbDisplay = "${dbHost}/${dbName}"
+  } else {
+    $dbDisplay = "(unparsed -- verify you are targeting the correct database)"
+  }
+  Write-Host "DB target : $dbDisplay" -ForegroundColor Yellow
+
   # Expire the trial via psql
   $sql = "UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE email = '$email';"
   try {
