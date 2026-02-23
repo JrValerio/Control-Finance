@@ -71,7 +71,6 @@ interface BillsPageProps {
 
 const BillsPage = ({
   onBack = undefined,
-  onLogout: _onLogout = undefined,
 }: BillsPageProps): JSX.Element => {
   const [statusFilter, setStatusFilter] = useState<BillStatusFilter>(undefined);
   const [offset, setOffset] = useState(0);
@@ -193,7 +192,7 @@ const BillsPage = ({
     setEditingBill(null);
   };
 
-  const handleBillSaved = (_bill: Bill) => {
+  const handleBillSaved = () => {
     closeBillModal();
     showSuccess(editingBill ? "Pendencia atualizada." : "Pendencia criada.");
     void loadSummary();
