@@ -62,6 +62,7 @@ apps/
 ```
 
 Detalhes tecnicos:
+
 - Foundation: `docs/architecture/v1.3.0.md`
 - Auth: `docs/architecture/v1.3.0-auth.md`
 - Transactions API: `docs/architecture/v1.3.1-transactions.md`
@@ -151,9 +152,7 @@ Quando uma linha e invalida, a resposta traz erros por campo:
 {
   "line": 3,
   "status": "invalid",
-  "errors": [
-    { "field": "date", "message": "Data invalida. Use YYYY-MM-DD." }
-  ]
+  "errors": [{ "field": "date", "message": "Data invalida. Use YYYY-MM-DD." }]
 }
 ```
 
