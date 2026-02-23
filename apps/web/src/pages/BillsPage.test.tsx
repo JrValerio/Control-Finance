@@ -13,6 +13,7 @@ vi.mock("../services/bills.service", () => ({
     getSummary: vi.fn(),
     list: vi.fn(),
     create: vi.fn(),
+    createBatch: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
     markPaid: vi.fn(),
@@ -246,6 +247,61 @@ describe("BillsPage", () => {
       expect(billsService.list).toHaveBeenCalledWith(
         expect.objectContaining({ offset: 20 }),
       );
+    });
+  });
+
+  // ─── Parcelamento ─────────────────────────────────────────────────────────────
+
+  it("parcelamento cria N bills via createBatch com titulos corretos", async () => {
+    const user = userEvent.setup();
+    vi.mocked(billsService.createBatch).mockResolvedValue([
+      buildBill({ id: 10, title: "IPTU (1/3)" }),
+      buildBill({ id: 11, title: "IPTU (2/3)" }),
+      buildBill({ id: 12, title: "IPTU (3/3)" }),
+    ]);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Conta de Agua")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /Nova pendencia/ }));
+    await user.type(screen.getByLabelText(/Titulo/), "IPTU");
+    await user.type(screen.getByLabelText(/Valor/), "500");
+    await user.click(screen.getByRole("checkbox", { name: /Parcelar/ }));
+
+    const countInput = screen.getByRole("spinbutton", { name: /parcelas/i });
+    await user.clear(countInput);
+    await user.type(countInput, "3");
+
+    await user.click(screen.getByRole("button", { name: "Gerar 3 parcelas" }));
+
+    await waitFor(() => {
+      expect(billsService.createBatch).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({ title: "IPTU (1/3)" }),
+          expect.objectContaining({ title: "IPTU (2/3)" }),
+          expect.objectContaining({ title: "IPTU (3/3)" }),
+        ]),
+      );
+    });
+  });
+
+  it("erro no createBatch exibe mensagem de erro no modal", async () => {
+    const user = userEvent.setup();
+    vi.mocked(billsService.createBatch).mockRejectedValue(
+      new Error("Falha ao criar parcelas."),
+    );
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText("Conta de Agua")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /Nova pendencia/ }));
+    await user.type(screen.getByLabelText(/Titulo/), "IPTU");
+    await user.type(screen.getByLabelText(/Valor/), "500");
+    await user.click(screen.getByRole("checkbox", { name: /Parcelar/ }));
+    await user.click(screen.getByRole("button", { name: "Gerar 2 parcelas" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeInTheDocument();
     });
   });
 });

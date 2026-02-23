@@ -396,6 +396,45 @@ export const markBillAsPaidForUser = async (userId, billId, payload = {}) => {
 };
 
 /**
+ * Creates N bills atomically (all or nothing) in a single DB transaction.
+ * @param {number} userId
+ * @param {Array} payloads - validated before call, 2-24 items
+ * @returns {Promise<Array>}
+ */
+export const createBillsBatchForUser = async (userId, payloads) => {
+  const uid = normalizeUserId(userId);
+
+  if (!Array.isArray(payloads) || payloads.length < 2 || payloads.length > 24) {
+    throw createError(400, "Informe entre 2 e 24 parcelas.");
+  }
+
+  // Validate all payloads up-front (before transaction)
+  const normalized = payloads.map((p) => ({
+    title:          normalizeTitle(p.title),
+    amount:         normalizeAmount(p.amount),
+    dueDate:        normalizeDueDate(p.dueDate),
+    categoryId:     normalizeOptionalCategoryId(p.categoryId) ?? null,
+    notes:          normalizeOptionalText(p.notes, "Notas") ?? null,
+    provider:       normalizeOptionalText(p.provider, "Fornecedor") ?? null,
+    referenceMonth: normalizeOptionalReferenceMonth(p.referenceMonth) ?? null,
+  }));
+
+  return withDbTransaction(async (client) => {
+    const results = [];
+    for (const b of normalized) {
+      const { rows } = await client.query(
+        `INSERT INTO bills (user_id, title, amount, due_date, category_id, notes, provider, reference_month)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [uid, b.title, b.amount, b.dueDate, b.categoryId, b.notes, b.provider, b.referenceMonth],
+      );
+      results.push(mapBillRow(rows[0]));
+    }
+    return results;
+  });
+};
+
+/**
  * Returns the sum and count of pending bills whose due_date <= endDate.
  * Used by the forecast engine to compute the adjusted projected balance.
  * @param {number} userId

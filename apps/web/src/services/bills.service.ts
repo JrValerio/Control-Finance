@@ -46,6 +46,10 @@ export interface CreateBillPayload {
 
 export type UpdateBillPayload = Partial<CreateBillPayload>;
 
+export interface BillsBatchResult {
+  bills: unknown[];
+}
+
 export interface MarkPaidResult {
   bill: Bill;
   transaction: {
@@ -180,6 +184,11 @@ export const billsService = {
 
   remove: async (id: number): Promise<void> => {
     await api.delete(`/bills/${id}`);
+  },
+
+  createBatch: async (bills: CreateBillPayload[]): Promise<Bill[]> => {
+    const { data } = await api.post<BillsBatchResult>("/bills/batch", { bills });
+    return (data.bills as BillApiPayload[]).map(normalizeBill);
   },
 
   markPaid: async (id: number, opts: { paidAt?: string } = {}): Promise<MarkPaidResult> => {
