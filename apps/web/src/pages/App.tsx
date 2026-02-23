@@ -103,6 +103,7 @@ interface ApiLikeError {
 
 interface AppProps {
   onLogout?: () => void;
+  onOpenBills?: () => void;
   onOpenCategoriesSettings?: () => void;
   onOpenBillingSettings?: () => void;
   onOpenProfileSettings?: () => void;
@@ -446,6 +447,7 @@ const calculateMonthOverMonthMetric = (
 };
 const App = ({
   onLogout = undefined,
+  onOpenBills = undefined,
   onOpenCategoriesSettings = undefined,
   onOpenBillingSettings = undefined,
   onOpenProfileSettings = undefined,
@@ -1365,6 +1367,11 @@ const App = ({
     setImportHistoryModalOpen(true);
   };
 
+  const handleOpenBills = () => {
+    closeMobileActionsMenu();
+    onOpenBills?.();
+  };
+
   const handleOpenCategoriesSettings = () => {
     closeMobileActionsMenu();
     onOpenCategoriesSettings?.();
@@ -1560,6 +1567,16 @@ const App = ({
                     >
                       Historico de imports
                     </button>
+                    {onOpenBills ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleOpenBills}
+                        className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                      >
+                        Pendencias
+                      </button>
+                    ) : null}
                     {onOpenCategoriesSettings ? (
                       <button
                         type="button"
@@ -1664,6 +1681,15 @@ const App = ({
                 >
                   Historico de imports
                 </button>
+                {onOpenBills ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenBills}
+                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                  >
+                    Pendencias
+                  </button>
+                ) : null}
                 {onOpenCategoriesSettings ? (
                   <button
                     type="button"
