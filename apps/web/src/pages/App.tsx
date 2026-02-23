@@ -1679,7 +1679,7 @@ const App = ({
                           type="button"
                           role="menuitem"
                           onClick={handleLogoutFromActionsMenu}
-                          className="rounded px-2 py-2 text-left text-xs font-semibold text-red-700 hover:bg-red-50"
+                          className="rounded px-2 py-2 text-left text-xs font-semibold text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                         >
                           Sair
                         </button>
@@ -1798,7 +1798,7 @@ const App = ({
                               role="menuitem"
                               ref={!onOpenProfileSettings && !onOpenBillingSettings && !onOpenSecuritySettings ? firstContaItemRef : undefined}
                               onClick={() => { setContaMenuOpen(false); onLogout(); }}
-                              className="rounded px-2 py-2 text-left text-xs font-semibold text-red-700 hover:bg-red-50"
+                              className="rounded px-2 py-2 text-left text-xs font-semibold text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                             >
                               Sair
                             </button>
