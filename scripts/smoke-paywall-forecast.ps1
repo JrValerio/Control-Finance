@@ -238,6 +238,7 @@ if (-not $DbConnectionString) {
   }
 
   Write-Host "DB target : $dbDisplay" -ForegroundColor Yellow
+  Write-Host "psql      : $PsqlPath" -ForegroundColor Yellow
 
   if (-not $dbParsed) {
     Write-Host "[WARN] DB target unparsed -- double-check DbConnectionString before proceeding." -ForegroundColor Magenta
@@ -247,7 +248,7 @@ if (-not $DbConnectionString) {
       Skip "GET /forecasts/current (expired trial) -> 402" ""
       goto_summary
     }
-    Write-Host "[WARN] -Force set -- proceeding despite unparsed DB target." -ForegroundColor Magenta
+    Write-Host "[WARN] -Force set -- you are responsible for DB target correctness." -ForegroundColor Magenta
   }
 
   # Expire the trial via psql
