@@ -7,6 +7,7 @@ import { transactionsService } from "../services/transactions.service";
 import { analyticsService } from "../services/analytics.service";
 import { forecastService } from "../services/forecast.service";
 import { profileService } from "../services/profile.service";
+import { billsService } from "../services/bills.service";
 
 vi.mock("../hooks/useTheme", () => ({
   useTheme: () => ({ theme: "light", toggleTheme: vi.fn() }),
@@ -59,6 +60,12 @@ vi.mock("../services/profile.service", () => ({
   profileService: {
     getMe: vi.fn(),
     updateProfile: vi.fn(),
+  },
+}));
+
+vi.mock("../services/bills.service", () => ({
+  billsService: {
+    getSummary: vi.fn(),
   },
 }));
 
@@ -281,6 +288,12 @@ describe("App", () => {
       profile: null,
     });
     profileService.updateProfile.mockResolvedValue({});
+    billsService.getSummary.mockResolvedValue({
+      pendingCount: 0,
+      pendingTotal: 0,
+      overdueCount: 0,
+      overdueTotal: 0,
+    });
     transactionsService.exportCsv.mockResolvedValue({
       blob: new Blob(["id,type\n1,Entrada"], { type: "text/csv;charset=utf-8" }),
       fileName: "transacoes.csv",
@@ -2868,5 +2881,20 @@ describe("App", () => {
 
     expect(screen.queryByRole("dialog", { name: "Meta do mes" })).not.toBeInTheDocument();
     expect(screen.getByText("Registro de valor")).toBeInTheDocument();
+  });
+
+  it("exibe cards de pendencias no dashboard", async () => {
+    billsService.getSummary.mockResolvedValue({
+      pendingCount: 3,
+      pendingTotal: 450.0,
+      overdueCount: 1,
+      overdueTotal: 150.0,
+    });
+
+    render(<App />);
+
+    expect(await screen.findByText(/450[,.]00/)).toBeInTheDocument();
+    expect(screen.getByText(/150[,.]00/)).toBeInTheDocument();
+    expect(screen.getByText("3 contas")).toBeInTheDocument();
   });
 });
