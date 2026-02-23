@@ -2,6 +2,111 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.26.0] - 2026-02-22
+
+### Title
+
+v1.26.0 - Trial, Paywall & Forecast Pack (P4)
+
+### Added
+
+#### Smart Trial System (API — #177)
+
+- `trial_ends_at` column on `users` (migration `014`).
+  - Set to `now + 14 days` on every new registration (email or Google).
+  - Extended to `MAX(signup + 14d, next_payday_date)` when the user first saves a payday — guarantees at least one full pay cycle before the trial expires.
+- `GET /me` now includes `trialEndsAt` (ISO string or null) and `trialExpired` (boolean).
+- `PATCH /me/profile` with `payday` recalculates and persists the extended deadline.
+
+#### Paywall Enforcement (API — #179)
+
+- `requireActiveTrialOrPaidPlan` middleware (migration `014` shared with trial):
+  - Allows access if the user has an active trial (`trial_ends_at > now`).
+  - Allows access if a paid subscription exists with status `active`, `trialing`, or `past_due`.
+  - Returns **402 Payment Required** with `"Periodo de teste encerrado"` when both checks fail.
+- Applied to `GET /forecasts/current` and `POST /forecasts/recompute`.
+
+#### Balance Forecast Engine v1 (API — #175)
+
+- Migration `015`: `user_forecasts` table — stores monthly projections per user.
+- `POST /forecasts/recompute` — recalculates projection for the current month:
+  - `projected_balance = net_to_date + income_adjustment − (daily_avg_spending × days_remaining)`
+  - Flip detection: `pos_to_neg` / `neg_to_pos` signals when the projected sign differs from current balance.
+- `GET /forecasts/current` — returns the latest persisted forecast for the month (or null if none).
+
+#### Email Notifications — Best-Effort (API — #178)
+
+- Migration `016`: `email_notifications` table (type CHECK: `flip_neg` | `payday_reminder`).
+- `email.service.js` — nodemailer-based sender; falls back to structured `console.log` when SMTP not configured.
+- `notifications.service.js`:
+  - `maybeSendFlipNotification` — fires on `pos_to_neg` flip only; 24-hour cooldown per user.
+  - `maybeSendPaydayReminder` — fires 5–7 days before payday; once per calendar month.
+- Both called inside `POST /forecasts/recompute` as **fire-and-forget** (`void …catch`) — never blocks the API response.
+- New env vars (optional): `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_SECURE`.
+
+#### Forecast Card — Progressive Onboarding (Web — #176)
+
+- New `ForecastCard` component, self-contained (fetches `/me` + `/forecasts/current` independently).
+- Four rendering states:
+  - **loading** — skeleton while requests resolve.
+  - **awaiting-profile** — no salary/payday configured; CTA redirects to profile settings.
+  - **active** — projected balance grid (projeção, gasto, dias restantes, projeção de gasto) + FlipBanner on flip events.
+  - **frozen** — grayed card with "Congelado" badge, last known balance, tx count since freeze, "Ativar plano" CTA.
+- `trialExpired` state sourced from `/me`; forecast cached locally after first 402 to show stale data in the frozen state.
+- Rendered in `App.tsx` between the filter panel and the summary section.
+
+#### Security Settings (API + Web — #173 / #174)
+
+- `GET /me` extended with `hasPassword` and `linkedProviders` (list of OAuth providers linked to the account).
+- `PATCH /auth/password` — change password (requires `currentPassword` for accounts with a password; Google-only accounts can set one without).
+- `POST /auth/google/link` — link a Google identity to an existing account; idempotent if already linked; 409 if the Google account belongs to another user.
+- `/app/settings/security` page — password change form + Google link button, with real-time feedback.
+
+#### User Profile (API + Web — #171 / #172)
+
+- Migration: `user_profiles` table (`salary_monthly`, `payday`, `display_name`, `avatar_url`).
+- `GET /me` includes `profile` object (null for new users).
+- `PATCH /me/profile` — upsert any subset of fields; validates payday (1–31), salary (≥ 0), avatar URL (https).
+- `/app/settings/profile` page — avatar preview, display name, salary and payday form.
+
+#### Billing Settings (API + Web — #169 / #170)
+
+- `POST /billing/portal` — creates a Stripe Customer Portal session; requires `stripe_customer_id`.
+- `/app/settings/billing` page — plan card (Free / Pro), "Subscribe" CTA → Stripe Checkout, "Manage" CTA → Customer Portal.
+
+#### Google OAuth (API + Web — #165)
+
+- `POST /auth/google` — exchange Google ID token; registers new user or logs in existing; sets `trial_ends_at` on creation.
+- "Entrar com Google" button on login/register pages.
+
+#### Dark Mode (Web — #160 / #161 / #162 / #164)
+
+- Full dark mode infrastructure: CSS custom properties on `:root` / `[data-theme="dark"]`, toggled via `<html data-theme>`.
+- Semantic color token system (`cf-surface`, `cf-bg-subtle`, `cf-text-primary`, `cf-text-secondary`, `cf-border`, `cf-border-input`, `cf-bg-page`) applied to shell, modals, inner content.
+- Recharts axis, grid, and legend colors updated via theme tokens.
+
+### Fixed
+
+- **Semantic transaction colors** — Entrada/Saída type indicators now use `text-green-600` / `text-red-600` instead of raw grays (#167).
+- **BRL formatting centralized** — all currency values use a single `Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })` formatter (#166).
+- **Budget/Category skeletons** — `bg-gray-100` (#212529, near-black in custom palette) corrected to `bg-cf-bg-subtle`; visible as dark skeleton on light backgrounds (#162).
+- **Low-contrast error text** — transaction list error `text-red-300` corrected to `text-red-600` (#162).
+- **Show/hide password toggle** — login and register fields now have a visibility toggle (#163).
+
+### Migration Notes
+
+| # | File | Description |
+|---|------|-------------|
+| 014 | `014_add_trial_ends_at.sql` | Adds `trial_ends_at TIMESTAMPTZ` to `users`; backfills existing rows |
+| 015 | `015_create_user_forecasts.sql` | Creates `user_forecasts` table for monthly projections |
+| 016 | `016_create_email_notifications.sql` | Creates `email_notifications` table (flip_neg / payday_reminder) |
+
+### Quality
+
+- 18 new/updated test files.
+- API: **233/233** tests · lint OK.
+- Web: **115/115** tests · lint OK · typecheck OK.
+
 ## [1.25.0] - 2026-02-22
 
 ### Title
