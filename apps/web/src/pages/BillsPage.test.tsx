@@ -1,0 +1,251 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import BillsPage from "./BillsPage";
+import { billsService, type Bill, type BillsSummary } from "../services/bills.service";
+import { categoriesService } from "../services/categories.service";
+
+// ─── Mocks ────────────────────────────────────────────────────────────────────
+
+vi.mock("../services/bills.service", () => ({
+  billsService: {
+    getSummary: vi.fn(),
+    list: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+    remove: vi.fn(),
+    markPaid: vi.fn(),
+  },
+}));
+
+vi.mock("../services/categories.service", () => ({
+  categoriesService: {
+    listCategories: vi.fn(),
+  },
+}));
+
+// ─── Builders ─────────────────────────────────────────────────────────────────
+
+const buildBill = (overrides: Partial<Bill> = {}): Bill => ({
+  id: 1,
+  userId: 1,
+  title: "Conta de Agua",
+  amount: 132.9,
+  dueDate: "2026-03-25",
+  status: "pending",
+  isOverdue: false,
+  categoryId: null,
+  paidAt: null,
+  notes: null,
+  provider: null,
+  referenceMonth: null,
+  createdAt: "2026-02-01T12:00:00.000Z",
+  updatedAt: "2026-02-01T12:00:00.000Z",
+  ...overrides,
+});
+
+const buildSummary = (overrides: Partial<BillsSummary> = {}): BillsSummary => ({
+  pendingCount: 2,
+  pendingTotal: 265.8,
+  overdueCount: 1,
+  overdueTotal: 132.9,
+  ...overrides,
+});
+
+const buildListResult = (items: Bill[] = [buildBill()]) => ({
+  items,
+  pagination: { limit: 20, offset: 0, total: items.length },
+});
+
+// ─── Render helper ────────────────────────────────────────────────────────────
+
+const renderPage = () =>
+  render(
+    <MemoryRouter>
+      <BillsPage onBack={vi.fn()} onLogout={vi.fn()} />
+    </MemoryRouter>,
+  );
+
+// ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe("BillsPage", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(billsService.getSummary).mockResolvedValue(buildSummary());
+    vi.mocked(billsService.list).mockResolvedValue(buildListResult());
+    vi.mocked(categoriesService.listCategories).mockResolvedValue([]);
+  });
+
+  it("renderiza cards de resumo com valores do mock", async () => {
+    renderPage();
+
+    await waitFor(() => {
+      // Use regex to avoid locale-specific currency formatting in Node.js
+      expect(screen.getByText(/265[,.]80/)).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText(/132[,.]90/).length).toBeGreaterThan(0);
+    expect(screen.getByText("2 contas")).toBeInTheDocument();
+    expect(screen.getByText("1 conta")).toBeInTheDocument();
+  });
+
+  it("renderiza lista de bills com titulo e valor", async () => {
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Conta de Agua")).toBeInTheDocument();
+    });
+
+    // The amount 132.90 appears in both the summary overdue card and the list item
+    expect(screen.getAllByText(/132[,.]90/).length).toBeGreaterThan(0);
+  });
+
+  it("exibe badge Vencida para bill com isOverdue true", async () => {
+    vi.mocked(billsService.list).mockResolvedValue(
+      buildListResult([buildBill({ isOverdue: true })]),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Vencida")).toBeInTheDocument();
+    });
+  });
+
+  it("exibe badge Paga para bill com status paid", async () => {
+    vi.mocked(billsService.list).mockResolvedValue(
+      buildListResult([buildBill({ status: "paid", paidAt: "2026-02-15T10:00:00.000Z" })]),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Paga")).toBeInTheDocument();
+    });
+  });
+
+  it("clicar filtro Pendentes chama list com status pending", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Conta de Agua")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Pendentes" }));
+
+    await waitFor(() => {
+      expect(billsService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "pending", offset: 0 }),
+      );
+    });
+  });
+
+  it("clicar filtro Vencidas chama list com status overdue", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Conta de Agua")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Vencidas" }));
+
+    await waitFor(() => {
+      expect(billsService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "overdue" }),
+      );
+    });
+  });
+
+  it("marcar como paga chama markPaid e exibe mensagem de sucesso", async () => {
+    const user = userEvent.setup();
+    vi.mocked(billsService.markPaid).mockResolvedValue({
+      bill: buildBill({ status: "paid" }),
+      transaction: { id: 99, type: "Saida", value: 132.9, date: "2026-02-15", description: "Conta de Agua" },
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Conta de Agua")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Marcar como paga" }));
+
+    await waitFor(() => {
+      expect(billsService.markPaid).toHaveBeenCalledWith(1);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("status")).toBeInTheDocument();
+    });
+  });
+
+  it("excluir bill com confirmacao chama remove e refetch", async () => {
+    const user = userEvent.setup();
+    vi.mocked(billsService.remove).mockResolvedValue(undefined);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Conta de Agua")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Excluir" }));
+    expect(screen.getByText("Confirmar?")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Sim" }));
+
+    await waitFor(() => {
+      expect(billsService.remove).toHaveBeenCalledWith(1);
+    });
+  });
+
+  it("erro de carregamento exibe mensagem de erro", async () => {
+    vi.mocked(billsService.getSummary).mockRejectedValue(new Error("Falha de rede"));
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toBeInTheDocument();
+    });
+  });
+
+  it("lista vazia exibe mensagem de estado vazio", async () => {
+    vi.mocked(billsService.list).mockResolvedValue(buildListResult([]));
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Nenhuma pendencia encontrada.")).toBeInTheDocument();
+    });
+  });
+
+  it("botao Proxima chama list com offset 20", async () => {
+    const user = userEvent.setup();
+    // Return full page (20 items) to enable "Proxima"
+    const fullPage = Array.from({ length: 20 }, (_, i) =>
+      buildBill({ id: i + 1, title: `Bill ${i + 1}` }),
+    );
+    vi.mocked(billsService.list).mockResolvedValue({
+      items: fullPage,
+      pagination: { limit: 20, offset: 0, total: 25 },
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Bill 1")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Proxima" }));
+
+    await waitFor(() => {
+      expect(billsService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ offset: 20 }),
+      );
+    });
+  });
+});
