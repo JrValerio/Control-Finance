@@ -20,6 +20,19 @@ const formatAmountForInput = (value: number): string => {
   return value.toFixed(2).replace(".", ",");
 };
 
+const addMonthsClamped = (isoDate: string, n: number): string => {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const targetYear = y + Math.floor((m - 1 + n) / 12);
+  const targetMonth = ((m - 1 + n) % 12) + 1;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+  const clampedDay = Math.min(d, lastDay);
+  return [
+    targetYear,
+    String(targetMonth).padStart(2, "0"),
+    String(clampedDay).padStart(2, "0"),
+  ].join("-");
+};
+
 const BillModal = ({
   isOpen,
   onClose,
@@ -38,6 +51,8 @@ const BillModal = ({
   const [notes, setNotes] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showInstallments, setShowInstallments] = useState(false);
+  const [installmentCount, setInstallmentCount] = useState("2");
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -61,6 +76,8 @@ const BillModal = ({
     }
     setErrorMessage("");
     setIsSaving(false);
+    setShowInstallments(false);
+    setInstallmentCount("2");
   }, [isOpen, initialBill]);
 
   // Escape key listener
@@ -99,22 +116,39 @@ const BillModal = ({
         return;
       }
 
-      const payload: CreateBillPayload = {
-        title: trimmedTitle,
-        amount: parsedAmount,
-        dueDate,
-        categoryId: categoryId ? Number(categoryId) : null,
-        provider: provider.trim() || null,
-        referenceMonth: referenceMonth.trim() || null,
-        notes: notes.trim() || null,
-      };
-
       setIsSaving(true);
       try {
-        const savedBill = isEditing && initialBill
-          ? await billsService.update(initialBill.id, payload)
-          : await billsService.create(payload);
-        onSaved(savedBill);
+        if (showInstallments && !isEditing) {
+          const n = Math.max(2, Math.min(24, parseInt(installmentCount, 10) || 2));
+          const bills: CreateBillPayload[] = Array.from({ length: n }, (_, i) => {
+            const installmentDueDate = addMonthsClamped(dueDate, i);
+            return {
+              title: `${trimmedTitle} (${i + 1}/${n})`,
+              amount: parsedAmount,
+              dueDate: installmentDueDate,
+              categoryId: categoryId ? Number(categoryId) : null,
+              provider: provider.trim() || null,
+              referenceMonth: installmentDueDate.slice(0, 7),
+              notes: notes.trim() || null,
+            };
+          });
+          const createdBills = await billsService.createBatch(bills);
+          onSaved(createdBills[0]);
+        } else {
+          const payload: CreateBillPayload = {
+            title: trimmedTitle,
+            amount: parsedAmount,
+            dueDate,
+            categoryId: categoryId ? Number(categoryId) : null,
+            provider: provider.trim() || null,
+            referenceMonth: referenceMonth.trim() || null,
+            notes: notes.trim() || null,
+          };
+          const savedBill = isEditing && initialBill
+            ? await billsService.update(initialBill.id, payload)
+            : await billsService.create(payload);
+          onSaved(savedBill);
+        }
       } catch (error) {
         const err = error as { response?: { data?: { message?: string } }; message?: string };
         setErrorMessage(
@@ -124,7 +158,7 @@ const BillModal = ({
         setIsSaving(false);
       }
     },
-    [title, amount, dueDate, categoryId, provider, referenceMonth, notes, isEditing, initialBill, onSaved],
+    [title, amount, dueDate, categoryId, provider, referenceMonth, notes, isEditing, initialBill, onSaved, showInstallments, installmentCount],
   );
 
   if (!isOpen) return null;
@@ -272,6 +306,40 @@ const BillModal = ({
             />
           </div>
 
+          {/* Installments */}
+          {!isEditing ? (
+            <div className="border-t border-cf-border pt-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-cf-text-primary">
+                <input
+                  type="checkbox"
+                  checked={showInstallments}
+                  onChange={(e) => setShowInstallments(e.target.checked)}
+                  disabled={isSaving}
+                  className="rounded"
+                />
+                Parcelar
+              </label>
+
+              {showInstallments ? (
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={2}
+                    max={24}
+                    value={installmentCount}
+                    onChange={(e) => setInstallmentCount(e.target.value)}
+                    disabled={isSaving}
+                    aria-label="Numero de parcelas"
+                    className="w-16 rounded border border-cf-border-input px-2 py-1.5 text-sm text-cf-text-primary focus:outline-none focus:ring-1 focus:ring-brand-1 bg-cf-surface"
+                  />
+                  <span className="text-sm text-cf-text-secondary">
+                    parcelas mensais a partir de {dueDate || "—"}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {/* Error */}
           {errorMessage ? (
             <div
@@ -297,7 +365,11 @@ const BillModal = ({
               disabled={isSaving}
               className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSaving ? "Salvando..." : "Salvar"}
+              {isSaving
+                ? "Gerando..."
+                : showInstallments && !isEditing
+                ? `Gerar ${parseInt(installmentCount, 10) || 2} parcelas`
+                : "Salvar"}
             </button>
           </div>
         </form>

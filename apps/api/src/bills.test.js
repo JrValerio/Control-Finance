@@ -429,6 +429,112 @@ describe("bills", () => {
     expectErrorResponseWithRequestId(res, 404, "Pendencia nao encontrada.");
   });
 
+  // ─── POST /bills/batch ───────────────────────────────────────────────────────
+
+  describe("POST /bills/batch", () => {
+    it("cria N parcelas atomicamente e retorna todas", async () => {
+      const token = await registerAndLogin("bills-batch-create@test.dev");
+
+      const bills = [
+        { title: "IPTU (1/3)", amount: 500, dueDate: FUTURE_DATE },
+        { title: "IPTU (2/3)", amount: 500, dueDate: toLocalDate(60) },
+        { title: "IPTU (3/3)", amount: 500, dueDate: toLocalDate(90) },
+      ];
+
+      const res = await request(app)
+        .post("/bills/batch")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ bills });
+
+      expect(res.status).toBe(201);
+      expect(res.body.bills).toHaveLength(3);
+      expect(res.body.bills[0].title).toBe("IPTU (1/3)");
+      expect(res.body.bills[1].title).toBe("IPTU (2/3)");
+      expect(res.body.bills[2].title).toBe("IPTU (3/3)");
+      expect(res.body.bills[0].amount).toBe(500);
+
+      // Verify all 3 are persisted in DB
+      const listRes = await request(app)
+        .get("/bills")
+        .set("Authorization", `Bearer ${token}`);
+      expect(listRes.body.pagination.total).toBe(3);
+    });
+
+    it("retorna 400 se bills array tiver menos de 2 items", async () => {
+      const token = await registerAndLogin("bills-batch-min@test.dev");
+
+      const res = await request(app)
+        .post("/bills/batch")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ bills: [{ title: "A", amount: 100, dueDate: FUTURE_DATE }] });
+
+      expectErrorResponseWithRequestId(res, 400, "Informe entre 2 e 24 parcelas.");
+    });
+
+    it("retorna 400 se bills array tiver mais de 24 items", async () => {
+      const token = await registerAndLogin("bills-batch-max@test.dev");
+
+      const bills = Array.from({ length: 25 }, (_, i) => ({
+        title: `P ${i + 1}`,
+        amount: 100,
+        dueDate: FUTURE_DATE,
+      }));
+
+      const res = await request(app)
+        .post("/bills/batch")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ bills });
+
+      expectErrorResponseWithRequestId(res, 400, "Informe entre 2 e 24 parcelas.");
+    });
+
+    it("retorna 400 se qualquer parcela tiver campo invalido", async () => {
+      const token = await registerAndLogin("bills-batch-invalid@test.dev");
+
+      const res = await request(app)
+        .post("/bills/batch")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bills: [
+            { title: "Valida", amount: 100, dueDate: FUTURE_DATE },
+            { title: "", amount: 100, dueDate: FUTURE_DATE }, // title vazio
+          ],
+        });
+
+      expectErrorResponseWithRequestId(res, 400, "Titulo e obrigatorio.");
+    });
+
+    it("nao cria nenhuma bill se uma parcela for invalida (atomico)", async () => {
+      const token = await registerAndLogin("bills-batch-atomic@test.dev");
+
+      const res = await request(app)
+        .post("/bills/batch")
+        .set("Authorization", `Bearer ${token}`)
+        .send({
+          bills: [
+            { title: "Valida", amount: 100, dueDate: FUTURE_DATE },
+            { title: "Invalida", amount: -50, dueDate: FUTURE_DATE }, // amount invalido
+          ],
+        });
+
+      expect(res.status).toBe(400);
+
+      // DB deve estar vazio — nenhuma bill criada
+      const listRes = await request(app)
+        .get("/bills")
+        .set("Authorization", `Bearer ${token}`);
+      expect(listRes.body.pagination.total).toBe(0);
+    });
+
+    it("retorna 401 sem token", async () => {
+      const res = await request(app)
+        .post("/bills/batch")
+        .send({ bills: [] });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
   // ─── Rate limiting ───────────────────────────────────────────────────────────
 
   it("POST /bills aplica rate limit por usuario", async () => {

@@ -3,6 +3,7 @@ import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { billsWriteRateLimiter } from "../middlewares/rate-limit.middleware.js";
 import {
   createBillForUser,
+  createBillsBatchForUser,
   listBillsByUser,
   getBillsSummaryForUser,
   updateBillForUser,
@@ -40,6 +41,16 @@ router.post("/", billsWriteRateLimiter, async (req, res, next) => {
   try {
     const bill = await createBillForUser(req.user.id, req.body || {});
     res.status(201).json(bill);
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /bills/batch — create N bills atomically (installments)
+router.post("/batch", billsWriteRateLimiter, async (req, res, next) => {
+  try {
+    const bills = await createBillsBatchForUser(req.user.id, req.body?.bills ?? []);
+    res.status(201).json({ bills });
   } catch (error) {
     next(error);
   }
