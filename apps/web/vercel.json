@@ -1,0 +1,5 @@
+{
+  "git": {
+    "ignoreCommand": "bash -lc 'BASE=${VERCEL_GIT_PREVIOUS_SHA:-\"\"}; if [ -z \"$BASE\" ]; then BASE=$(git rev-parse HEAD~1 2>/dev/null || echo \"\"); fi; if [ -z \"$BASE\" ]; then exit 1; fi; if git diff --name-only $BASE HEAD | grep -qE \"^(apps/web/|package.json|package-lock.json|pnpm-lock.yaml|yarn.lock|turbo.json)\"; then exit 1; else exit 0; fi'"
+  }
+}
