@@ -2,6 +2,91 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.27.0] - 2026-02-23
+
+### Title
+
+v1.27.0 - Bills, Batch Installments & UI Polish Pack
+
+### Added
+
+#### Bills Domain (PR #194)
+
+- Full Bills API (PostgreSQL + user-scoped ownership)
+  - `POST /bills`
+  - `GET /bills`
+  - `PATCH /bills/:id`
+  - `DELETE /bills/:id`
+  - `PATCH /bills/:id/mark-paid`
+- Status handling (`pending`, `paid`, `overdue`)
+- Overdue detection
+- Server-side pagination and filtering
+
+#### Bills Web (PR #195)
+
+- `/app/bills` page with:
+  - Bills CRUD (create, edit, delete)
+  - Mark as paid
+  - Summary cards (Total, Pending, Overdue, Paid)
+  - Pagination + status filters
+- BillModal with validation and feedback states
+
+#### Dashboard Integration (PR #196)
+
+- Bills summary widget on dashboard
+- Top-level visibility of pending/overdue bills
+
+#### Forecast Integration (PR #197)
+
+- Pending bills integrated into projected balance calculation
+- Forecast now reflects real upcoming liabilities
+
+#### Batch Installments (PR #198)
+
+- New endpoint: `POST /bills/batch`
+- Atomic creation of 2–24 installments (transaction-safe)
+- Installment UI in BillModal:
+  - "Parcelar" toggle
+  - Automatic due date increment (month-clamped)
+  - Title format: `Título (X/N)`
+- Full API + Web test coverage
+
+#### UI Improvements (PR #200)
+
+- Desktop header refactor:
+  - Perfil, Assinatura, Segurança and Sair grouped under **Conta** dropdown
+  - Click-outside + Escape support
+  - Focus-first-item accessibility behavior
+- Mobile "Ações" menu reordered into logical groups
+- BillsPage dark mode fix (`bg-cf-bg-page`)
+- UpgradeModal fully translated to PT-BR
+- Dark-mode-aware hover state for Sair buttons
+
+### Changed
+
+- Forecast logic now considers pending bills in projected balance.
+- Desktop header reduced from 10 buttons to 7 via account grouping.
+- Improved dark mode consistency in navigation menus.
+
+### Chore
+
+#### Tooling (PR #199)
+
+- Added PowerShell smoke test:
+  - `scripts/smoke-bills-batch.ps1`
+  - camelCase → snake_case fallback payload strategy
+  - HTTP status + error output visibility
+- Added `apps/web/vercel.json`:
+  - `ignoreCommand` to skip web builds when only API files change
+  - Reduces unnecessary Vercel free-tier build usage
+
+### Quality
+
+- 136/136 web tests passing
+- API tests fully green
+- Zero lint warnings
+- Production build verified
+
 ## [1.26.0] - 2026-02-22
 
 ### Title
