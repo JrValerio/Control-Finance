@@ -1,25 +1,25 @@
-﻿{
-    "name":  "control-finance-monorepo",
-    "private":  true,
-    "version":  "1.29.0",
-    "engines":  {
-                    "node":  "24.x"
-                },
-    "workspaces":  [
-                       "apps/web",
-                       "apps/api"
-                   ],
-    "scripts":  {
-                    "dev":  "concurrently \"npm -w apps/api run dev\" \"npm -w apps/web run dev\"",
-                    "lint":  "npm -w apps/web run lint \u0026\u0026 npm -w apps/api run lint",
-                    "typecheck:web":  "npm -w apps/web run typecheck",
-                    "typecheck":  "npm run typecheck:web",
-                    "test":  "npm -w apps/web run test:run \u0026\u0026 npm -w apps/api run test",
-                    "test:run":  "npm run test",
-                    "build":  "npm -w apps/web run build \u0026\u0026 npm -w apps/api run build",
-                    "preview":  "npm -w apps/web run preview"
-                },
-    "devDependencies":  {
-                            "concurrently":  "^9.2.1"
-                        }
+{
+  "name": "control-finance-monorepo",
+  "private": true,
+  "version": "1.29.0",
+  "engines": {
+    "node": "24.x"
+  },
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm -w apps/api run dev\" \"npm -w apps/web run dev\"",
+    "lint": "npm -w apps/web run lint && npm -w apps/api run lint",
+    "typecheck:web": "npm -w apps/web run typecheck",
+    "typecheck": "npm run typecheck:web",
+    "test": "npm -w apps/web run test:run && npm -w apps/api run test",
+    "test:run": "npm run test",
+    "build": "npm -w apps/web run build && npm -w apps/api run build",
+    "preview": "npm -w apps/web run preview"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
 }
