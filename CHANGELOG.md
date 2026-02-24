@@ -2,6 +2,51 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.29.0] - 2026-02-24
+
+### Title
+
+v1.29.0 - Fontes de Renda (Income Sources Module)
+
+### Added
+
+#### Income Sources API (PR #203)
+
+- New DB migration `018_create_income_sources.sql`:
+  - `income_sources` — user-scoped income sources with optional category and default payment day
+  - `income_deductions` — fixed and variable deductions per source (active/inactive, sort order)
+  - `income_statements` — monthly snapshots with unique constraint on `(source_id, reference_month)`
+  - `income_statement_deductions` — immutable deduction snapshot at statement creation time
+- New service `income-sources.service.js` with 13 functions:
+  - Full CRUD for income sources and their deductions
+  - `createStatementDraftForSource` — atomic draft creation with deduction snapshot (transaction-safe)
+  - `postStatementForSource` — atomic post: inserts `Entrada` transaction + marks statement posted; inherits `category_id` from source
+  - Duplicate-month guard (409) and invalid-month validation
+- New routes at `/income-sources` (12 endpoints, all auth-gated):
+  - `GET /income-sources` — list with active deductions
+  - `POST /income-sources`, `PATCH /:id`, `DELETE /:id`
+  - `POST /:id/deductions`, `PATCH /deductions/:id`, `DELETE /deductions/:id`
+  - `GET /:id/statements`, `POST /:id/statements`, `PATCH /statements/:id`, `POST /statements/:id/post`
+- `incomeSourcesWriteRateLimiter` added to rate-limit middleware
+- 22 API tests covering auth, CRUD, deduction management, statement lifecycle, 409/400 guards
+
+#### Income Sources Web (PR #204)
+
+- Typed client `incomeSources.service.ts` (11 methods, defensive normalizers for all API shapes)
+- `IncomeSourceModal` — create/edit income source (name, default payment day, category, notes)
+- `IncomeDeductionModal` — create/edit deduction (label, amount, variable toggle)
+- `IncomeStatementModal` — monthly statement generation:
+  - Fixed deductions shown read-only; variable deductions editable per-statement
+  - Live footer: total deductions + estimated gross (net + deductions)
+  - "Salvar rascunho" (draft only) and "Lançar entrada" (draft → post → Entrada transaction)
+- `/app/income-sources` page with full CRUD for sources and deductions, statement history
+- Navigation: "Fontes de Renda" added to desktop header and mobile Ações menu
+- 8 web tests covering render, create flow, statement posting, draft save, error handling
+
+### Changed
+
+- App navigation extended with Income Sources route and nav entries (desktop + mobile)
+
 ## [1.27.0] - 2026-02-23
 
 ### Title
