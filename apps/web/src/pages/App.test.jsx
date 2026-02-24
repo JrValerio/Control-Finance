@@ -8,6 +8,7 @@ import { analyticsService } from "../services/analytics.service";
 import { forecastService } from "../services/forecast.service";
 import { profileService } from "../services/profile.service";
 import { billsService } from "../services/bills.service";
+import { salaryService } from "../services/salary.service";
 
 vi.mock("../hooks/useTheme", () => ({
   useTheme: () => ({ theme: "light", toggleTheme: vi.fn() }),
@@ -66,6 +67,13 @@ vi.mock("../services/profile.service", () => ({
 vi.mock("../services/bills.service", () => ({
   billsService: {
     getSummary: vi.fn(),
+  },
+}));
+
+vi.mock("../services/salary.service", () => ({
+  salaryService: {
+    getProfile:    vi.fn(),
+    upsertProfile: vi.fn(),
   },
 }));
 
@@ -297,6 +305,7 @@ describe("App", () => {
       overdueCount: 0,
       overdueTotal: 0,
     });
+    salaryService.getProfile.mockResolvedValue(null);
     transactionsService.exportCsv.mockResolvedValue({
       blob: new Blob(["id,type\n1,Entrada"], { type: "text/csv;charset=utf-8" }),
       fileName: "transacoes.csv",
