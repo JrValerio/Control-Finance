@@ -185,11 +185,13 @@ $pkgPaths = @(
   (Join-Path $root "apps\api\package.json"),
   (Join-Path $root "apps\web\package.json")
 )
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 foreach ($f in $pkgPaths) {
-  $raw = Get-Content $f -Raw -Encoding UTF8 | ConvertFrom-Json
+  $raw = [System.IO.File]::ReadAllText($f, $utf8NoBom) | ConvertFrom-Json
   $old = $raw.version
   $raw.version = $Version
-  $raw | ConvertTo-Json -Depth 20 | Set-Content $f -Encoding UTF8
+  $json = ($raw | ConvertTo-Json -Depth 20) + "`n"
+  [System.IO.File]::WriteAllText($f, $json, $utf8NoBom)
   $rel = $f.Substring($root.Length).TrimStart('\', '/')
   Log ("  {0}: {1} -> {2}" -f $rel, $old, $Version)
 }
