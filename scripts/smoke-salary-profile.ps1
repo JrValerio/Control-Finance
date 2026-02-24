@@ -12,11 +12,15 @@
   Base expectation: for a fresh trial user, calculation.netAnnual and
   calculation.taxAnnual are numeric values.
 
-  Optional flow (requires -DbConnectionString and psql):
-    5. Expire trial in DB -> user falls back to free
-    6. GET /salary/profile -> netAnnual/taxAnnual must be null
-    7. Grant pro subscription in DB
-    8. GET /salary/profile -> netAnnual/taxAnnual must be numeric again
+  Optional flow #1 (requires -OpsToken, no DB credentials needed):
+    5. POST /ops/force-plan { email, plan: "pro" } with x-ops-token
+    6. GET /billing/subscription -> plan=pro, features.salary_annual=true
+
+  Optional flow #2 (requires -DbConnectionString and psql):
+    7. Expire trial in DB -> user falls back to free
+    8. GET /salary/profile -> netAnnual/taxAnnual must be null
+    9. Grant pro subscription in DB
+   10. GET /salary/profile -> netAnnual/taxAnnual must be numeric again
 
   Every API call sends x-request-id and validates it is echoed back.
 
@@ -36,6 +40,10 @@
   Optional Postgres connection string for free/pro verification steps.
   Example: "postgresql://user:pass@host/db"
 
+.PARAMETER OpsToken
+  Optional token for POST /ops/force-plan.
+  Enables deterministic Pro verification without direct DB credentials.
+
 .PARAMETER PsqlPath
   Path to psql.exe when DbConnectionString is provided.
 
@@ -44,7 +52,13 @@
   .\scripts\smoke-salary-profile.ps1 -BaseUrl "https://your-api.onrender.com"
 
 .EXAMPLE
-  # Full smoke (trial -> free -> pro)
+  # Optional pro verification via /ops/force-plan (no DB credentials)
+  .\scripts\smoke-salary-profile.ps1 `
+    -BaseUrl "https://your-api.onrender.com" `
+    -OpsToken "your-ops-token"
+
+.EXAMPLE
+  # Full smoke (trial -> free -> pro) via DB
   .\scripts\smoke-salary-profile.ps1 `
     -BaseUrl "https://your-api.onrender.com" `
     -DbConnectionString "postgresql://user:pass@host/db"
@@ -55,6 +69,7 @@ param(
   [double]$GrossSalary = 5000,
   [int]$Dependents = 1,
   [int]$PaymentDay = 5,
+  [string]$OpsToken = "",
   [string]$DbConnectionString = "",
   [string]$PsqlPath = "C:\Program Files\PostgreSQL\16\bin\psql.exe"
 )
@@ -75,6 +90,11 @@ Write-Host "=== Smoke Test: Salary Profile + Annual Paywall ===" -ForegroundColo
 Write-Host "RunId  : $runId"
 Write-Host "BaseUrl: $BaseUrl"
 Write-Host "Email  : $email"
+if ($OpsToken) {
+  Write-Host "OPS    : provided (/ops/force-plan enabled)"
+} else {
+  Write-Host "OPS    : not provided (/ops/force-plan skipped)"
+}
 if ($DbConnectionString) {
   Write-Host "DB     : provided (free/pro checks enabled)"
 } else {
@@ -103,7 +123,6 @@ function Skip([string]$step, [string]$reason = "") {
   $script:skipped++
 }
 
-# no-op marker used to short-circuit to summary section
 function New-RequestId([string]$label) {
   $script:requestSeq++
   return "smoke-salary-$runId-$($script:requestSeq)-$label"
@@ -259,6 +278,22 @@ function Assert-AnnualIsNull($resp, [string]$step) {
   }
 }
 
+function Assert-SubscriptionIsPro($resp, [string]$step) {
+  if (-not $resp.Body -or -not $resp.Body.features) {
+    Fail $step "Response body missing plan/features."
+    return
+  }
+
+  $plan = $resp.Body.plan
+  $salaryAnnual = $resp.Body.features.salary_annual
+
+  if ($plan -eq "pro" -and $salaryAnnual -eq $true) {
+    Pass $step
+  } else {
+    Fail $step "Expected plan=pro and features.salary_annual=true. plan=$plan salary_annual=$salaryAnnual"
+  }
+}
+
 function Invoke-Psql([string]$sql, [string]$step) {
   if (-not (Test-Path $PsqlPath)) {
     Fail $step "psql not found at '$PsqlPath'."
@@ -326,6 +361,29 @@ if ($rRegister.StatusCode -eq 201) {
 
     Write-Host ""
     Write-Host "--- Optional flow (free/pro) ---"
+
+    if ($OpsToken) {
+      $opsHeaders = @{
+        "x-ops-token" = $OpsToken
+      }
+
+      $rOpsForcePlan = Invoke-Api -Method "POST" -Path "/ops/force-plan" -Headers $opsHeaders -Body @{
+        email = $email
+        plan = "pro"
+      } -RequestId (New-RequestId "ops-force-plan")
+      Assert-Code $rOpsForcePlan 200 "POST /ops/force-plan"
+      Assert-RequestIdEcho $rOpsForcePlan "POST /ops/force-plan"
+
+      $rBillingPro = Invoke-Api -Method "GET" -Path "/billing/subscription" -Headers $auth -RequestId (New-RequestId "billing-subscription-pro")
+      Assert-Code $rBillingPro 200 "GET /billing/subscription (after ops force-plan)"
+      Assert-RequestIdEcho $rBillingPro "GET /billing/subscription (after ops force-plan)"
+      if ($rBillingPro.StatusCode -eq 200) {
+        Assert-SubscriptionIsPro $rBillingPro "GET /billing/subscription: plan=pro and salary_annual=true"
+      }
+    } else {
+      Skip "POST /ops/force-plan" "Provide -OpsToken."
+      Skip "GET /billing/subscription (after ops force-plan)" "Provide -OpsToken."
+    }
 
     if (-not $DbConnectionString) {
       Skip "GET /salary/profile (free): annual fields null" "Provide -DbConnectionString."
