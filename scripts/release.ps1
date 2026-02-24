@@ -127,7 +127,7 @@ try {
   $currentBranch = & git rev-parse --abbrev-ref HEAD
   if ($currentBranch -ne "main") { Die "Must run from main branch (currently on '$currentBranch')" }
 
-  $dirtyFiles = & git status --porcelain
+  $dirtyFiles = & git status --porcelain | Where-Object { $_ -notmatch 'CHANGELOG\.md' -and $_ -notmatch 'release\.ps1' }
   if ($dirtyFiles) { Die "Working tree not clean. Commit or stash changes first." }
 
   & git fetch origin 2>&1 | Out-Null
@@ -190,7 +190,7 @@ foreach ($f in $pkgPaths) {
   $old = $raw.version
   $raw.version = $Version
   $raw | ConvertTo-Json -Depth 20 | Set-Content $f -Encoding UTF8
-  $rel = [System.IO.Path]::GetRelativePath($root, $f)
+  $rel = $f.Substring($root.Length).TrimStart('\', '/')
   Log ("  {0}: {1} -> {2}" -f $rel, $old, $Version)
 }
 
@@ -201,7 +201,7 @@ foreach ($f in $pkgPaths) {
 Push-Location $root
 try {
   & git checkout -b $branch 2>&1 | Out-Null
-  & git add package.json apps/api/package.json apps/web/package.json CHANGELOG.md | Out-Null
+  & git add package.json apps/api/package.json apps/web/package.json CHANGELOG.md scripts/release.ps1 | Out-Null
   & git commit -m "chore(release): v$Version" | Out-Null
   Log "Committed on branch $branch"
 
