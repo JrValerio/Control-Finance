@@ -7,8 +7,8 @@ export interface SalaryCalculation {
   inssMonthly: number;
   irrfMonthly: number;
   netMonthly: number;
-  netAnnual: number;
-  taxAnnual: number;
+  netAnnual: number | null;  // null for free-plan users
+  taxAnnual: number | null;  // null for free-plan users
 }
 
 export interface SalaryProfile {
@@ -35,8 +35,8 @@ const normalizeCalculation = (raw: Record<string, unknown>): SalaryCalculation =
   inssMonthly:  Number(raw.inssMonthly)  || 0,
   irrfMonthly:  Number(raw.irrfMonthly)  || 0,
   netMonthly:   Number(raw.netMonthly)   || 0,
-  netAnnual:    Number(raw.netAnnual)    || 0,
-  taxAnnual:    Number(raw.taxAnnual)    || 0,
+  netAnnual:    raw.netAnnual == null ? null : Number(raw.netAnnual) || 0,
+  taxAnnual:    raw.taxAnnual == null ? null : Number(raw.taxAnnual) || 0,
 });
 
 const normalizeProfile = (raw: Record<string, unknown>): SalaryProfile => ({

@@ -10,6 +10,7 @@ import {
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 import {
   expectErrorResponseWithRequestId,
+  makeProUser,
   registerAndLogin,
   setupTestDb,
 } from "./test-helpers.js";
@@ -308,5 +309,59 @@ describe("salary-profile", () => {
     expect(resA.body.grossSalary).toBe(5000);
     expect(resB.body.grossSalary).toBe(10000);
     expect(resA.body.id).not.toBe(resB.body.id);
+  });
+
+  // ─── Paywall — projeção anual ─────────────────────────────────────────────
+
+  it("free user (trial expirado) recebe null em netAnnual e taxAnnual", async () => {
+    const email = "sal-paywall-free@test.dev";
+    const token = await registerAndLogin(email);
+
+    // expire the trial so the user falls back to the free plan
+    await dbQuery(
+      "UPDATE users SET trial_ends_at = '2020-01-01T00:00:00Z' WHERE email = $1",
+      [email],
+    );
+
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 5000 });
+
+    const res = await request(app)
+      .get("/salary/profile")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(typeof res.body.calculation.netMonthly).toBe("number");
+    expect(res.body.calculation.netMonthly).toBeGreaterThan(0);
+    expect(res.body.calculation.netAnnual).toBeNull();
+    expect(res.body.calculation.taxAnnual).toBeNull();
+  });
+
+  it("usuario pro recebe netAnnual e taxAnnual numericos", async () => {
+    const email = "sal-paywall-pro@test.dev";
+    const token = await registerAndLogin(email);
+
+    // expire trial so access comes exclusively from the pro subscription
+    await dbQuery(
+      "UPDATE users SET trial_ends_at = '2020-01-01T00:00:00Z' WHERE email = $1",
+      [email],
+    );
+    await makeProUser(email);
+
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 5000 });
+
+    const res = await request(app)
+      .get("/salary/profile")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(typeof res.body.calculation.netAnnual).toBe("number");
+    expect(typeof res.body.calculation.taxAnnual).toBe("number");
+    expect(res.body.calculation.netAnnual).toBeGreaterThan(0);
   });
 });

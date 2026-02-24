@@ -74,7 +74,9 @@ function ProfileView({
           {formatCurrency(calculation.netMonthly)}
         </p>
         <p className="text-xs text-cf-text-secondary">
-          {formatCurrency(calculation.netAnnual)} / ano
+          {calculation.netAnnual == null
+            ? "Líquido anual: disponível no Pro"
+            : `${formatCurrency(calculation.netAnnual)} / ano`}
         </p>
       </div>
 

@@ -13,6 +13,7 @@ const TRIAL_FEATURES = {
   csv_export: false,
   analytics_months_max: 6,
   budget_tracking: true,
+  salary_annual: true,
 };
 
 const normalizeUserId = (value) => {

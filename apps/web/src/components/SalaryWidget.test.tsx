@@ -231,6 +231,44 @@ describe("SalaryWidget — edição", () => {
   });
 });
 
+// ─── Paywall — projeção anual ─────────────────────────────────────────────────
+
+describe("SalaryWidget — paywall anual", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("exibe texto de upgrade quando netAnnual e null (free user)", async () => {
+    const freeProfile = buildProfile({
+      calculation: { ...buildProfile().calculation, netAnnual: null, taxAnnual: null },
+    });
+    vi.mocked(salaryService.getProfile).mockResolvedValue(freeProfile);
+
+    renderWidget();
+
+    await waitFor(() => {
+      expect(screen.getByText("Salário líquido")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Líquido anual: disponível no Pro")).toBeInTheDocument();
+    expect(screen.queryByText(/ \/ ano$/)).not.toBeInTheDocument();
+  });
+
+  it("exibe valor anual formatado quando netAnnual e numero (premium user)", async () => {
+    vi.mocked(salaryService.getProfile).mockResolvedValue(buildProfile());
+
+    renderWidget();
+
+    await waitFor(() => {
+      // netMonthly (4161.82) appears in two places (main card + breakdown row)
+      expect(screen.getAllByText(/4\.161/).length).toBeGreaterThan(0);
+    });
+
+    expect(screen.getByText(/49\.941/)).toBeInTheDocument();
+    expect(screen.queryByText("Líquido anual: disponível no Pro")).not.toBeInTheDocument();
+  });
+});
+
 // ─── Criação via formulário (sem perfil) ──────────────────────────────────────
 
 describe("SalaryWidget — criação via formulário", () => {
