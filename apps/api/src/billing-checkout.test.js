@@ -120,6 +120,7 @@ describe("billing checkout", () => {
         .post("/billing/checkout")
         .set("Authorization", `Bearer ${token}`);
       expect(response.status).toBe(500);
+      expect(response.body.code).toBe("BILLING_STRIPE_SECRET_MISSING");
       expect(mockSessionCreate).not.toHaveBeenCalled();
     } finally {
       process.env.STRIPE_SECRET_KEY = saved;
@@ -135,9 +136,48 @@ describe("billing checkout", () => {
         .post("/billing/checkout")
         .set("Authorization", `Bearer ${token}`);
       expect(response.status).toBe(500);
+      expect(response.body.code).toBe("BILLING_CHECKOUT_URLS_NOT_CONFIGURED");
       expect(mockSessionCreate).not.toHaveBeenCalled();
     } finally {
       process.env.STRIPE_CHECKOUT_SUCCESS_URL = saved;
+    }
+  });
+
+  it("retorna 500 quando nao existe price id configurado", async () => {
+    const saved = process.env.STRIPE_PRICE_ID_PRO;
+    delete process.env.STRIPE_PRICE_ID_PRO;
+    await dbQuery(`UPDATE plans SET stripe_price_id = NULL WHERE name = 'pro'`);
+
+    try {
+      const token = await registerAndLogin("checkout-no-price@controlfinance.dev");
+      const response = await request(app)
+        .post("/billing/checkout")
+        .set("Authorization", `Bearer ${token}`);
+      expect(response.status).toBe(500);
+      expect(response.body.code).toBe("BILLING_PRO_PRICE_NOT_CONFIGURED");
+      expect(mockSessionCreate).not.toHaveBeenCalled();
+    } finally {
+      process.env.STRIPE_PRICE_ID_PRO = saved;
+      await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
+    }
+  });
+
+  it("retorna 500 quando price id configurado e invalido", async () => {
+    const saved = process.env.STRIPE_PRICE_ID_PRO;
+    process.env.STRIPE_PRICE_ID_PRO = "prod_invalid";
+    await dbQuery(`UPDATE plans SET stripe_price_id = NULL WHERE name = 'pro'`);
+
+    try {
+      const token = await registerAndLogin("checkout-invalid-price@controlfinance.dev");
+      const response = await request(app)
+        .post("/billing/checkout")
+        .set("Authorization", `Bearer ${token}`);
+      expect(response.status).toBe(500);
+      expect(response.body.code).toBe("BILLING_PRO_PRICE_ID_INVALID");
+      expect(mockSessionCreate).not.toHaveBeenCalled();
+    } finally {
+      process.env.STRIPE_PRICE_ID_PRO = saved;
+      await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
     }
   });
 });

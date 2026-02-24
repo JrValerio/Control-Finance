@@ -21,6 +21,20 @@ const resolveErrorMessage = (error, statusCode) => {
   return "Unexpected error.";
 };
 
+const resolveResponseCode = (error) => {
+  const rawCode = typeof error?.publicCode === "string" ? error.publicCode.trim() : "";
+
+  if (!rawCode) {
+    return "";
+  }
+
+  if (!/^[A-Z0-9_]+$/.test(rawCode)) {
+    return "";
+  }
+
+  return rawCode;
+};
+
 export const notFoundHandler = (_req, _res, next) => {
   next(createNotFoundError());
 };
@@ -33,6 +47,7 @@ export const errorHandler = (error, req, res, next) => {
   const requestId = req.requestId || null;
   const status = resolveStatusCode(error);
   const message = resolveErrorMessage(error, status);
+  const code = resolveResponseCode(error);
   const parsedUserId = Number(req?.user?.id);
   const userId = Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : null;
   const startedAt = Number(req?.requestStartedAt);
@@ -48,11 +63,29 @@ export const errorHandler = (error, req, res, next) => {
     message,
   };
 
+  if (code) {
+    errorLogPayload.code = code;
+  }
+
+  if (typeof error?.message === "string" && error.message.trim()) {
+    errorLogPayload.errorMessage = error.message.trim();
+  }
+
+  if (typeof error?.internalMessage === "string" && error.internalMessage.trim()) {
+    errorLogPayload.internalMessage = error.internalMessage.trim();
+  }
+
   if (typeof error?.stack === "string" && error.stack.trim()) {
     errorLogPayload.stack = error.stack;
   }
 
   logError(errorLogPayload);
 
-  return res.status(status).json({ message, requestId });
+  const responseBody = { message, requestId };
+
+  if (code) {
+    responseBody.code = code;
+  }
+
+  return res.status(status).json(responseBody);
 };
