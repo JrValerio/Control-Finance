@@ -274,7 +274,7 @@ const IncomeSourcesPage = ({
                       onClick={() => openStatementModal(source)}
                       className="rounded border border-brand-1 px-2 py-1 text-xs font-semibold text-brand-1 hover:bg-brand-1/10"
                     >
-                      Gerar mes
+                      Gerar extrato
                     </button>
                     <button
                       type="button"

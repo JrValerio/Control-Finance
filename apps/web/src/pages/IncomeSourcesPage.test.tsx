@@ -167,15 +167,15 @@ describe("IncomeSourcesPage", () => {
     });
   });
 
-  it("abre IncomeStatementModal ao clicar em Gerar mes", async () => {
+  it("abre IncomeStatementModal ao clicar em Gerar extrato", async () => {
     const user = userEvent.setup();
     renderPage();
 
     await waitFor(() => expect(screen.getByText("Pensao INSS")).toBeInTheDocument());
 
-    await user.click(screen.getByRole("button", { name: "Gerar mes" }));
+    await user.click(screen.getByRole("button", { name: "Gerar extrato" }));
 
-    expect(screen.getByText(/Gerar extrato/)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Gerar extrato/ })).toBeInTheDocument();
     expect(screen.getByLabelText(/Mes de referencia/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Valor liquido/)).toBeInTheDocument();
   });
@@ -189,7 +189,7 @@ describe("IncomeSourcesPage", () => {
 
     await waitFor(() => expect(screen.getByText("Pensao INSS")).toBeInTheDocument());
 
-    await user.click(screen.getByRole("button", { name: "Gerar mes" }));
+    await user.click(screen.getByRole("button", { name: "Gerar extrato" }));
 
     await user.type(screen.getByLabelText(/Valor liquido/), "2803,52");
 
@@ -219,7 +219,7 @@ describe("IncomeSourcesPage", () => {
 
     await waitFor(() => expect(screen.getByText("Pensao INSS")).toBeInTheDocument());
 
-    await user.click(screen.getByRole("button", { name: "Gerar mes" }));
+    await user.click(screen.getByRole("button", { name: "Gerar extrato" }));
 
     await user.type(screen.getByLabelText(/Valor liquido/), "2803,52");
 
@@ -247,7 +247,7 @@ describe("IncomeSourcesPage", () => {
 
     await waitFor(() => expect(screen.getByText("Pensao INSS")).toBeInTheDocument());
 
-    await user.click(screen.getByRole("button", { name: "Gerar mes" }));
+    await user.click(screen.getByRole("button", { name: "Gerar extrato" }));
     await user.type(screen.getByLabelText(/Valor liquido/), "2803,52");
     await user.click(screen.getByRole("button", { name: "Lancar entrada" }));
 
