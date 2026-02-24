@@ -3,6 +3,7 @@ import App from "./pages/App";
 import BillingSettings from "./pages/BillingSettings";
 import BillsPage from "./pages/BillsPage";
 import CategoriesSettings from "./pages/CategoriesSettings";
+import IncomeSourcesPage from "./pages/IncomeSourcesPage";
 import Login from "./pages/Login";
 import ProfileSettings from "./pages/ProfileSettings";
 import SecuritySettings from "./pages/SecuritySettings";
@@ -38,6 +39,10 @@ const Dashboard = () => {
     navigate("/app/bills");
   };
 
+  const handleOpenIncomeSources = () => {
+    navigate("/app/income-sources");
+  };
+
   return (
     <App
       onLogout={handleLogout}
@@ -46,6 +51,7 @@ const Dashboard = () => {
       onOpenProfileSettings={handleOpenProfileSettings}
       onOpenSecuritySettings={handleOpenSecuritySettings}
       onOpenBills={handleOpenBills}
+      onOpenIncomeSources={handleOpenIncomeSources}
     />
   );
 };
@@ -130,6 +136,16 @@ const BillsRoute = () => {
   return <BillsPage onBack={handleBack} onLogout={handleLogout} />;
 };
 
+const IncomeSourcesRoute = () => {
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    navigate("/app");
+  };
+
+  return <IncomeSourcesPage onBack={handleBack} />;
+};
+
 const RootRedirect = () => {
   const { isAuthenticated } = useAuth();
 
@@ -185,6 +201,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <BillsRoute />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/income-sources"
+        element={
+          <ProtectedRoute>
+            <IncomeSourcesRoute />
           </ProtectedRoute>
         }
       />
