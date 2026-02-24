@@ -5,6 +5,7 @@ import ImportHistoryModal from "../components/ImportHistoryModal";
 import UpgradeModal from "../components/UpgradeModal";
 import ForecastCard from "../components/ForecastCard";
 import BillsSummaryWidget from "../components/BillsSummaryWidget";
+import SalaryWidget from "../components/SalaryWidget";
 import TransactionList from "../components/TransactionList";
 import {
   transactionsService,
@@ -2125,6 +2126,8 @@ const App = ({
         <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
 
         <BillsSummaryWidget onOpenBills={handleOpenBills} />
+
+        <SalaryWidget />
 
         <div className="space-y-6">
           <section ref={summarySectionRef}>
