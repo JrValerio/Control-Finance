@@ -210,33 +210,45 @@ const calculateDeltaPercentage = (current, previous) => {
   return Number((((current - previous) / previous) * 100).toFixed(2));
 };
 
+const toCategoryKey = (item) =>
+  item.categoryId === null || item.categoryName === UNCATEGORIZED_CATEGORY_NAME
+    ? "uncategorized"
+    : String(item.categoryId);
+
 const buildByCategoryDelta = (currentByCategory = [], previousByCategory = []) => {
   const categoryDeltaMap = new Map();
 
   previousByCategory.forEach((item) => {
-    const key = item.categoryId === null ? "uncategorized" : String(item.categoryId);
+    const key = toCategoryKey(item);
+    const existing = categoryDeltaMap.get(key);
+    if (existing) {
+      existing.previous = Number((existing.previous + Number(item.expense || 0)).toFixed(2));
+      return;
+    }
     categoryDeltaMap.set(key, {
-      categoryId: item.categoryId,
-      category: item.categoryName || UNCATEGORIZED_CATEGORY_NAME,
+      categoryId: key === "uncategorized" ? null : item.categoryId,
+      category: key === "uncategorized" ? UNCATEGORIZED_CATEGORY_NAME : item.categoryName || UNCATEGORIZED_CATEGORY_NAME,
       current: 0,
       previous: Number(item.expense || 0),
     });
   });
 
   currentByCategory.forEach((item) => {
-    const key = item.categoryId === null ? "uncategorized" : String(item.categoryId);
+    const key = toCategoryKey(item);
     const existingItem = categoryDeltaMap.get(key);
     const currentValue = Number(item.expense || 0);
 
     if (existingItem) {
-      existingItem.current = currentValue;
-      existingItem.category = item.categoryName || existingItem.category;
+      existingItem.current = Number((existingItem.current + currentValue).toFixed(2));
+      if (key !== "uncategorized") {
+        existingItem.category = item.categoryName || existingItem.category;
+      }
       return;
     }
 
     categoryDeltaMap.set(key, {
-      categoryId: item.categoryId,
-      category: item.categoryName || UNCATEGORIZED_CATEGORY_NAME,
+      categoryId: key === "uncategorized" ? null : item.categoryId,
+      category: key === "uncategorized" ? UNCATEGORIZED_CATEGORY_NAME : item.categoryName || UNCATEGORIZED_CATEGORY_NAME,
       current: currentValue,
       previous: 0,
     });
@@ -762,7 +774,7 @@ const getMonthlySummaryForRange = async (userId, monthRange) => {
     `
       SELECT
         t.category_id,
-        c.name AS category_name,
+        MIN(c.name) AS category_name,
         COALESCE(SUM(t.value), 0)::numeric AS expense
       FROM transactions t
       LEFT JOIN categories c
@@ -773,26 +785,43 @@ const getMonthlySummaryForRange = async (userId, monthRange) => {
         AND t.type = $4
         AND t.date >= $2
         AND t.date < $3
-      GROUP BY t.category_id, c.name
+      GROUP BY t.category_id
       ORDER BY
         (t.category_id IS NULL) ASC,
         expense DESC,
-        LOWER(COALESCE(c.name, '')) ASC,
+        LOWER(COALESCE(MIN(c.name), '')) ASC,
         t.category_id ASC
     `,
     [userId, monthRange.from, monthRange.to, CATEGORY_EXIT],
   );
+
+  // Consolidate orphaned category_ids (deleted categories whose name resolved to NULL)
+  // into the single "Sem categoria" bucket so the UI never shows duplicates.
+  const byCategoryMap = new Map();
+  for (const row of byCategoryResult.rows) {
+    const name = row.category_name || UNCATEGORIZED_CATEGORY_NAME;
+    const key =
+      row.category_id === null || name === UNCATEGORIZED_CATEGORY_NAME
+        ? "uncategorized"
+        : String(row.category_id);
+    const existing = byCategoryMap.get(key);
+    if (existing) {
+      existing.expense = Number((existing.expense + Number(row.expense)).toFixed(2));
+    } else {
+      byCategoryMap.set(key, {
+        categoryId: key === "uncategorized" ? null : Number(row.category_id),
+        categoryName: key === "uncategorized" ? UNCATEGORIZED_CATEGORY_NAME : name,
+        expense: Number(row.expense),
+      });
+    }
+  }
 
   return {
     month: monthRange.month,
     income,
     expense,
     balance: income - expense,
-    byCategory: byCategoryResult.rows.map((row) => ({
-      categoryId: row.category_id === null ? null : Number(row.category_id),
-      categoryName: row.category_name || UNCATEGORIZED_CATEGORY_NAME,
-      expense: Number(row.expense),
-    })),
+    byCategory: Array.from(byCategoryMap.values()),
   };
 };
 
