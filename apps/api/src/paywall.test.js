@@ -142,6 +142,54 @@ describe("requireActiveTrialOrPaidPlan", () => {
     expect(res.status).toBe(200);
   });
 
+  it("permite acesso em past_due dentro de 3 dias (grace) e envia header de status", async () => {
+    const token = await registerAndLogin("paywall-past-due-grace@test.dev");
+    const userId = await getUserIdByEmail("paywall-past-due-grace@test.dev");
+
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+    await makeProUser("paywall-past-due-grace@test.dev");
+    await dbQuery(
+      `UPDATE subscriptions
+        SET status = 'past_due', updated_at = NOW() - INTERVAL '2 days'
+        WHERE user_id = $1`,
+      [userId],
+    );
+
+    const res = await request(testApp)
+      .get("/trial-gated")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["x-subscription-status"]).toBe("past_due_grace");
+  });
+
+  it("retorna 402 quando past_due ultrapassa 3 dias de grace", async () => {
+    const token = await registerAndLogin("paywall-past-due-expired@test.dev");
+    const userId = await getUserIdByEmail("paywall-past-due-expired@test.dev");
+
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+    await makeProUser("paywall-past-due-expired@test.dev");
+    await dbQuery(
+      `UPDATE subscriptions
+        SET status = 'past_due', updated_at = NOW() - INTERVAL '4 days'
+        WHERE user_id = $1`,
+      [userId],
+    );
+
+    const res = await request(testApp)
+      .get("/trial-gated")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(402);
+    expect(res.body.message).toContain("Periodo de teste encerrado");
+  });
+
   it("retorna 402 para usuario sem trial nem assinatura (legacy sem trial_ends_at)", async () => {
     const token = await registerAndLogin("paywall-no-trial@test.dev");
     const userId = await getUserIdByEmail("paywall-no-trial@test.dev");

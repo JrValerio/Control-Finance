@@ -6,6 +6,9 @@ const createError = (status, message) => {
   return error;
 };
 
+const DEFAULT_PAST_DUE_GRACE_DAYS = 3;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+
 // Features available during an active trial.
 // csv_import/export remain PRO-only; analytics cap is set to 6 months.
 const TRIAL_FEATURES = {
@@ -25,6 +28,40 @@ const normalizeUserId = (value) => {
 
   return parsed;
 };
+
+const parsePositiveInteger = (value, fallbackValue) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallbackValue;
+  }
+  return parsed;
+};
+
+const getPastDueGraceDays = () =>
+  parsePositiveInteger(
+    process.env.BILLING_PAST_DUE_GRACE_DAYS,
+    DEFAULT_PAST_DUE_GRACE_DAYS,
+  );
+
+const toDateOrNull = (value) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+};
+
+const toIsoOrNull = (value) => {
+  if (!value) return null;
+  return value.toISOString();
+};
+
+const isFutureDate = (value, now = new Date()) => {
+  const parsed = toDateOrNull(value);
+  if (!parsed) return false;
+  return parsed.getTime() > now.getTime();
+};
+
+const addDays = (date, days) => new Date(date.getTime() + days * MILLISECONDS_PER_DAY);
 
 const getFreePlan = async () => {
   const result = await dbQuery(
@@ -56,7 +93,7 @@ const getProPlan = async () => {
   return result.rows[0];
 };
 
-const getActivePaidSubscriptionSummary = async (userId) => {
+const getCurrentSubscriptionForEntitlement = async (userId) => {
   const result = await dbQuery(
     `
       SELECT
@@ -65,11 +102,21 @@ const getActivePaidSubscriptionSummary = async (userId) => {
         p.features,
         s.status,
         s.current_period_end AS "currentPeriodEnd",
-        s.cancel_at_period_end AS "cancelAtPeriodEnd"
+        s.cancel_at_period_end AS "cancelAtPeriodEnd",
+        s.updated_at AS "updatedAt"
       FROM subscriptions s
       JOIN plans p ON p.id = s.plan_id
       WHERE s.user_id = $1
         AND s.status IN ('active', 'trialing', 'past_due')
+      ORDER BY
+        CASE s.status
+          WHEN 'active' THEN 1
+          WHEN 'trialing' THEN 2
+          WHEN 'past_due' THEN 3
+          ELSE 4
+        END,
+        COALESCE(s.updated_at, s.created_at) DESC,
+        s.id DESC
       LIMIT 1
     `,
     [userId],
@@ -78,28 +125,9 @@ const getActivePaidSubscriptionSummary = async (userId) => {
   return result.rows[0] ?? null;
 };
 
-const getActiveTrialEndsAtForUser = async (userId) => {
-  const trialResult = await dbQuery(
-    `SELECT trial_ends_at FROM users WHERE id = $1 LIMIT 1`,
-    [userId],
-  );
-  const trialEndsAt =
-    trialResult.rows.length > 0 ? trialResult.rows[0].trial_ends_at : null;
-
-  if (!trialEndsAt) {
-    return null;
-  }
-
-  if (new Date(trialEndsAt) <= new Date()) {
-    return null;
-  }
-
-  return trialEndsAt;
-};
-
-const getActivePrepaidProExpiresAtForUser = async (userId) => {
+const getUserBillingDates = async (userId) => {
   const result = await dbQuery(
-    `SELECT pro_expires_at
+    `SELECT trial_ends_at AS "trialEndsAt", pro_expires_at AS "proExpiresAt"
       FROM users
       WHERE id = $1
       LIMIT 1`,
@@ -110,45 +138,125 @@ const getActivePrepaidProExpiresAtForUser = async (userId) => {
     return null;
   }
 
-  const proExpiresAt = result.rows[0].pro_expires_at;
-  if (!proExpiresAt) {
-    return null;
+  return result.rows[0];
+};
+
+/**
+ * Resolves effective entitlement for a user.
+ * Priority order:
+ *  1. recurring active/trialing
+ *  2. recurring past_due within grace window
+ *  3. prepaid active (pro_expires_at)
+ *  4. active trial
+ *  5. free
+ */
+export const resolveEntitlement = async (userId) => {
+  const normalizedUserId = normalizeUserId(userId);
+  const now = new Date();
+
+  const activeSubscription = await getCurrentSubscriptionForEntitlement(
+    normalizedUserId,
+  );
+  const userBillingDates = await getUserBillingDates(normalizedUserId);
+
+  const trialEndsAt = toDateOrNull(userBillingDates?.trialEndsAt ?? null);
+  const proExpiresAt = toDateOrNull(userBillingDates?.proExpiresAt ?? null);
+
+  let pastDueContext = null;
+
+  if (activeSubscription?.status === "active" || activeSubscription?.status === "trialing") {
+    return {
+      plan: "pro",
+      source: "recurring",
+      subscriptionStatus: activeSubscription.status,
+      trialEndsAt: null,
+      proExpiresAt: null,
+      graceEndsAt: null,
+      subscription: activeSubscription,
+    };
   }
 
-  if (new Date(proExpiresAt) <= new Date()) {
-    return null;
+  if (activeSubscription?.status === "past_due") {
+    const graceDays = getPastDueGraceDays();
+    const referenceDate = toDateOrNull(activeSubscription.updatedAt) ?? now;
+    const graceEndsAt = addDays(referenceDate, graceDays);
+
+    if (now.getTime() <= graceEndsAt.getTime()) {
+      return {
+        plan: "pro",
+        source: "recurring_grace",
+        subscriptionStatus: "past_due",
+        trialEndsAt: null,
+        proExpiresAt: null,
+        graceEndsAt,
+        subscription: activeSubscription,
+      };
+    }
+
+    pastDueContext = {
+      subscriptionStatus: "past_due",
+      graceEndsAt,
+      subscription: activeSubscription,
+    };
   }
 
-  return proExpiresAt;
+  if (isFutureDate(proExpiresAt, now)) {
+    return {
+      plan: "pro",
+      source: "prepaid",
+      subscriptionStatus: pastDueContext?.subscriptionStatus ?? null,
+      trialEndsAt: null,
+      proExpiresAt,
+      graceEndsAt: pastDueContext?.graceEndsAt ?? null,
+      subscription: pastDueContext?.subscription ?? null,
+    };
+  }
+
+  if (isFutureDate(trialEndsAt, now)) {
+    return {
+      plan: "trial",
+      source: "trial",
+      subscriptionStatus: pastDueContext?.subscriptionStatus ?? null,
+      trialEndsAt,
+      proExpiresAt: null,
+      graceEndsAt: pastDueContext?.graceEndsAt ?? null,
+      subscription: pastDueContext?.subscription ?? null,
+    };
+  }
+
+  return {
+    plan: "free",
+    source: "none",
+    subscriptionStatus: pastDueContext?.subscriptionStatus ?? null,
+    trialEndsAt: null,
+    proExpiresAt: null,
+    graceEndsAt: pastDueContext?.graceEndsAt ?? null,
+    subscription: pastDueContext?.subscription ?? null,
+  };
 };
 
 /**
  * Returns the active plan features for a user.
- * Priority order:
- *  1. Active recurring subscription
- *  2. Active prepaid PRO entitlement (users.pro_expires_at)
- *  3. Active trial
- *  4. Free plan
  */
 export const getActivePlanFeaturesForUser = async (userId) => {
   const normalizedUserId = normalizeUserId(userId);
+  const entitlement = await resolveEntitlement(normalizedUserId);
 
-  const activeSubscription = await getActivePaidSubscriptionSummary(
-    normalizedUserId,
-  );
-  if (activeSubscription) {
-    return activeSubscription.features;
-  }
+  if (entitlement.plan === "pro") {
+    if (
+      entitlement.source === "recurring" ||
+      entitlement.source === "recurring_grace"
+    ) {
+      if (entitlement.subscription?.features) {
+        return entitlement.subscription.features;
+      }
+    }
 
-  const prepaidProExpiresAt =
-    await getActivePrepaidProExpiresAtForUser(normalizedUserId);
-  if (prepaidProExpiresAt) {
     const proPlan = await getProPlan();
     return proPlan.features;
   }
 
-  const trialEndsAt = await getActiveTrialEndsAtForUser(normalizedUserId);
-  if (trialEndsAt && new Date(trialEndsAt) > new Date()) {
+  if (entitlement.plan === "trial") {
     return TRIAL_FEATURES;
   }
 
@@ -160,14 +268,33 @@ export const getActivePlanFeaturesForUser = async (userId) => {
  * Returns a summary of the user's current subscription for the /billing/subscription endpoint.
  */
 export const getSubscriptionSummaryForUser = async (userId) => {
-  const normalizedUserId = normalizeUserId(userId);
+  const entitlement = await resolveEntitlement(userId);
 
-  const activeSubscription = await getActivePaidSubscriptionSummary(
-    normalizedUserId,
-  );
+  if (
+    entitlement.plan === "pro" &&
+    (entitlement.source === "recurring" || entitlement.source === "recurring_grace")
+  ) {
+    const row = entitlement.subscription;
+    const entitlementSource =
+      entitlement.source === "recurring_grace"
+        ? "subscription_grace"
+        : "subscription";
 
-  if (activeSubscription) {
-    const row = activeSubscription;
+    if (!row) {
+      const proPlan = await getProPlan();
+      return {
+        plan: proPlan.name,
+        displayName: proPlan.displayName,
+        features: proPlan.features,
+        subscription: {
+          status: "active",
+          currentPeriodEnd: null,
+          cancelAtPeriodEnd: false,
+        },
+        entitlementSource,
+        graceEndsAt: toIsoOrNull(entitlement.graceEndsAt),
+      };
+    }
 
     return {
       plan: row.plan,
@@ -178,13 +305,12 @@ export const getSubscriptionSummaryForUser = async (userId) => {
         currentPeriodEnd: row.currentPeriodEnd,
         cancelAtPeriodEnd: row.cancelAtPeriodEnd,
       },
-      entitlementSource: "subscription",
+      entitlementSource,
+      graceEndsAt: toIsoOrNull(entitlement.graceEndsAt),
     };
   }
 
-  const prepaidProExpiresAt =
-    await getActivePrepaidProExpiresAtForUser(normalizedUserId);
-  if (prepaidProExpiresAt) {
+  if (entitlement.plan === "pro" && entitlement.source === "prepaid") {
     const proPlan = await getProPlan();
     return {
       plan: proPlan.name,
@@ -192,11 +318,11 @@ export const getSubscriptionSummaryForUser = async (userId) => {
       features: proPlan.features,
       subscription: {
         status: "prepaid_active",
-        currentPeriodEnd: prepaidProExpiresAt,
+        currentPeriodEnd: toIsoOrNull(entitlement.proExpiresAt),
         cancelAtPeriodEnd: true,
       },
       entitlementSource: "prepaid",
-      proExpiresAt: prepaidProExpiresAt,
+      proExpiresAt: toIsoOrNull(entitlement.proExpiresAt),
     };
   }
 
@@ -216,46 +342,14 @@ export const getSubscriptionSummaryForUser = async (userId) => {
  * Returns the user's effective entitlement source.
  */
 export const getEntitlementSummaryForUser = async (userId) => {
-  const normalizedUserId = normalizeUserId(userId);
-
-  const activeSubscription = await getActivePaidSubscriptionSummary(
-    normalizedUserId,
-  );
-
-  if (activeSubscription) {
-    return {
-      plan: activeSubscription.plan,
-      source: "subscription",
-      proExpiresAt: null,
-      trialEndsAt: null,
-    };
-  }
-
-  const prepaidProExpiresAt =
-    await getActivePrepaidProExpiresAtForUser(normalizedUserId);
-  if (prepaidProExpiresAt) {
-    return {
-      plan: "pro",
-      source: "prepaid",
-      proExpiresAt: prepaidProExpiresAt,
-      trialEndsAt: null,
-    };
-  }
-
-  const trialEndsAt = await getActiveTrialEndsAtForUser(normalizedUserId);
-  if (trialEndsAt) {
-    return {
-      plan: "free",
-      source: "trial",
-      proExpiresAt: null,
-      trialEndsAt,
-    };
-  }
+  const entitlement = await resolveEntitlement(userId);
 
   return {
-    plan: "free",
-    source: "free",
-    proExpiresAt: null,
-    trialEndsAt: null,
+    plan: entitlement.plan,
+    source: entitlement.source,
+    subscriptionStatus: entitlement.subscriptionStatus,
+    proExpiresAt: toIsoOrNull(entitlement.proExpiresAt),
+    trialEndsAt: toIsoOrNull(entitlement.trialEndsAt),
+    graceEndsAt: toIsoOrNull(entitlement.graceEndsAt),
   };
 };

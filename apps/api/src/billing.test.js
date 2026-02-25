@@ -88,10 +88,64 @@ describe("billing", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body.plan).toBe("free");
+    expect(response.body.plan).toBe("trial");
     expect(response.body.source).toBe("trial");
     expect(typeof response.body.trialEndsAt).toBe("string");
     expect(response.body.proExpiresAt).toBeNull();
+  });
+
+  it("GET /billing/entitlement retorna source=recurring_grace para usuario past_due dentro da janela", async () => {
+    const email = "billing-entitlement-grace@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    const userId = await getUserIdByEmail(email);
+    await makeProUser(email);
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+    await dbQuery(
+      `UPDATE subscriptions
+        SET status = 'past_due', updated_at = NOW() - INTERVAL '2 days'
+        WHERE user_id = $1`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/billing/entitlement")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.plan).toBe("pro");
+    expect(response.body.source).toBe("recurring_grace");
+    expect(response.body.subscriptionStatus).toBe("past_due");
+    expect(typeof response.body.graceEndsAt).toBe("string");
+  });
+
+  it("GET /billing/entitlement retorna source=none para usuario past_due fora da janela", async () => {
+    const email = "billing-entitlement-grace-expired@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    const userId = await getUserIdByEmail(email);
+    await makeProUser(email);
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+    await dbQuery(
+      `UPDATE subscriptions
+        SET status = 'past_due', updated_at = NOW() - INTERVAL '4 days'
+        WHERE user_id = $1`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/billing/entitlement")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.plan).toBe("free");
+    expect(response.body.source).toBe("none");
+    expect(response.body.subscriptionStatus).toBe("past_due");
+    expect(typeof response.body.graceEndsAt).toBe("string");
   });
 
   it("GET /billing/entitlement retorna source=prepaid para usuario com pro_expires_at ativo", async () => {
@@ -135,6 +189,35 @@ describe("billing", () => {
       cancelAtPeriodEnd: true,
     });
     expect(typeof response.body.subscription.currentPeriodEnd).toBe("string");
+  });
+
+  it("GET /billing/subscription retorna entitlementSource=subscription_grace para usuario past_due dentro da janela", async () => {
+    const email = "billing-summary-grace@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    const userId = await getUserIdByEmail(email);
+    await makeProUser(email);
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+    await dbQuery(
+      `UPDATE subscriptions
+        SET status = 'past_due', updated_at = NOW() - INTERVAL '2 days'
+        WHERE user_id = $1`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/billing/subscription")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.plan).toBe("pro");
+    expect(response.body.entitlementSource).toBe("subscription_grace");
+    expect(response.body.subscription).toMatchObject({
+      status: "past_due",
+    });
+    expect(typeof response.body.graceEndsAt).toBe("string");
   });
 
   it("POST /transactions/import/dry-run retorna 402 para usuario free", async () => {
