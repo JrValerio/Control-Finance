@@ -30,8 +30,18 @@ const formatDate = (isoString: string | null | undefined): string => {
   return date.toLocaleDateString("pt-BR");
 };
 
+const resolveCheckoutStatus = (): string => {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  return params.get("checkout")?.trim().toLowerCase() || "";
+};
+
 const STATUS_LABELS: Record<string, string> = {
   active: "Ativo",
+  prepaid_active: "Ativo (pre-pago)",
   trialing: "Em teste",
   past_due: "Pagamento pendente",
   canceled: "Cancelado",
@@ -40,6 +50,7 @@ const STATUS_LABELS: Record<string, string> = {
 
 const STATUS_CLASSES: Record<string, string> = {
   active: "border-green-200 bg-green-50 text-green-700",
+  prepaid_active: "border-green-200 bg-green-50 text-green-700",
   trialing: "border-blue-200 bg-blue-50 text-blue-700",
   past_due: "border-amber-200 bg-amber-50 text-amber-700",
   canceled: "border-gray-200 bg-gray-50 text-gray-600",
@@ -84,7 +95,7 @@ const BillingSettings = ({
     setIsActionLoading(true);
     setActionError(null);
     try {
-      const { url } = await billingService.createCheckout();
+      const { url } = await billingService.createPrepaidCheckout();
       window.location.href = url;
     } catch (error) {
       setActionError(
@@ -119,8 +130,13 @@ const BillingSettings = ({
   const statusKey = summary?.subscription?.status ?? "";
   const statusLabel = STATUS_LABELS[statusKey] ?? "";
   const statusClass = STATUS_CLASSES[statusKey] ?? "";
+  const isPrepaid = statusKey === "prepaid_active";
   const periodEnd = summary?.subscription?.currentPeriodEnd;
   const cancelAtPeriodEnd = summary?.subscription?.cancelAtPeriodEnd;
+  const checkoutStatus = resolveCheckoutStatus();
+  const showCheckoutPendingNotice =
+    checkoutStatus === "success" && !isLoading && !loadError && !isPro;
+  const showCheckoutCanceledNotice = checkoutStatus === "cancel";
 
   return (
     <div className="min-h-screen bg-cf-bg-page py-6">
@@ -180,6 +196,18 @@ const BillingSettings = ({
 
           {!isLoading && !loadError && summary ? (
             <div className="mt-4 space-y-4">
+              {showCheckoutPendingNotice ? (
+                <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                  Pagamento recebido. Confirmando liberacao do plano Pro. Em metodos como boleto, a confirmacao pode levar alguns minutos.
+                </div>
+              ) : null}
+
+              {showCheckoutCanceledNotice ? (
+                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                  Checkout cancelado. Nenhuma cobranca foi confirmada.
+                </div>
+              ) : null}
+
               {/* Plan card */}
               <div className="rounded border border-cf-border bg-cf-bg-subtle p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -227,7 +255,9 @@ const BillingSettings = ({
 
                 {isPro && periodEnd ? (
                   <p className="mt-3 text-xs text-cf-text-secondary">
-                    {cancelAtPeriodEnd
+                    {isPrepaid
+                      ? `Expira em: ${formatDate(periodEnd)}`
+                      : cancelAtPeriodEnd
                       ? `Cancela em: ${formatDate(periodEnd)}`
                       : `Renovacao em: ${formatDate(periodEnd)}`}
                   </p>
