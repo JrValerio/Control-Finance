@@ -130,14 +130,15 @@ export const requireActiveTrialOrPaidPlan = async (req, res, next) => {
 
     // Check for active prepaid PRO entitlement
     const prepaidResult = await dbQuery(
-      `SELECT 1 FROM users
+      `SELECT pro_expires_at
+       FROM users
        WHERE id = $1
-         AND pro_expires_at IS NOT NULL
-         AND pro_expires_at > NOW()
        LIMIT 1`,
       [userId],
     );
-    if (prepaidResult.rows.length > 0) return next();
+    const prepaidProExpiresAt =
+      prepaidResult.rows.length > 0 ? prepaidResult.rows[0].pro_expires_at : null;
+    if (prepaidProExpiresAt && new Date(prepaidProExpiresAt) > new Date()) return next();
 
     // Check for an active trial (trial_ends_at column added by migration 014)
     const trialResult = await dbQuery(
