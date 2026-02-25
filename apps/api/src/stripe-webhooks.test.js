@@ -468,6 +468,41 @@ describe("stripe webhooks", () => {
     expect(new Date(proExpiresAt).getTime()).toBeGreaterThan(Date.now());
   });
 
+  it("checkout.session.completed aplica fallback legado de 6 meses sem entitlement_months", async () => {
+    await registerAndLogin("webhook-prepaid-legacy-fallback@controlfinance.dev");
+    const userId = await getUserIdByEmail("webhook-prepaid-legacy-fallback@controlfinance.dev");
+
+    const response = await stripePost({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_prepaid_legacy_002",
+          mode: "payment",
+          payment_status: "paid",
+          payment_intent: "pi_prepaid_legacy_002",
+          metadata: {
+            userId: String(userId),
+            entitlement: "pro_6_months",
+          },
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+
+    const grantResult = await dbQuery(
+      `SELECT entitlement_months
+         FROM prepaid_pro_grants
+        WHERE stripe_checkout_session_id = 'cs_prepaid_legacy_002'
+        LIMIT 1`,
+    );
+    expect(grantResult.rows[0]?.entitlement_months).toBe(6);
+
+    const proExpiresAt = await getUserProExpiresAt(userId);
+    expect(proExpiresAt).not.toBeNull();
+    expect(new Date(proExpiresAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
   it("checkout.session.async_payment_succeeded concede pre-pago com idempotencia por session id", async () => {
     await registerAndLogin("webhook-prepaid-async@controlfinance.dev");
     const userId = await getUserIdByEmail("webhook-prepaid-async@controlfinance.dev");
