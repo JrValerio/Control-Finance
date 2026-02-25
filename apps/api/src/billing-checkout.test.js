@@ -214,7 +214,10 @@ describe("billing checkout", () => {
     expect(mockSessionCreate).toHaveBeenCalledOnce();
     const args = mockSessionCreate.mock.calls[0][0];
     expect(args.mode).toBe("payment");
-    expect(args.automatic_payment_methods).toEqual({ enabled: true });
+    expect(args.automatic_payment_methods).toBeUndefined();
+    expect(args.payment_intent_data?.automatic_payment_methods).toEqual({
+      enabled: true,
+    });
     expect(args.line_items[0].price).toBe("price_prepaid_year_env");
     expect(args.metadata.userId).toBe(String(userId));
     expect(args.metadata.entitlement).toBe("pro_12_months");
