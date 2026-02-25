@@ -35,6 +35,7 @@ router.post("/checkout", async (req, res, next) => {
     const result = await createCheckoutSession({
       userId: req.user.id,
       userEmail: req.user.email,
+      interval: req.body?.interval,
     });
     res.status(201).json(result);
   } catch (error) {

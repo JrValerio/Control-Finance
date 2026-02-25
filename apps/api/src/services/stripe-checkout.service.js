@@ -13,7 +13,43 @@ const createError = (status, message, publicCode = "") => {
 const isValidStripePriceId = (value) =>
   typeof value === "string" && value.trim().startsWith("price_");
 
-const resolvePriceId = async () => {
+const resolveCheckoutInterval = (value) => {
+  const normalizedValue =
+    typeof value === "string" ? value.trim().toLowerCase() : "";
+
+  if (!normalizedValue) {
+    return "month";
+  }
+
+  if (normalizedValue === "month" || normalizedValue === "year") {
+    return normalizedValue;
+  }
+
+  throw createError(
+    400,
+    "interval deve ser 'month' ou 'year'.",
+    "BILLING_CHECKOUT_INTERVAL_INVALID",
+  );
+};
+
+const resolvePriceIdFromEnv = (envKey) => {
+  const rawValue = process.env[envKey];
+  if (!rawValue) {
+    return "";
+  }
+
+  if (!isValidStripePriceId(rawValue)) {
+    throw createError(
+      500,
+      `Invalid Stripe price ID configured in ${envKey}.`,
+      "BILLING_PRO_PRICE_ID_INVALID",
+    );
+  }
+
+  return rawValue.trim();
+};
+
+const resolveMonthlyPriceIdFromLegacyConfig = async () => {
   const dbResult = await dbQuery(
     `SELECT stripe_price_id FROM plans
       WHERE name = 'pro' AND is_active = true AND stripe_price_id IS NOT NULL
@@ -33,17 +69,32 @@ const resolvePriceId = async () => {
     );
   }
 
-  const envPriceId = process.env.STRIPE_PRICE_ID_PRO;
-  if (envPriceId) {
-    if (isValidStripePriceId(envPriceId)) {
-      return envPriceId;
+  const legacyPriceId = resolvePriceIdFromEnv("STRIPE_PRICE_ID_PRO");
+  if (legacyPriceId) {
+    return legacyPriceId;
+  }
+
+  return "";
+};
+
+const resolvePriceId = async (interval) => {
+  if (interval === "month") {
+    const monthlyEnvPriceId = resolvePriceIdFromEnv("STRIPE_PRICE_ID_PRO_MONTHLY");
+    if (monthlyEnvPriceId) {
+      return monthlyEnvPriceId;
     }
 
-    throw createError(
-      500,
-      "Invalid Stripe price ID configured in STRIPE_PRICE_ID_PRO.",
-      "BILLING_PRO_PRICE_ID_INVALID",
-    );
+    const legacyMonthlyPriceId = await resolveMonthlyPriceIdFromLegacyConfig();
+    if (legacyMonthlyPriceId) {
+      return legacyMonthlyPriceId;
+    }
+  }
+
+  if (interval === "year") {
+    const yearlyEnvPriceId = resolvePriceIdFromEnv("STRIPE_PRICE_ID_PRO_YEARLY");
+    if (yearlyEnvPriceId) {
+      return yearlyEnvPriceId;
+    }
   }
 
   throw createError(
@@ -53,7 +104,7 @@ const resolvePriceId = async () => {
   );
 };
 
-export const createCheckoutSession = async ({ userId, userEmail }) => {
+export const createCheckoutSession = async ({ userId, userEmail, interval }) => {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) {
     throw createError(500, "Stripe secret key not configured.", "BILLING_STRIPE_SECRET_MISSING");
@@ -69,6 +120,8 @@ export const createCheckoutSession = async ({ userId, userEmail }) => {
     );
   }
 
+  const resolvedInterval = resolveCheckoutInterval(interval);
+
   const existing = await dbQuery(
     `SELECT id FROM subscriptions
       WHERE user_id = $1 AND status IN ('active', 'trialing', 'past_due')
@@ -77,7 +130,7 @@ export const createCheckoutSession = async ({ userId, userEmail }) => {
   );
   if (existing.rows.length > 0) throw createError(409, "Voce ja possui uma assinatura ativa.");
 
-  const priceId = await resolvePriceId();
+  const priceId = await resolvePriceId(resolvedInterval);
 
   const stripe = new Stripe(secretKey, { apiVersion: "2026-01-28.clover" });
 
@@ -88,7 +141,10 @@ export const createCheckoutSession = async ({ userId, userEmail }) => {
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { userId: String(userId) },
+      metadata: {
+        userId: String(userId),
+        billing_interval: resolvedInterval,
+      },
       ...(userEmail ? { customer_email: userEmail } : {}),
       allow_promotion_codes: true,
       billing_address_collection: "auto",

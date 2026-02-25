@@ -26,6 +26,8 @@ describe("billing checkout", () => {
     process.env.STRIPE_SECRET_KEY = "sk_test_mock_controlfinance";
     process.env.STRIPE_CHECKOUT_SUCCESS_URL = "https://app.test/billing/success";
     process.env.STRIPE_CHECKOUT_CANCEL_URL = "https://app.test/billing/cancel";
+    process.env.STRIPE_PRICE_ID_PRO_MONTHLY = "price_pro_monthly_env";
+    process.env.STRIPE_PRICE_ID_PRO_YEARLY = "price_pro_yearly_env";
     await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
   });
 
@@ -34,6 +36,9 @@ describe("billing checkout", () => {
     delete process.env.STRIPE_SECRET_KEY;
     delete process.env.STRIPE_CHECKOUT_SUCCESS_URL;
     delete process.env.STRIPE_CHECKOUT_CANCEL_URL;
+    delete process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
+    delete process.env.STRIPE_PRICE_ID_PRO_YEARLY;
+    delete process.env.STRIPE_PRICE_ID_PRO;
     delete process.env.STRIPE_PREPAID_PRO_AMOUNT_CENTS;
     delete process.env.STRIPE_PREPAID_PRO_DURATION_MONTHS;
   });
@@ -93,11 +98,40 @@ describe("billing checkout", () => {
     expect(mockSessionCreate).toHaveBeenCalledOnce();
     const args = mockSessionCreate.mock.calls[0][0];
     expect(args.mode).toBe("subscription");
-    expect(args.line_items[0].price).toBe("price_pro_monthly");
+    expect(args.line_items[0].price).toBe("price_pro_monthly_env");
     expect(args.line_items[0].quantity).toBe(1);
     expect(args.metadata.userId).toBe(String(userId));
+    expect(args.metadata.billing_interval).toBe("month");
     expect(args.success_url).toBe("https://app.test/billing/success");
     expect(args.cancel_url).toBe("https://app.test/billing/cancel");
+  });
+
+  it("usa price anual quando interval=year", async () => {
+    const token = await registerAndLogin("checkout-yearly@controlfinance.dev");
+
+    const response = await request(app)
+      .post("/billing/checkout")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ interval: "year" });
+
+    expect(response.status).toBe(201);
+    expect(mockSessionCreate).toHaveBeenCalledOnce();
+    const args = mockSessionCreate.mock.calls[0][0];
+    expect(args.line_items[0].price).toBe("price_pro_yearly_env");
+    expect(args.metadata.billing_interval).toBe("year");
+  });
+
+  it("retorna 400 para interval invalido", async () => {
+    const token = await registerAndLogin("checkout-invalid-interval@controlfinance.dev");
+
+    const response = await request(app)
+      .post("/billing/checkout")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ interval: "weekly" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("BILLING_CHECKOUT_INTERVAL_INVALID");
+    expect(mockSessionCreate).not.toHaveBeenCalled();
   });
 
   it("passa customer_email quando disponivel no token", async () => {
@@ -146,7 +180,9 @@ describe("billing checkout", () => {
   });
 
   it("retorna 500 quando nao existe price id configurado", async () => {
-    const saved = process.env.STRIPE_PRICE_ID_PRO;
+    const savedMonthly = process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
+    const savedLegacy = process.env.STRIPE_PRICE_ID_PRO;
+    delete process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
     delete process.env.STRIPE_PRICE_ID_PRO;
     await dbQuery(`UPDATE plans SET stripe_price_id = NULL WHERE name = 'pro'`);
 
@@ -159,15 +195,15 @@ describe("billing checkout", () => {
       expect(response.body.code).toBe("BILLING_PRO_PRICE_NOT_CONFIGURED");
       expect(mockSessionCreate).not.toHaveBeenCalled();
     } finally {
-      process.env.STRIPE_PRICE_ID_PRO = saved;
+      process.env.STRIPE_PRICE_ID_PRO_MONTHLY = savedMonthly;
+      process.env.STRIPE_PRICE_ID_PRO = savedLegacy;
       await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
     }
   });
 
   it("retorna 500 quando price id configurado e invalido", async () => {
-    const saved = process.env.STRIPE_PRICE_ID_PRO;
-    process.env.STRIPE_PRICE_ID_PRO = "prod_invalid";
-    await dbQuery(`UPDATE plans SET stripe_price_id = NULL WHERE name = 'pro'`);
+    const savedMonthly = process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
+    process.env.STRIPE_PRICE_ID_PRO_MONTHLY = "prod_invalid";
 
     try {
       const token = await registerAndLogin("checkout-invalid-price@controlfinance.dev");
@@ -178,8 +214,26 @@ describe("billing checkout", () => {
       expect(response.body.code).toBe("BILLING_PRO_PRICE_ID_INVALID");
       expect(mockSessionCreate).not.toHaveBeenCalled();
     } finally {
-      process.env.STRIPE_PRICE_ID_PRO = saved;
-      await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
+      process.env.STRIPE_PRICE_ID_PRO_MONTHLY = savedMonthly;
+    }
+  });
+
+  it("retorna 500 quando price anual nao configurado", async () => {
+    const savedYearly = process.env.STRIPE_PRICE_ID_PRO_YEARLY;
+    delete process.env.STRIPE_PRICE_ID_PRO_YEARLY;
+
+    try {
+      const token = await registerAndLogin("checkout-missing-year-price@controlfinance.dev");
+      const response = await request(app)
+        .post("/billing/checkout")
+        .set("Authorization", `Bearer ${token}`)
+        .send({ interval: "year" });
+
+      expect(response.status).toBe(500);
+      expect(response.body.code).toBe("BILLING_PRO_PRICE_NOT_CONFIGURED");
+      expect(mockSessionCreate).not.toHaveBeenCalled();
+    } finally {
+      process.env.STRIPE_PRICE_ID_PRO_YEARLY = savedYearly;
     }
   });
 
