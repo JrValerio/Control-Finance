@@ -149,6 +149,10 @@ const getUserBillingDates = async (userId) => {
  *  3. prepaid active (pro_expires_at)
  *  4. active trial
  *  5. free
+ *
+ * NOTE: for now, the grace reference timestamp comes from subscription.updated_at.
+ * This keeps the model migration-free, but webhook noise may move updated_at.
+ * Future hardening can add subscriptions.past_due_since for immutable tracking.
  */
 export const resolveEntitlement = async (userId) => {
   const normalizedUserId = normalizeUserId(userId);
@@ -275,6 +279,9 @@ export const getSubscriptionSummaryForUser = async (userId) => {
     (entitlement.source === "recurring" || entitlement.source === "recurring_grace")
   ) {
     const row = entitlement.subscription;
+    // Keep API contract stable:
+    // - /billing/entitlement uses source=recurring_grace
+    // - /billing/subscription uses entitlementSource=subscription_grace
     const entitlementSource =
       entitlement.source === "recurring_grace"
         ? "subscription_grace"

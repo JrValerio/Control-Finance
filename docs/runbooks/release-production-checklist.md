@@ -24,6 +24,7 @@ Standardize post-release verification for API + Web in production, with traceabl
   - [ ] `CORS_ORIGIN`
   - [ ] `TRUST_PROXY=1`
   - [ ] `APP_BUILD_TIMESTAMP` (set in Render deploy environment)
+  - [ ] `BILLING_PAST_DUE_GRACE_DAYS` (optional, default `3`)
 
 ### Web (Vercel)
 - [ ] Confirm latest deployment is from `main`.
