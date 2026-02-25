@@ -214,6 +214,7 @@ describe("billing checkout", () => {
     expect(mockSessionCreate).toHaveBeenCalledOnce();
     const args = mockSessionCreate.mock.calls[0][0];
     expect(args.mode).toBe("payment");
+    expect(args.automatic_payment_methods).toBeUndefined();
     expect(args.payment_intent_data?.automatic_payment_methods).toEqual({
       enabled: true,
     });
