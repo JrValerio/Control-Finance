@@ -88,13 +88,27 @@ const resolvePriceId = async (interval) => {
     if (legacyMonthlyPriceId) {
       return legacyMonthlyPriceId;
     }
+
+    throw createError(
+      500,
+      "Monthly pro plan price not configured.",
+      "BILLING_PRO_PRICE_NOT_CONFIGURED",
+    );
   }
 
   if (interval === "year") {
+    // Yearly checkout must be explicitly configured via STRIPE_PRICE_ID_PRO_YEARLY.
+    // No DB or legacy env fallback to avoid silent monthly/yearly mixups.
     const yearlyEnvPriceId = resolvePriceIdFromEnv("STRIPE_PRICE_ID_PRO_YEARLY");
     if (yearlyEnvPriceId) {
       return yearlyEnvPriceId;
     }
+
+    throw createError(
+      500,
+      "Yearly pro plan price not configured.",
+      "BILLING_PRO_PRICE_NOT_CONFIGURED",
+    );
   }
 
   throw createError(
