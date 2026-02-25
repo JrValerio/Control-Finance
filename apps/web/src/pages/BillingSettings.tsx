@@ -95,7 +95,7 @@ const BillingSettings = ({
     setIsActionLoading(true);
     setActionError(null);
     try {
-      const { url } = await billingService.createPrepaidCheckout();
+      const { url } = await billingService.createCheckout();
       window.location.href = url;
     } catch (error) {
       setActionError(

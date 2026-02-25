@@ -35,6 +35,7 @@ describe("billing checkout", () => {
     delete process.env.STRIPE_SECRET_KEY;
     delete process.env.STRIPE_CHECKOUT_SUCCESS_URL;
     delete process.env.STRIPE_CHECKOUT_CANCEL_URL;
+    delete process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
     delete process.env.STRIPE_PRICE_ID_PRO_PREPAID_YEAR;
     delete process.env.STRIPE_PREPAID_PRO_DURATION_MONTHS;
   });
@@ -47,6 +48,7 @@ describe("billing checkout", () => {
     await dbQuery("DELETE FROM subscriptions");
     await dbQuery("DELETE FROM transactions");
     await dbQuery("DELETE FROM users");
+    delete process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
     mockSessionCreate.mockReset();
     mockSessionCreate.mockResolvedValue({ url: "https://checkout.stripe.com/test-session-001" });
   });
@@ -148,6 +150,8 @@ describe("billing checkout", () => {
 
   it("retorna 500 quando nao existe price id configurado", async () => {
     const saved = process.env.STRIPE_PRICE_ID_PRO;
+    const savedMonthly = process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
+    delete process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
     delete process.env.STRIPE_PRICE_ID_PRO;
     await dbQuery(`UPDATE plans SET stripe_price_id = NULL WHERE name = 'pro'`);
 
@@ -161,12 +165,39 @@ describe("billing checkout", () => {
       expect(mockSessionCreate).not.toHaveBeenCalled();
     } finally {
       process.env.STRIPE_PRICE_ID_PRO = saved;
+      process.env.STRIPE_PRICE_ID_PRO_MONTHLY = savedMonthly;
+      await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
+    }
+  });
+
+  it("usa STRIPE_PRICE_ID_PRO_MONTHLY quando DB nao possui price", async () => {
+    const saved = process.env.STRIPE_PRICE_ID_PRO;
+    const savedMonthly = process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
+    process.env.STRIPE_PRICE_ID_PRO_MONTHLY = "price_pro_monthly_env";
+    delete process.env.STRIPE_PRICE_ID_PRO;
+    await dbQuery(`UPDATE plans SET stripe_price_id = NULL WHERE name = 'pro'`);
+
+    try {
+      const token = await registerAndLogin("checkout-monthly-env@controlfinance.dev");
+      const response = await request(app)
+        .post("/billing/checkout")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(201);
+      expect(mockSessionCreate).toHaveBeenCalledOnce();
+      const args = mockSessionCreate.mock.calls[0][0];
+      expect(args.line_items[0].price).toBe("price_pro_monthly_env");
+    } finally {
+      process.env.STRIPE_PRICE_ID_PRO = saved;
+      process.env.STRIPE_PRICE_ID_PRO_MONTHLY = savedMonthly;
       await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
     }
   });
 
   it("retorna 500 quando price id configurado e invalido", async () => {
     const saved = process.env.STRIPE_PRICE_ID_PRO;
+    const savedMonthly = process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
+    delete process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
     process.env.STRIPE_PRICE_ID_PRO = "prod_invalid";
     await dbQuery(`UPDATE plans SET stripe_price_id = NULL WHERE name = 'pro'`);
 
@@ -180,6 +211,30 @@ describe("billing checkout", () => {
       expect(mockSessionCreate).not.toHaveBeenCalled();
     } finally {
       process.env.STRIPE_PRICE_ID_PRO = saved;
+      process.env.STRIPE_PRICE_ID_PRO_MONTHLY = savedMonthly;
+      await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
+    }
+  });
+
+  it("retorna 500 quando STRIPE_PRICE_ID_PRO_MONTHLY invalido", async () => {
+    const saved = process.env.STRIPE_PRICE_ID_PRO;
+    const savedMonthly = process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
+    process.env.STRIPE_PRICE_ID_PRO_MONTHLY = "prod_invalid";
+    delete process.env.STRIPE_PRICE_ID_PRO;
+    await dbQuery(`UPDATE plans SET stripe_price_id = NULL WHERE name = 'pro'`);
+
+    try {
+      const token = await registerAndLogin("checkout-invalid-monthly-env@controlfinance.dev");
+      const response = await request(app)
+        .post("/billing/checkout")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(500);
+      expect(response.body.code).toBe("BILLING_PRO_PRICE_ID_INVALID");
+      expect(mockSessionCreate).not.toHaveBeenCalled();
+    } finally {
+      process.env.STRIPE_PRICE_ID_PRO = saved;
+      process.env.STRIPE_PRICE_ID_PRO_MONTHLY = savedMonthly;
       await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
     }
   });
