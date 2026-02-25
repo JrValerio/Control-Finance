@@ -5,16 +5,12 @@
 ALTER TABLE users
 ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'chk_users_plan'
-  ) THEN
-    ALTER TABLE users
-      ADD CONSTRAINT chk_users_plan
-      CHECK (plan IN ('free', 'trial', 'pro'));
-  END IF;
-END $$;
+ALTER TABLE users
+DROP CONSTRAINT IF EXISTS chk_users_plan;
+
+ALTER TABLE users
+ADD CONSTRAINT chk_users_plan
+CHECK (plan IN ('free', 'trial', 'pro'));
 
 -- Backfill users.plan cache from existing billing state.
 -- Precedence:
@@ -22,16 +18,15 @@ END $$;
 --  2) active prepaid entitlement (pro_expires_at)
 --  3) active trial
 --  4) free
-UPDATE users u
+UPDATE users
 SET plan = CASE
-  WHEN EXISTS (
-    SELECT 1
-    FROM subscriptions s
-    WHERE s.user_id = u.id
-      AND s.status IN ('active', 'trialing', 'past_due')
+  WHEN id IN (
+    SELECT user_id
+    FROM subscriptions
+    WHERE status IN ('active', 'trialing', 'past_due')
   ) THEN 'pro'
-  WHEN u.pro_expires_at IS NOT NULL AND u.pro_expires_at > NOW() THEN 'pro'
-  WHEN u.trial_ends_at IS NOT NULL AND u.trial_ends_at > NOW() THEN 'trial'
+  WHEN pro_expires_at IS NOT NULL AND pro_expires_at > NOW() THEN 'pro'
+  WHEN trial_ends_at IS NOT NULL AND trial_ends_at > NOW() THEN 'trial'
   ELSE 'free'
 END;
 
@@ -41,26 +36,22 @@ CREATE INDEX IF NOT EXISTS idx_users_pro_expires_at ON users (pro_expires_at);
 
 -- 2) Subscription status hardening.
 -- NOTE: prepaid is not a Stripe subscription status and should not be stored here.
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'chk_subscriptions_status'
-  ) THEN
-    ALTER TABLE subscriptions
-      ADD CONSTRAINT chk_subscriptions_status
-      CHECK (
-        status IN (
-          'active',
-          'trialing',
-          'past_due',
-          'canceled',
-          'incomplete',
-          'incomplete_expired',
-          'unpaid'
-        )
-      );
-  END IF;
-END $$;
+ALTER TABLE subscriptions
+DROP CONSTRAINT IF EXISTS chk_subscriptions_status;
+
+ALTER TABLE subscriptions
+ADD CONSTRAINT chk_subscriptions_status
+CHECK (
+  status IN (
+    'active',
+    'trialing',
+    'past_due',
+    'canceled',
+    'incomplete',
+    'incomplete_expired',
+    'unpaid'
+  )
+);
 
 -- 3) Stripe webhook idempotency registry.
 CREATE TABLE IF NOT EXISTS stripe_events (

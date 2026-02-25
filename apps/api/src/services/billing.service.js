@@ -102,8 +102,6 @@ const getActivePrepaidProExpiresAtForUser = async (userId) => {
     `SELECT pro_expires_at
       FROM users
       WHERE id = $1
-        AND pro_expires_at IS NOT NULL
-        AND pro_expires_at > NOW()
       LIMIT 1`,
     [userId],
   );
@@ -112,7 +110,16 @@ const getActivePrepaidProExpiresAtForUser = async (userId) => {
     return null;
   }
 
-  return result.rows[0].pro_expires_at;
+  const proExpiresAt = result.rows[0].pro_expires_at;
+  if (!proExpiresAt) {
+    return null;
+  }
+
+  if (new Date(proExpiresAt) <= new Date()) {
+    return null;
+  }
+
+  return proExpiresAt;
 };
 
 /**
