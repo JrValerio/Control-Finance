@@ -41,6 +41,12 @@ describe("billing", () => {
     expectErrorResponseWithRequestId(response, 401, "Token de autenticacao ausente ou invalido.");
   });
 
+  it("GET /billing/entitlement retorna 401 sem token", async () => {
+    const response = await request(app).get("/billing/entitlement");
+
+    expectErrorResponseWithRequestId(response, 401, "Token de autenticacao ausente ou invalido.");
+  });
+
   it("GET /billing/subscription retorna plano free para novo usuario sem subscription", async () => {
     const token = await registerAndLogin("billing-free@controlfinance.dev");
 
@@ -71,6 +77,64 @@ describe("billing", () => {
       analytics_months_max: expect.any(Number),
       budget_tracking: expect.any(Boolean),
     });
+  });
+
+  it("GET /billing/entitlement retorna source=trial para usuario novo", async () => {
+    const email = "billing-entitlement-trial@controlfinance.dev";
+    const token = await registerAndLogin(email);
+
+    const response = await request(app)
+      .get("/billing/entitlement")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.plan).toBe("free");
+    expect(response.body.source).toBe("trial");
+    expect(typeof response.body.trialEndsAt).toBe("string");
+    expect(response.body.proExpiresAt).toBeNull();
+  });
+
+  it("GET /billing/entitlement retorna source=prepaid para usuario com pro_expires_at ativo", async () => {
+    const email = "billing-entitlement-prepaid@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    const userId = await getUserIdByEmail(email);
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day', pro_expires_at = NOW() + INTERVAL '6 months' WHERE id = $1`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/billing/entitlement")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.plan).toBe("pro");
+    expect(response.body.source).toBe("prepaid");
+    expect(typeof response.body.proExpiresAt).toBe("string");
+    expect(response.body.trialEndsAt).toBeNull();
+  });
+
+  it("GET /billing/subscription retorna plano pro para usuario com prepaid ativo", async () => {
+    const email = "billing-summary-prepaid@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    const userId = await getUserIdByEmail(email);
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day', pro_expires_at = NOW() + INTERVAL '6 months' WHERE id = $1`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/billing/subscription")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.plan).toBe("pro");
+    expect(response.body.entitlementSource).toBe("prepaid");
+    expect(response.body.subscription).toMatchObject({
+      status: "prepaid_active",
+      cancelAtPeriodEnd: true,
+    });
+    expect(typeof response.body.subscription.currentPeriodEnd).toBe("string");
   });
 
   it("POST /transactions/import/dry-run retorna 402 para usuario free", async () => {
