@@ -26,58 +26,37 @@ const normalizeUserId = (value) => {
   return parsed;
 };
 
-/**
- * Returns the active plan features for a user.
- * If no active/trialing/past_due subscription exists, falls back to the free plan.
- */
-export const getActivePlanFeaturesForUser = async (userId) => {
-  const normalizedUserId = normalizeUserId(userId);
-
-  const subscriptionResult = await dbQuery(
-    `
-      SELECT p.features
-      FROM subscriptions s
-      JOIN plans p ON p.id = s.plan_id
-      WHERE s.user_id = $1
-        AND s.status IN ('active', 'trialing', 'past_due')
-      LIMIT 1
-    `,
-    [normalizedUserId],
+const getFreePlan = async () => {
+  const result = await dbQuery(
+    `SELECT name, display_name AS "displayName", features
+      FROM plans
+      WHERE name = 'free' AND is_active = true
+      LIMIT 1`,
   );
 
-  if (subscriptionResult.rows.length > 0) {
-    return subscriptionResult.rows[0].features;
-  }
-
-  // Check for an active trial
-  const trialResult = await dbQuery(
-    `SELECT trial_ends_at FROM users WHERE id = $1 LIMIT 1`,
-    [normalizedUserId],
-  );
-  const trialEndsAt =
-    trialResult.rows.length > 0 ? trialResult.rows[0].trial_ends_at : null;
-
-  if (trialEndsAt && new Date(trialEndsAt) > new Date()) {
-    return TRIAL_FEATURES;
-  }
-
-  const freePlanResult = await dbQuery(
-    `SELECT features FROM plans WHERE name = 'free' AND is_active = true LIMIT 1`,
-  );
-
-  if (freePlanResult.rows.length === 0) {
+  if (result.rows.length === 0) {
     throw createError(500, "Plano gratuito nao encontrado.");
   }
 
-  return freePlanResult.rows[0].features;
+  return result.rows[0];
 };
 
-/**
- * Returns a summary of the user's current subscription for the /billing/subscription endpoint.
- */
-export const getSubscriptionSummaryForUser = async (userId) => {
-  const normalizedUserId = normalizeUserId(userId);
+const getProPlan = async () => {
+  const result = await dbQuery(
+    `SELECT name, display_name AS "displayName", features
+      FROM plans
+      WHERE name = 'pro' AND is_active = true
+      LIMIT 1`,
+  );
 
+  if (result.rows.length === 0) {
+    throw createError(500, "Plano Pro nao encontrado.");
+  }
+
+  return result.rows[0];
+};
+
+const getActivePaidSubscriptionSummary = async (userId) => {
   const result = await dbQuery(
     `
       SELECT
@@ -93,11 +72,95 @@ export const getSubscriptionSummaryForUser = async (userId) => {
         AND s.status IN ('active', 'trialing', 'past_due')
       LIMIT 1
     `,
-    [normalizedUserId],
+    [userId],
   );
 
-  if (result.rows.length > 0) {
-    const row = result.rows[0];
+  return result.rows[0] ?? null;
+};
+
+const getActiveTrialEndsAtForUser = async (userId) => {
+  const trialResult = await dbQuery(
+    `SELECT trial_ends_at FROM users WHERE id = $1 LIMIT 1`,
+    [userId],
+  );
+  const trialEndsAt =
+    trialResult.rows.length > 0 ? trialResult.rows[0].trial_ends_at : null;
+
+  if (!trialEndsAt) {
+    return null;
+  }
+
+  if (new Date(trialEndsAt) <= new Date()) {
+    return null;
+  }
+
+  return trialEndsAt;
+};
+
+const getActivePrepaidProExpiresAtForUser = async (userId) => {
+  const result = await dbQuery(
+    `SELECT pro_expires_at
+      FROM users
+      WHERE id = $1
+        AND pro_expires_at IS NOT NULL
+        AND pro_expires_at > NOW()
+      LIMIT 1`,
+    [userId],
+  );
+
+  if (result.rows.length === 0) {
+    return null;
+  }
+
+  return result.rows[0].pro_expires_at;
+};
+
+/**
+ * Returns the active plan features for a user.
+ * Priority order:
+ *  1. Active recurring subscription
+ *  2. Active prepaid PRO entitlement (users.pro_expires_at)
+ *  3. Active trial
+ *  4. Free plan
+ */
+export const getActivePlanFeaturesForUser = async (userId) => {
+  const normalizedUserId = normalizeUserId(userId);
+
+  const activeSubscription = await getActivePaidSubscriptionSummary(
+    normalizedUserId,
+  );
+  if (activeSubscription) {
+    return activeSubscription.features;
+  }
+
+  const prepaidProExpiresAt =
+    await getActivePrepaidProExpiresAtForUser(normalizedUserId);
+  if (prepaidProExpiresAt) {
+    const proPlan = await getProPlan();
+    return proPlan.features;
+  }
+
+  const trialEndsAt = await getActiveTrialEndsAtForUser(normalizedUserId);
+  if (trialEndsAt && new Date(trialEndsAt) > new Date()) {
+    return TRIAL_FEATURES;
+  }
+
+  const freePlan = await getFreePlan();
+  return freePlan.features;
+};
+
+/**
+ * Returns a summary of the user's current subscription for the /billing/subscription endpoint.
+ */
+export const getSubscriptionSummaryForUser = async (userId) => {
+  const normalizedUserId = normalizeUserId(userId);
+
+  const activeSubscription = await getActivePaidSubscriptionSummary(
+    normalizedUserId,
+  );
+
+  if (activeSubscription) {
+    const row = activeSubscription;
 
     return {
       plan: row.plan,
@@ -108,23 +171,84 @@ export const getSubscriptionSummaryForUser = async (userId) => {
         currentPeriodEnd: row.currentPeriodEnd,
         cancelAtPeriodEnd: row.cancelAtPeriodEnd,
       },
+      entitlementSource: "subscription",
     };
   }
 
-  const freePlanResult = await dbQuery(
-    `SELECT name, display_name AS "displayName", features FROM plans WHERE name = 'free' AND is_active = true LIMIT 1`,
-  );
-
-  if (freePlanResult.rows.length === 0) {
-    throw createError(500, "Plano gratuito nao encontrado.");
+  const prepaidProExpiresAt =
+    await getActivePrepaidProExpiresAtForUser(normalizedUserId);
+  if (prepaidProExpiresAt) {
+    const proPlan = await getProPlan();
+    return {
+      plan: proPlan.name,
+      displayName: proPlan.displayName,
+      features: proPlan.features,
+      subscription: {
+        status: "prepaid_active",
+        currentPeriodEnd: prepaidProExpiresAt,
+        cancelAtPeriodEnd: true,
+      },
+      entitlementSource: "prepaid",
+      proExpiresAt: prepaidProExpiresAt,
+    };
   }
 
-  const freePlan = freePlanResult.rows[0];
+  const freePlan = await getFreePlan();
 
   return {
     plan: freePlan.name,
     displayName: freePlan.displayName,
     features: freePlan.features,
     subscription: null,
+    entitlementSource: "free",
+    proExpiresAt: null,
+  };
+};
+
+/**
+ * Returns the user's effective entitlement source.
+ */
+export const getEntitlementSummaryForUser = async (userId) => {
+  const normalizedUserId = normalizeUserId(userId);
+
+  const activeSubscription = await getActivePaidSubscriptionSummary(
+    normalizedUserId,
+  );
+
+  if (activeSubscription) {
+    return {
+      plan: activeSubscription.plan,
+      source: "subscription",
+      proExpiresAt: null,
+      trialEndsAt: null,
+    };
+  }
+
+  const prepaidProExpiresAt =
+    await getActivePrepaidProExpiresAtForUser(normalizedUserId);
+  if (prepaidProExpiresAt) {
+    return {
+      plan: "pro",
+      source: "prepaid",
+      proExpiresAt: prepaidProExpiresAt,
+      trialEndsAt: null,
+    };
+  }
+
+  const trialEndsAt = await getActiveTrialEndsAtForUser(normalizedUserId);
+  if (trialEndsAt) {
+    return {
+      plan: "free",
+      source: "trial",
+      proExpiresAt: null,
+      trialEndsAt,
+    };
+  }
+
+  return {
+    plan: "free",
+    source: "free",
+    proExpiresAt: null,
+    trialEndsAt: null,
   };
 };

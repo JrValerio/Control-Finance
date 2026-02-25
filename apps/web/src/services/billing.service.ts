@@ -24,6 +24,11 @@ export const billingService = {
     return data;
   },
 
+  createPrepaidCheckout: async (): Promise<{ url: string }> => {
+    const { data } = await api.post<{ url: string }>("/billing/checkout-prepaid");
+    return data;
+  },
+
   createPortal: async (): Promise<{ url: string }> => {
     const { data } = await api.post<{ url: string }>("/billing/portal");
     return data;

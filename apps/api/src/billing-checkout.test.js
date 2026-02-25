@@ -34,6 +34,8 @@ describe("billing checkout", () => {
     delete process.env.STRIPE_SECRET_KEY;
     delete process.env.STRIPE_CHECKOUT_SUCCESS_URL;
     delete process.env.STRIPE_CHECKOUT_CANCEL_URL;
+    delete process.env.STRIPE_PREPAID_PRO_AMOUNT_CENTS;
+    delete process.env.STRIPE_PREPAID_PRO_DURATION_MONTHS;
   });
 
   beforeEach(async () => {
@@ -178,6 +180,90 @@ describe("billing checkout", () => {
     } finally {
       process.env.STRIPE_PRICE_ID_PRO = saved;
       await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
+    }
+  });
+
+  it("checkout-prepaid retorna 401 sem token", async () => {
+    const response = await request(app).post("/billing/checkout-prepaid");
+    expect(response.status).toBe(401);
+  });
+
+  it("checkout-prepaid retorna 201 com url para usuario sem assinatura recorrente", async () => {
+    const email = "checkout-prepaid-free@controlfinance.dev";
+    const token = await registerAndLogin(email);
+
+    const response = await request(app)
+      .post("/billing/checkout-prepaid")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(201);
+    expect(response.body.url).toBe("https://checkout.stripe.com/test-session-001");
+  });
+
+  it("checkout-prepaid envia payload esperado para Stripe", async () => {
+    const email = "checkout-prepaid-metadata@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    const userResult = await dbQuery(`SELECT id FROM users WHERE email = $1`, [email]);
+    const userId = userResult.rows[0].id;
+
+    await request(app)
+      .post("/billing/checkout-prepaid")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(mockSessionCreate).toHaveBeenCalledOnce();
+    const args = mockSessionCreate.mock.calls[0][0];
+    expect(args.mode).toBe("payment");
+    expect(args.automatic_payment_methods).toEqual({ enabled: true });
+    expect(args.line_items[0].price_data.currency).toBe("brl");
+    expect(args.line_items[0].price_data.unit_amount).toBe(1990);
+    expect(args.metadata.userId).toBe(String(userId));
+    expect(args.metadata.entitlement).toBe("pro_6_months");
+    expect(args.metadata.entitlement_months).toBe("6");
+  });
+
+  it("checkout-prepaid retorna 409 para usuario com assinatura recorrente ativa", async () => {
+    const email = "checkout-prepaid-with-sub@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    await makeProUser(email);
+
+    const response = await request(app)
+      .post("/billing/checkout-prepaid")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("BILLING_RECURRING_SUBSCRIPTION_ALREADY_ACTIVE");
+    expect(mockSessionCreate).not.toHaveBeenCalled();
+  });
+
+  it("checkout-prepaid retorna 500 com amount invalido em env", async () => {
+    process.env.STRIPE_PREPAID_PRO_AMOUNT_CENTS = "abc";
+    try {
+      const token = await registerAndLogin("checkout-prepaid-invalid-amount@controlfinance.dev");
+      const response = await request(app)
+        .post("/billing/checkout-prepaid")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(500);
+      expect(response.body.code).toBe("BILLING_PREPAID_AMOUNT_INVALID");
+      expect(mockSessionCreate).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.STRIPE_PREPAID_PRO_AMOUNT_CENTS;
+    }
+  });
+
+  it("checkout-prepaid retorna 500 com duration invalida em env", async () => {
+    process.env.STRIPE_PREPAID_PRO_DURATION_MONTHS = "0";
+    try {
+      const token = await registerAndLogin("checkout-prepaid-invalid-duration@controlfinance.dev");
+      const response = await request(app)
+        .post("/billing/checkout-prepaid")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(500);
+      expect(response.body.code).toBe("BILLING_PREPAID_DURATION_INVALID");
+      expect(mockSessionCreate).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.STRIPE_PREPAID_PRO_DURATION_MONTHS;
     }
   });
 });
