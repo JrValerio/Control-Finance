@@ -1,7 +1,9 @@
 import { dbQuery } from "../db/index.js";
 
-const PREPAID_PRO_ENTITLEMENT_KEY = "pro_6_months";
-const DEFAULT_PREPAID_DURATION_MONTHS = 6;
+const PREPAID_PRO_ENTITLEMENT_KEYS = new Set(["pro_12_months", "pro_6_months"]);
+const LEGACY_PREPAID_ENTITLEMENT_KEY = "pro_6_months";
+const LEGACY_PREPAID_DURATION_MONTHS = 6;
+const DEFAULT_PREPAID_DURATION_MONTHS = 12;
 
 const createError = (status, message) => {
   const error = new Error(message);
@@ -42,13 +44,19 @@ const parsePositiveInteger = (value, fallbackValue) => {
   return parsed;
 };
 
-const resolvePrepaidDurationMonths = (session) => {
+const resolvePrepaidDurationMonths = ({ entitlement, metadata }) => {
   const metadataMonths = parsePositiveInteger(
-    session?.metadata?.entitlement_months,
+    metadata?.entitlement_months,
     NaN,
   );
   if (Number.isInteger(metadataMonths) && metadataMonths > 0) {
     return metadataMonths;
+  }
+
+  // Legacy 6-month prepaid sessions may not include entitlement_months in metadata.
+  // Keep the historical behavior to avoid over-granting 12 months.
+  if (entitlement === LEGACY_PREPAID_ENTITLEMENT_KEY) {
+    return LEGACY_PREPAID_DURATION_MONTHS;
   }
 
   return parsePositiveInteger(
@@ -59,7 +67,7 @@ const resolvePrepaidDurationMonths = (session) => {
 
 const extractPrepaidGrantPayload = (session) => {
   const entitlement = session?.metadata?.entitlement;
-  if (entitlement !== PREPAID_PRO_ENTITLEMENT_KEY) {
+  if (!PREPAID_PRO_ENTITLEMENT_KEYS.has(entitlement)) {
     return null;
   }
 
@@ -74,7 +82,10 @@ const extractPrepaidGrantPayload = (session) => {
     return null;
   }
 
-  const months = resolvePrepaidDurationMonths(session);
+  const months = resolvePrepaidDurationMonths({
+    entitlement,
+    metadata: session?.metadata,
+  });
   if (!Number.isInteger(months) || months <= 0) {
     return null;
   }

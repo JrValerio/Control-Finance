@@ -26,6 +26,7 @@ describe("billing checkout", () => {
     process.env.STRIPE_SECRET_KEY = "sk_test_mock_controlfinance";
     process.env.STRIPE_CHECKOUT_SUCCESS_URL = "https://app.test/billing/success";
     process.env.STRIPE_CHECKOUT_CANCEL_URL = "https://app.test/billing/cancel";
+    process.env.STRIPE_PRICE_ID_PRO_PREPAID_YEAR = "price_prepaid_year_env";
     await dbQuery(`UPDATE plans SET stripe_price_id = 'price_pro_monthly' WHERE name = 'pro'`);
   });
 
@@ -34,7 +35,7 @@ describe("billing checkout", () => {
     delete process.env.STRIPE_SECRET_KEY;
     delete process.env.STRIPE_CHECKOUT_SUCCESS_URL;
     delete process.env.STRIPE_CHECKOUT_CANCEL_URL;
-    delete process.env.STRIPE_PREPAID_PRO_AMOUNT_CENTS;
+    delete process.env.STRIPE_PRICE_ID_PRO_PREPAID_YEAR;
     delete process.env.STRIPE_PREPAID_PRO_DURATION_MONTHS;
   });
 
@@ -214,11 +215,10 @@ describe("billing checkout", () => {
     const args = mockSessionCreate.mock.calls[0][0];
     expect(args.mode).toBe("payment");
     expect(args.automatic_payment_methods).toEqual({ enabled: true });
-    expect(args.line_items[0].price_data.currency).toBe("brl");
-    expect(args.line_items[0].price_data.unit_amount).toBe(1990);
+    expect(args.line_items[0].price).toBe("price_prepaid_year_env");
     expect(args.metadata.userId).toBe(String(userId));
-    expect(args.metadata.entitlement).toBe("pro_6_months");
-    expect(args.metadata.entitlement_months).toBe("6");
+    expect(args.metadata.entitlement).toBe("pro_12_months");
+    expect(args.metadata.entitlement_months).toBe("12");
   });
 
   it("checkout-prepaid retorna 409 para usuario com assinatura recorrente ativa", async () => {
@@ -235,19 +235,37 @@ describe("billing checkout", () => {
     expect(mockSessionCreate).not.toHaveBeenCalled();
   });
 
-  it("checkout-prepaid retorna 500 com amount invalido em env", async () => {
-    process.env.STRIPE_PREPAID_PRO_AMOUNT_CENTS = "abc";
+  it("checkout-prepaid retorna 500 com price anual ausente", async () => {
+    const savedPriceId = process.env.STRIPE_PRICE_ID_PRO_PREPAID_YEAR;
+    delete process.env.STRIPE_PRICE_ID_PRO_PREPAID_YEAR;
     try {
-      const token = await registerAndLogin("checkout-prepaid-invalid-amount@controlfinance.dev");
+      const token = await registerAndLogin("checkout-prepaid-missing-price-id@controlfinance.dev");
       const response = await request(app)
         .post("/billing/checkout-prepaid")
         .set("Authorization", `Bearer ${token}`);
 
       expect(response.status).toBe(500);
-      expect(response.body.code).toBe("BILLING_PREPAID_AMOUNT_INVALID");
+      expect(response.body.code).toBe("BILLING_PREPAID_YEAR_PRICE_NOT_CONFIGURED");
       expect(mockSessionCreate).not.toHaveBeenCalled();
     } finally {
-      delete process.env.STRIPE_PREPAID_PRO_AMOUNT_CENTS;
+      process.env.STRIPE_PRICE_ID_PRO_PREPAID_YEAR = savedPriceId;
+    }
+  });
+
+  it("checkout-prepaid retorna 500 com price anual invalido em env", async () => {
+    const savedPriceId = process.env.STRIPE_PRICE_ID_PRO_PREPAID_YEAR;
+    process.env.STRIPE_PRICE_ID_PRO_PREPAID_YEAR = "prod_invalid";
+    try {
+      const token = await registerAndLogin("checkout-prepaid-invalid-price-id@controlfinance.dev");
+      const response = await request(app)
+        .post("/billing/checkout-prepaid")
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(response.status).toBe(500);
+      expect(response.body.code).toBe("BILLING_PREPAID_YEAR_PRICE_INVALID");
+      expect(mockSessionCreate).not.toHaveBeenCalled();
+    } finally {
+      process.env.STRIPE_PRICE_ID_PRO_PREPAID_YEAR = savedPriceId;
     }
   });
 
