@@ -5,6 +5,7 @@ import {
   getSubscriptionSummaryForUser,
 } from "../services/billing.service.js";
 import { createCheckoutSession } from "../services/stripe-checkout.service.js";
+import { createPrepaidCheckoutSession } from "../services/stripe-prepaid-checkout.service.js";
 import { createPortalSession } from "../services/stripe-portal.service.js";
 
 const router = Router();
@@ -32,6 +33,18 @@ router.get("/entitlement", async (req, res, next) => {
 router.post("/checkout", async (req, res, next) => {
   try {
     const result = await createCheckoutSession({
+      userId: req.user.id,
+      userEmail: req.user.email,
+    });
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/checkout-prepaid", async (req, res, next) => {
+  try {
+    const result = await createPrepaidCheckoutSession({
       userId: req.user.id,
       userEmail: req.user.email,
     });
