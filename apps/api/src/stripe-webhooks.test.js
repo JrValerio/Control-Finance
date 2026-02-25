@@ -74,6 +74,25 @@ describe("stripe webhooks", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toBe("Missing Stripe-Signature header.");
+    expect(response.body.code).toBe("BILLING_WEBHOOK_SIGNATURE_MISSING");
+  });
+
+  it("retorna 500 com code explicito sem STRIPE_WEBHOOK_SECRET", async () => {
+    const savedSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+
+    try {
+      const response = await request(app)
+        .post("/billing/webhooks/stripe")
+        .set("Content-Type", "application/json")
+        .send(JSON.stringify({ type: "checkout.session.completed" }));
+
+      expect(response.status).toBe(500);
+      expect(response.body.message).toBe("Unexpected error.");
+      expect(response.body.code).toBe("BILLING_WEBHOOK_SECRET_MISSING");
+    } finally {
+      process.env.STRIPE_WEBHOOK_SECRET = savedSecret;
+    }
   });
 
   it("retorna 400 com assinatura invalida (secret errado)", async () => {
@@ -90,6 +109,7 @@ describe("stripe webhooks", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toBe("Stripe signature invalid.");
+    expect(response.body.code).toBe("BILLING_WEBHOOK_SIGNATURE_INVALID");
   });
 
   it("retorna 400 com timestamp expirado (replay attack)", async () => {
@@ -108,6 +128,7 @@ describe("stripe webhooks", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toBe("Stripe webhook timestamp expired.");
+    expect(response.body.code).toBe("BILLING_WEBHOOK_TIMESTAMP_EXPIRED");
   });
 
   it("retorna 200 para evento desconhecido sem efeito colateral", async () => {

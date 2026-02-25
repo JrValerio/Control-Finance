@@ -2,9 +2,12 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import express, { Router } from "express";
 import { processStripeEvent } from "../services/stripe-webhook.service.js";
 
-const createError = (status, message) => {
+const createError = (status, message, publicCode = "") => {
   const error = new Error(message);
   error.status = status;
+  if (typeof publicCode === "string" && publicCode.trim()) {
+    error.publicCode = publicCode.trim();
+  }
   return error;
 };
 
@@ -31,7 +34,11 @@ const verifyStripeSignature = (rawBodyBuffer, signatureHeader, secret) => {
   const { t, v1s } = parseStripeSignatureHeader(signatureHeader);
 
   if (!t || v1s.length === 0) {
-    throw createError(400, "Stripe signature malformed.");
+    throw createError(
+      400,
+      "Stripe signature malformed.",
+      "BILLING_WEBHOOK_SIGNATURE_MALFORMED",
+    );
   }
 
   const expectedHex = createHmac("sha256", secret)
@@ -49,13 +56,21 @@ const verifyStripeSignature = (rawBodyBuffer, signatureHeader, secret) => {
   });
 
   if (!ok) {
-    throw createError(400, "Stripe signature invalid.");
+    throw createError(
+      400,
+      "Stripe signature invalid.",
+      "BILLING_WEBHOOK_SIGNATURE_INVALID",
+    );
   }
 
   const TOLERANCE_SECONDS = 300;
   const age = Math.abs(Math.floor(Date.now() / 1000) - parseInt(t, 10));
   if (!Number.isFinite(age) || age > TOLERANCE_SECONDS) {
-    throw createError(400, "Stripe webhook timestamp expired.");
+    throw createError(
+      400,
+      "Stripe webhook timestamp expired.",
+      "BILLING_WEBHOOK_TIMESTAMP_EXPIRED",
+    );
   }
 };
 
@@ -67,10 +82,26 @@ router.post(
   async (req, res, next) => {
     try {
       const secret = process.env.STRIPE_WEBHOOK_SECRET;
-      if (!secret) return next(createError(500, "Webhook secret not configured."));
+      if (!secret) {
+        return next(
+          createError(
+            500,
+            "Stripe webhook secret missing.",
+            "BILLING_WEBHOOK_SECRET_MISSING",
+          ),
+        );
+      }
 
       const sig = req.headers["stripe-signature"];
-      if (!sig) return next(createError(400, "Missing Stripe-Signature header."));
+      if (!sig) {
+        return next(
+          createError(
+            400,
+            "Missing Stripe-Signature header.",
+            "BILLING_WEBHOOK_SIGNATURE_MISSING",
+          ),
+        );
+      }
 
       verifyStripeSignature(req.body, sig, secret);
 
