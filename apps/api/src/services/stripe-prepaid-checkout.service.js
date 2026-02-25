@@ -111,9 +111,7 @@ export const createPrepaidCheckoutSession = async ({ userId, userEmail }) => {
       mode: "payment",
       success_url: successUrl,
       cancel_url: cancelUrl,
-      payment_intent_data: {
-        automatic_payment_methods: { enabled: true },
-      },
+      payment_method_types: ["card"],
       line_items: [{ price: prepaidYearPriceId, quantity: 1 }],
       metadata: {
         userId: String(userId),
