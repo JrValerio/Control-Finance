@@ -1,5 +1,7 @@
-import { dbQuery } from "../db/index.js";
-import { getActivePlanFeaturesForUser } from "../services/billing.service.js";
+import {
+  getActivePlanFeaturesForUser,
+  resolveEntitlement,
+} from "../services/billing.service.js";
 
 // ---------------------------------------------------------------------------
 // Paywall bypass (dev / staging only)
@@ -116,39 +118,15 @@ export const requireActiveTrialOrPaidPlan = async (req, res, next) => {
       return next();
     }
 
-    const userId = req.user.id;
+    const entitlement = await resolveEntitlement(req.user.id);
 
-    // Check for an active paid subscription
-    const subResult = await dbQuery(
-      `SELECT 1 FROM subscriptions
-       WHERE user_id = $1
-         AND status IN ('active', 'trialing', 'past_due')
-       LIMIT 1`,
-      [userId],
-    );
-    if (subResult.rows.length > 0) return next();
+    if (entitlement.source === "recurring_grace") {
+      res.set("X-Subscription-Status", "past_due_grace");
+    }
 
-    // Check for active prepaid PRO entitlement
-    const prepaidResult = await dbQuery(
-      `SELECT pro_expires_at
-       FROM users
-       WHERE id = $1
-       LIMIT 1`,
-      [userId],
-    );
-    const prepaidProExpiresAt =
-      prepaidResult.rows.length > 0 ? prepaidResult.rows[0].pro_expires_at : null;
-    if (prepaidProExpiresAt && new Date(prepaidProExpiresAt) > new Date()) return next();
-
-    // Check for an active trial (trial_ends_at column added by migration 014)
-    const trialResult = await dbQuery(
-      `SELECT trial_ends_at FROM users WHERE id = $1 LIMIT 1`,
-      [userId],
-    );
-    const trialEndsAt =
-      trialResult.rows.length > 0 ? trialResult.rows[0].trial_ends_at : null;
-
-    if (trialEndsAt && new Date(trialEndsAt) > new Date()) return next();
+    if (entitlement.plan === "pro" || entitlement.plan === "trial") {
+      return next();
+    }
 
     return next(createPaymentRequiredError(TRIAL_EXPIRED_MESSAGE));
   } catch (error) {
