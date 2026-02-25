@@ -13,6 +13,36 @@ const createError = (status, message, publicCode = "") => {
 const isValidStripePriceId = (value) =>
   typeof value === "string" && value.trim().startsWith("price_");
 
+const resolveRecurringPriceIdFromEnv = () => {
+  const monthlyEnvPriceId = process.env.STRIPE_PRICE_ID_PRO_MONTHLY;
+  if (monthlyEnvPriceId && monthlyEnvPriceId.trim()) {
+    if (isValidStripePriceId(monthlyEnvPriceId)) {
+      return monthlyEnvPriceId.trim();
+    }
+
+    throw createError(
+      500,
+      "Invalid Stripe price ID configured in STRIPE_PRICE_ID_PRO_MONTHLY.",
+      "BILLING_PRO_PRICE_ID_INVALID",
+    );
+  }
+
+  const legacyEnvPriceId = process.env.STRIPE_PRICE_ID_PRO;
+  if (legacyEnvPriceId && legacyEnvPriceId.trim()) {
+    if (isValidStripePriceId(legacyEnvPriceId)) {
+      return legacyEnvPriceId.trim();
+    }
+
+    throw createError(
+      500,
+      "Invalid Stripe price ID configured in STRIPE_PRICE_ID_PRO.",
+      "BILLING_PRO_PRICE_ID_INVALID",
+    );
+  }
+
+  return "";
+};
+
 const resolvePriceId = async () => {
   const dbResult = await dbQuery(
     `SELECT stripe_price_id FROM plans
@@ -33,17 +63,9 @@ const resolvePriceId = async () => {
     );
   }
 
-  const envPriceId = process.env.STRIPE_PRICE_ID_PRO;
+  const envPriceId = resolveRecurringPriceIdFromEnv();
   if (envPriceId) {
-    if (isValidStripePriceId(envPriceId)) {
-      return envPriceId;
-    }
-
-    throw createError(
-      500,
-      "Invalid Stripe price ID configured in STRIPE_PRICE_ID_PRO.",
-      "BILLING_PRO_PRICE_ID_INVALID",
-    );
+    return envPriceId;
   }
 
   throw createError(
