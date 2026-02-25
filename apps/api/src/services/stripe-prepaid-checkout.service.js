@@ -1,9 +1,9 @@
 import Stripe from "stripe";
 import { dbQuery } from "../db/index.js";
 
-const DEFAULT_PREPAID_AMOUNT_CENTS = 1990;
-const DEFAULT_PREPAID_MONTHS = 6;
-const DEFAULT_PREPAID_PRODUCT_NAME = "Control Finance PRO (6 meses pre-pago)";
+const PREPAID_YEAR_PRICE_ENV_KEY = "STRIPE_PRICE_ID_PRO_PREPAID_YEAR";
+const PREPAID_YEAR_ENTITLEMENT = "pro_12_months";
+const DEFAULT_PREPAID_MONTHS = 12;
 
 const createError = (status, message, publicCode = "") => {
   const error = new Error(message);
@@ -26,11 +26,8 @@ const parsePositiveIntegerEnv = (rawValue, fallbackValue) => {
   return parsedValue;
 };
 
-const resolvePrepaidAmountCents = () =>
-  parsePositiveIntegerEnv(
-    process.env.STRIPE_PREPAID_PRO_AMOUNT_CENTS,
-    DEFAULT_PREPAID_AMOUNT_CENTS,
-  );
+const isValidStripePriceId = (value) =>
+  typeof value === "string" && value.trim().startsWith("price_");
 
 const resolvePrepaidDurationMonths = () =>
   parsePositiveIntegerEnv(
@@ -38,13 +35,25 @@ const resolvePrepaidDurationMonths = () =>
     DEFAULT_PREPAID_MONTHS,
   );
 
-const resolvePrepaidProductName = () => {
-  const configuredName = process.env.STRIPE_PREPAID_PRO_PRODUCT_NAME;
-  if (typeof configuredName !== "string" || !configuredName.trim()) {
-    return DEFAULT_PREPAID_PRODUCT_NAME;
+const resolvePrepaidYearPriceId = () => {
+  const priceId = process.env[PREPAID_YEAR_PRICE_ENV_KEY];
+  if (!priceId || !priceId.trim()) {
+    throw createError(
+      500,
+      "Prepaid yearly price not configured.",
+      "BILLING_PREPAID_YEAR_PRICE_NOT_CONFIGURED",
+    );
   }
 
-  return configuredName.trim();
+  if (!isValidStripePriceId(priceId)) {
+    throw createError(
+      500,
+      `Invalid Stripe price ID configured in ${PREPAID_YEAR_PRICE_ENV_KEY}.`,
+      "BILLING_PREPAID_YEAR_PRICE_INVALID",
+    );
+  }
+
+  return priceId.trim();
 };
 
 const hasActiveRecurringSubscription = async (userId) => {
@@ -75,14 +84,7 @@ export const createPrepaidCheckoutSession = async ({ userId, userEmail }) => {
     );
   }
 
-  const amountCents = resolvePrepaidAmountCents();
-  if (!Number.isInteger(amountCents) || amountCents <= 0) {
-    throw createError(
-      500,
-      "Invalid prepaid amount configuration.",
-      "BILLING_PREPAID_AMOUNT_INVALID",
-    );
-  }
+  const prepaidYearPriceId = resolvePrepaidYearPriceId();
 
   const durationMonths = resolvePrepaidDurationMonths();
   if (!Number.isInteger(durationMonths) || durationMonths <= 0) {
@@ -101,8 +103,6 @@ export const createPrepaidCheckoutSession = async ({ userId, userEmail }) => {
     );
   }
 
-  const productName = resolvePrepaidProductName();
-
   const stripe = new Stripe(secretKey, { apiVersion: "2026-01-28.clover" });
 
   let session;
@@ -112,19 +112,10 @@ export const createPrepaidCheckoutSession = async ({ userId, userEmail }) => {
       success_url: successUrl,
       cancel_url: cancelUrl,
       automatic_payment_methods: { enabled: true },
-      line_items: [
-        {
-          price_data: {
-            currency: "brl",
-            product_data: { name: productName },
-            unit_amount: amountCents,
-          },
-          quantity: 1,
-        },
-      ],
+      line_items: [{ price: prepaidYearPriceId, quantity: 1 }],
       metadata: {
         userId: String(userId),
-        entitlement: "pro_6_months",
+        entitlement: PREPAID_YEAR_ENTITLEMENT,
         entitlement_months: String(durationMonths),
       },
       ...(userEmail ? { customer_email: userEmail } : {}),

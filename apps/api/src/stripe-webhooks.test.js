@@ -395,8 +395,8 @@ describe("stripe webhooks", () => {
           payment_intent: "pi_prepaid_001",
           metadata: {
             userId: String(userId),
-            entitlement: "pro_6_months",
-            entitlement_months: "6",
+            entitlement: "pro_12_months",
+            entitlement_months: "12",
           },
         },
       },
@@ -430,6 +430,31 @@ describe("stripe webhooks", () => {
           payment_status: "unpaid",
           metadata: {
             userId: String(userId),
+            entitlement: "pro_12_months",
+            entitlement_months: "12",
+          },
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await getUserProExpiresAt(userId)).toBeNull();
+  });
+
+  it("checkout.session.completed aceita metadata legacy pro_6_months", async () => {
+    await registerAndLogin("webhook-prepaid-legacy@controlfinance.dev");
+    const userId = await getUserIdByEmail("webhook-prepaid-legacy@controlfinance.dev");
+
+    const response = await stripePost({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_prepaid_legacy_001",
+          mode: "payment",
+          payment_status: "paid",
+          payment_intent: "pi_prepaid_legacy_001",
+          metadata: {
+            userId: String(userId),
             entitlement: "pro_6_months",
             entitlement_months: "6",
           },
@@ -438,7 +463,9 @@ describe("stripe webhooks", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(await getUserProExpiresAt(userId)).toBeNull();
+    const proExpiresAt = await getUserProExpiresAt(userId);
+    expect(proExpiresAt).not.toBeNull();
+    expect(new Date(proExpiresAt).getTime()).toBeGreaterThan(Date.now());
   });
 
   it("checkout.session.async_payment_succeeded concede pre-pago com idempotencia por session id", async () => {
@@ -455,8 +482,8 @@ describe("stripe webhooks", () => {
           payment_intent: "pi_prepaid_003",
           metadata: {
             userId: String(userId),
-            entitlement: "pro_6_months",
-            entitlement_months: "6",
+            entitlement: "pro_12_months",
+            entitlement_months: "12",
           },
         },
       },

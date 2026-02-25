@@ -1,7 +1,7 @@
 import { dbQuery } from "../db/index.js";
 
-const PREPAID_PRO_ENTITLEMENT_KEY = "pro_6_months";
-const DEFAULT_PREPAID_DURATION_MONTHS = 6;
+const PREPAID_PRO_ENTITLEMENT_KEYS = new Set(["pro_12_months", "pro_6_months"]);
+const DEFAULT_PREPAID_DURATION_MONTHS = 12;
 
 const createError = (status, message) => {
   const error = new Error(message);
@@ -59,7 +59,7 @@ const resolvePrepaidDurationMonths = (session) => {
 
 const extractPrepaidGrantPayload = (session) => {
   const entitlement = session?.metadata?.entitlement;
-  if (entitlement !== PREPAID_PRO_ENTITLEMENT_KEY) {
+  if (!PREPAID_PRO_ENTITLEMENT_KEYS.has(entitlement)) {
     return null;
   }
 
