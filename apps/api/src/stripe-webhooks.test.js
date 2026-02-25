@@ -41,6 +41,11 @@ const getSubscription = async (userId) => {
   return result.rows[0] ?? null;
 };
 
+const getUserProExpiresAt = async (userId) => {
+  const result = await dbQuery(`SELECT pro_expires_at FROM users WHERE id = $1 LIMIT 1`, [userId]);
+  return result.rows[0]?.pro_expires_at ?? null;
+};
+
 describe("stripe webhooks", () => {
   beforeAll(async () => {
     await setupTestDb();
@@ -369,5 +374,107 @@ describe("stripe webhooks", () => {
       .get("/billing/subscription")
       .set("Authorization", `Bearer ${token}`);
     expect(freeResponse.body.plan).toBe("free");
+  });
+
+  it("checkout.session.completed (mode=payment) concede PRO pre-pago quando payment_status=paid", async () => {
+    await registerAndLogin("webhook-prepaid-completed@controlfinance.dev");
+    const userId = await getUserIdByEmail("webhook-prepaid-completed@controlfinance.dev");
+    const token = (
+      await request(app)
+        .post("/auth/login")
+        .send({ email: "webhook-prepaid-completed@controlfinance.dev", password: "Senha123" })
+    ).body.token;
+
+    const response = await stripePost({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_prepaid_001",
+          mode: "payment",
+          payment_status: "paid",
+          payment_intent: "pi_prepaid_001",
+          metadata: {
+            userId: String(userId),
+            entitlement: "pro_6_months",
+            entitlement_months: "6",
+          },
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await getSubscription(userId)).toBeNull();
+
+    const proExpiresAt = await getUserProExpiresAt(userId);
+    expect(proExpiresAt).not.toBeNull();
+    expect(new Date(proExpiresAt).getTime()).toBeGreaterThan(Date.now());
+
+    const summaryResponse = await request(app)
+      .get("/billing/subscription")
+      .set("Authorization", `Bearer ${token}`);
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.plan).toBe("pro");
+    expect(summaryResponse.body.entitlementSource).toBe("prepaid");
+  });
+
+  it("checkout.session.completed (mode=payment) nao concede quando payment_status nao e paid", async () => {
+    await registerAndLogin("webhook-prepaid-unpaid@controlfinance.dev");
+    const userId = await getUserIdByEmail("webhook-prepaid-unpaid@controlfinance.dev");
+
+    const response = await stripePost({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_prepaid_002",
+          mode: "payment",
+          payment_status: "unpaid",
+          metadata: {
+            userId: String(userId),
+            entitlement: "pro_6_months",
+            entitlement_months: "6",
+          },
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await getUserProExpiresAt(userId)).toBeNull();
+  });
+
+  it("checkout.session.async_payment_succeeded concede pre-pago com idempotencia por session id", async () => {
+    await registerAndLogin("webhook-prepaid-async@controlfinance.dev");
+    const userId = await getUserIdByEmail("webhook-prepaid-async@controlfinance.dev");
+
+    const event = {
+      type: "checkout.session.async_payment_succeeded",
+      data: {
+        object: {
+          id: "cs_prepaid_003",
+          mode: "payment",
+          payment_status: "paid",
+          payment_intent: "pi_prepaid_003",
+          metadata: {
+            userId: String(userId),
+            entitlement: "pro_6_months",
+            entitlement_months: "6",
+          },
+        },
+      },
+    };
+
+    const firstResponse = await stripePost(event);
+    const firstExpiry = await getUserProExpiresAt(userId);
+    const secondResponse = await stripePost(event);
+    const secondExpiry = await getUserProExpiresAt(userId);
+
+    expect(firstResponse.status).toBe(200);
+    expect(secondResponse.status).toBe(200);
+    expect(firstExpiry).not.toBeNull();
+    expect(new Date(secondExpiry).toISOString()).toBe(new Date(firstExpiry).toISOString());
+
+    const grantsCountResult = await dbQuery(
+      `SELECT COUNT(*) FROM prepaid_pro_grants WHERE stripe_checkout_session_id = 'cs_prepaid_003'`,
+    );
+    expect(Number(grantsCountResult.rows[0].count)).toBe(1);
   });
 });
