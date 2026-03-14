@@ -165,6 +165,24 @@ export const clearDbClientForTests = async () => {
   dbClientOverride = undefined;
 };
 
+export const withDbClient = async (callback) => {
+  const dbClient = getDbClient();
+
+  if (!dbClient || typeof dbClient.connect !== "function") {
+    throw createDatabaseError("Cliente de banco invalido para conexao dedicada.");
+  }
+
+  const client = await dbClient.connect();
+
+  try {
+    return await callback(client);
+  } finally {
+    if (typeof client.release === "function") {
+      client.release();
+    }
+  }
+};
+
 export const closePool = async () => {
   if (!poolInstance) {
     return;
