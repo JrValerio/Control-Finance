@@ -29,9 +29,18 @@ const getRefreshMaxAgeMs = () =>
   parseInt(process.env.REFRESH_TOKEN_EXPIRES_DAYS || "30", 10) *
   24 * 60 * 60 * 1000;
 
+// COOKIE_SAME_SITE env var controls the SameSite policy:
+//   "lax"  (default) — same-site deploys (app.domain.com + api.domain.com)
+//   "none"           — cross-site deploys (e.g. Vercel + Render on different domains)
+//                      requires Secure=true, which is enforced in production
+const getSameSitePolicy = () => {
+  const value = (process.env.COOKIE_SAME_SITE || "lax").toLowerCase().trim();
+  return value === "none" || value === "strict" || value === "lax" ? value : "lax";
+};
+
 const buildCookieOptions = (path) => ({
   httpOnly: true,
-  sameSite: "lax",
+  sameSite: getSameSitePolicy(),
   secure: process.env.NODE_ENV === "production",
   path,
   ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
@@ -49,8 +58,10 @@ const setAuthCookies = (res, accessToken, rawRefreshToken) => {
 };
 
 const clearAuthCookies = (res) => {
-  res.cookie("cf_access", "", { httpOnly: true, maxAge: 0, path: "/" });
-  res.cookie("cf_refresh", "", { httpOnly: true, maxAge: 0, path: "/auth" });
+  // Attributes must match the Set-Cookie that created the cookie, otherwise
+  // the browser will not recognise it as the same cookie and won't clear it.
+  res.cookie("cf_access", "", { ...buildCookieOptions("/"), maxAge: 0 });
+  res.cookie("cf_refresh", "", { ...buildCookieOptions("/auth"), maxAge: 0 });
 };
 
 const issueSessionCookies = async (res, user, req) => {
