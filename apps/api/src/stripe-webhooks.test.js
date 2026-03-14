@@ -13,6 +13,7 @@ import {
   generateStripeSignature,
   getUserIdByEmail,
   registerAndLogin,
+  extractAccessToken,
   setupTestDb,
 } from "./test-helpers.js";
 
@@ -359,11 +360,11 @@ describe("stripe webhooks", () => {
   it("apos subscription.deleted, entitlement retorna ao plano free", async () => {
     await registerAndLogin("webhook-entitlement-fallback@controlfinance.dev");
     const userId = await getUserIdByEmail("webhook-entitlement-fallback@controlfinance.dev");
-    const token = (
+    const token = extractAccessToken(
       await request(app)
         .post("/auth/login")
-        .send({ email: "webhook-entitlement-fallback@controlfinance.dev", password: "Senha123" })
-    ).body.token;
+        .send({ email: "webhook-entitlement-fallback@controlfinance.dev", password: "Senha123" }),
+    );
 
     await stripePost({
       type: "checkout.session.completed",
@@ -400,11 +401,11 @@ describe("stripe webhooks", () => {
   it("checkout.session.completed (mode=payment) concede PRO pre-pago quando payment_status=paid", async () => {
     await registerAndLogin("webhook-prepaid-completed@controlfinance.dev");
     const userId = await getUserIdByEmail("webhook-prepaid-completed@controlfinance.dev");
-    const token = (
+    const token = extractAccessToken(
       await request(app)
         .post("/auth/login")
-        .send({ email: "webhook-prepaid-completed@controlfinance.dev", password: "Senha123" })
-    ).body.token;
+        .send({ email: "webhook-prepaid-completed@controlfinance.dev", password: "Senha123" }),
+    );
 
     const response = await stripePost({
       type: "checkout.session.completed",

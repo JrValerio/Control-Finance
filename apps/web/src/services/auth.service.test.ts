@@ -5,74 +5,65 @@ import { authService } from "./auth.service";
 vi.mock("./api", () => ({
   api: {
     post: vi.fn(),
+    delete: vi.fn(),
   },
 }));
 
 const postMock = vi.mocked(api.post);
+const deleteMock = vi.mocked(api.delete);
+
+const VALID_USER = { id: 1, name: "Amaro", email: "amaro@control.finance" };
 
 describe("auth service", () => {
   beforeEach(() => {
     postMock.mockReset();
+    deleteMock.mockReset();
   });
 
-  it("retorna resposta de login quando payload e valido", async () => {
+  // ─── login ────────────────────────────────────────────────────────────────────
+
+  it("retorna user quando payload de login e valido", async () => {
+    postMock.mockResolvedValueOnce({ data: { user: VALID_USER } });
+
+    await expect(
+      authService.login({ email: "amaro@control.finance", password: "abc12345" }),
+    ).resolves.toEqual({ user: VALID_USER });
+  });
+
+  it("falha quando resposta de login nao possui user valido", async () => {
     postMock.mockResolvedValueOnce({
-      data: {
-        token: "jwt_token",
-        user: {
-          id: 1,
-          name: "Amaro",
-          email: "amaro@control.finance",
-        },
-      },
+      data: { user: { id: 1, name: "Amaro" } }, // falta email
     });
 
     await expect(
       authService.login({ email: "amaro@control.finance", password: "abc12345" }),
-    ).resolves.toEqual({
-      token: "jwt_token",
-      user: {
-        id: 1,
-        name: "Amaro",
-        email: "amaro@control.finance",
-      },
-    });
+    ).rejects.toThrow("Resposta de autenticacao invalida.");
   });
 
-  it("normaliza token da resposta removendo espacos extras", async () => {
-    postMock.mockResolvedValueOnce({
-      data: {
-        token: "  jwt_token  ",
-        user: {
-          id: 1,
-          name: "Amaro",
-          email: "amaro@control.finance",
-        },
-      },
-    });
+  it("falha quando resposta de login nao possui user", async () => {
+    postMock.mockResolvedValueOnce({ data: {} });
 
     await expect(
       authService.login({ email: "amaro@control.finance", password: "abc12345" }),
-    ).resolves.toEqual({
-      token: "jwt_token",
-      user: {
-        id: 1,
-        name: "Amaro",
-        email: "amaro@control.finance",
-      },
-    });
+    ).rejects.toThrow("Resposta de autenticacao invalida.");
   });
 
-  it("falha quando resposta de registro nao possui token", async () => {
-    postMock.mockResolvedValueOnce({
-      data: {
-        user: {
-          id: 1,
-          name: "Amaro",
-          email: "amaro@control.finance",
-        },
-      },
-    });
+  // ─── register ────────────────────────────────────────────────────────────────
+
+  it("retorna user quando payload de registro e valido", async () => {
+    postMock.mockResolvedValueOnce({ data: { user: VALID_USER } });
+
+    await expect(
+      authService.register({
+        name: "Amaro",
+        email: "amaro@control.finance",
+        password: "abc12345",
+      }),
+    ).resolves.toEqual({ user: VALID_USER });
+  });
+
+  it("falha quando resposta de registro nao possui user", async () => {
+    postMock.mockResolvedValueOnce({ data: {} });
 
     await expect(
       authService.register({
@@ -83,19 +74,37 @@ describe("auth service", () => {
     ).rejects.toThrow("Resposta de autenticacao invalida.");
   });
 
-  it("falha quando resposta de login nao possui user valido", async () => {
-    postMock.mockResolvedValueOnce({
-      data: {
-        token: "jwt_token",
-        user: {
-          id: 1,
-          name: "Amaro",
-        },
-      },
-    });
+  // ─── loginWithGoogle ──────────────────────────────────────────────────────────
+
+  it("retorna user quando Google login e valido", async () => {
+    postMock.mockResolvedValueOnce({ data: { user: VALID_USER } });
 
     await expect(
-      authService.login({ email: "amaro@control.finance", password: "abc12345" }),
-    ).rejects.toThrow("Resposta de autenticacao invalida.");
+      authService.loginWithGoogle({ idToken: "fake-google-token" }),
+    ).resolves.toEqual({ user: VALID_USER });
+  });
+
+  // ─── refresh ─────────────────────────────────────────────────────────────────
+
+  it("retorna user ao chamar refresh com sucesso", async () => {
+    postMock.mockResolvedValueOnce({ data: { user: VALID_USER } });
+
+    await expect(authService.refresh()).resolves.toEqual({ user: VALID_USER });
+    expect(postMock).toHaveBeenCalledWith("/auth/refresh");
+  });
+
+  it("propaga erro quando refresh falha", async () => {
+    postMock.mockRejectedValueOnce(new Error("401"));
+
+    await expect(authService.refresh()).rejects.toThrow("401");
+  });
+
+  // ─── logout ───────────────────────────────────────────────────────────────────
+
+  it("chama DELETE /auth/logout ao fazer logout", async () => {
+    deleteMock.mockResolvedValueOnce({});
+
+    await expect(authService.logout()).resolves.toBeUndefined();
+    expect(deleteMock).toHaveBeenCalledWith("/auth/logout");
   });
 });

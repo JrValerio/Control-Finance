@@ -1,22 +1,22 @@
 import { createContext } from "react";
 import type {
-  AuthResponse,
   AuthUser,
+  AuthUserResponse,
   GoogleLoginPayload,
   LoginPayload,
   RegisterPayload,
 } from "../services/auth.service";
 
 export interface AuthContextValue {
-  token: string;
   user: AuthUser | null;
   isLoading: boolean;
+  isInitializing: boolean;
   errorMessage: string;
   isAuthenticated: boolean;
-  login: (payload: LoginPayload) => Promise<AuthResponse>;
-  register: (payload: RegisterPayload) => Promise<AuthResponse>;
-  loginWithGoogle: (payload: GoogleLoginPayload) => Promise<AuthResponse>;
-  logout: () => void;
+  login: (payload: LoginPayload) => Promise<AuthUserResponse>;
+  register: (payload: RegisterPayload) => Promise<AuthUserResponse>;
+  loginWithGoogle: (payload: GoogleLoginPayload) => Promise<AuthUserResponse>;
+  logout: () => Promise<void>;
   clearError: () => void;
 }
 

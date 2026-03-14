@@ -15,10 +15,19 @@ export const setupTestDb = async () => {
   return pool;
 };
 
+// Extracts the cf_access JWT from a Set-Cookie header array.
+// The JWT can be used as a Bearer token via the middleware's bearer fallback.
+export const extractAccessToken = (response) => {
+  const cookies = response.headers["set-cookie"] || [];
+  const accessCookie = cookies.find((c) => c.startsWith("cf_access="));
+  if (!accessCookie) return null;
+  return accessCookie.split(";")[0].split("=")[1];
+};
+
 export const registerAndLogin = async (email, password = "Senha123") => {
   await request(app).post("/auth/register").send({ email, password });
   const loginResponse = await request(app).post("/auth/login").send({ email, password });
-  return loginResponse.body.token;
+  return extractAccessToken(loginResponse);
 };
 
 export const getUserIdByEmail = async (email) => {

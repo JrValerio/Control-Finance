@@ -1,10 +1,11 @@
+import { randomBytes, createHash, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { dbQuery } from "../db/index.js";
 
 const DEFAULT_JWT_SECRET = "control-finance-dev-secret";
-const DEFAULT_JWT_EXPIRES_IN = "24h";
+const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = "15m";
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const WEAK_PASSWORD_MESSAGE =
   "Senha fraca: use no minimo 8 caracteres com letras e numeros.";
@@ -23,8 +24,13 @@ const sanitizeUser = (user) => ({
 
 const getJwtSecret = () => process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
 
-const getJwtExpiresIn = () =>
-  process.env.JWT_EXPIRES_IN || DEFAULT_JWT_EXPIRES_IN;
+const getAccessTokenExpiresIn = () =>
+  process.env.ACCESS_TOKEN_EXPIRES_IN ||
+  process.env.JWT_EXPIRES_IN ||
+  DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
+
+const getRefreshTokenExpiresDays = () =>
+  parseInt(process.env.REFRESH_TOKEN_EXPIRES_DAYS || "30", 10);
 
 const getNormalizedEmail = (email) =>
   typeof email === "string" ? email.trim().toLowerCase() : "";
@@ -46,24 +52,126 @@ const validatePasswordStrength = (password) => {
   }
 };
 
-const issueAuthToken = (user) =>
+const hashToken = (rawToken) =>
+  createHash("sha256").update(rawToken).digest("hex");
+
+// ─── Access token (JWT) ───────────────────────────────────────────────────────
+
+export const issueAuthToken = (user) =>
   jwt.sign(
     {
       sub: String(user.id),
       email: user.email,
     },
     getJwtSecret(),
-    { expiresIn: getJwtExpiresIn() },
+    { expiresIn: getAccessTokenExpiresIn() },
   );
 
-const createAuthResult = (user) => {
-  const sanitizedUser = sanitizeUser(user);
+export const verifyAuthToken = (token) => jwt.verify(token, getJwtSecret());
+
+// ─── Refresh token (opaque) ───────────────────────────────────────────────────
+
+export const issueRefreshToken = async (userId, familyId, { ipAddress, userAgent } = {}) => {
+  const rawToken = randomBytes(32).toString("hex");
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(
+    Date.now() + getRefreshTokenExpiresDays() * 24 * 60 * 60 * 1000,
+  );
+
+  await dbQuery(
+    `INSERT INTO refresh_tokens
+       (token_hash, user_id, family_id, expires_at, ip_address, user_agent)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [
+      tokenHash,
+      userId,
+      familyId,
+      expiresAt.toISOString(),
+      ipAddress || null,
+      userAgent || null,
+    ],
+  );
+
+  return rawToken;
+};
+
+export const rotateRefreshToken = async (rawToken, { ipAddress, userAgent } = {}) => {
+  const tokenHash = hashToken(rawToken);
+
+  const result = await dbQuery(
+    `SELECT id, user_id, family_id, expires_at, revoked_at
+     FROM refresh_tokens
+     WHERE token_hash = $1
+     LIMIT 1`,
+    [tokenHash],
+  );
+
+  if (result.rows.length === 0) {
+    throw createError(401, "Sessao expirada.");
+  }
+
+  const stored = result.rows[0];
+
+  // Token reuse detected — revoke entire family (possible theft)
+  if (stored.revoked_at !== null) {
+    await revokeTokenFamily(stored.family_id);
+    throw createError(401, "Sessao invalida.");
+  }
+
+  if (new Date(stored.expires_at) < new Date()) {
+    throw createError(401, "Sessao expirada.");
+  }
+
+  const newRawToken = await issueRefreshToken(
+    Number(stored.user_id),
+    stored.family_id,
+    { ipAddress, userAgent },
+  );
+
+  const newHash = hashToken(newRawToken);
+
+  await dbQuery(
+    `UPDATE refresh_tokens
+     SET revoked_at = NOW(), replaced_by = $1, last_used_at = NOW()
+     WHERE id = $2`,
+    [newHash, stored.id],
+  );
+
+  const userResult = await dbQuery(
+    `SELECT id, name, email FROM users WHERE id = $1 LIMIT 1`,
+    [Number(stored.user_id)],
+  );
+
+  if (userResult.rows.length === 0) {
+    throw createError(401, "Sessao expirada.");
+  }
 
   return {
-    token: issueAuthToken(sanitizedUser),
-    user: sanitizedUser,
+    user: sanitizeUser(userResult.rows[0]),
+    rawRefreshToken: newRawToken,
   };
 };
+
+export const revokeRefreshToken = async (rawToken) => {
+  const tokenHash = hashToken(rawToken);
+  await dbQuery(
+    `UPDATE refresh_tokens
+     SET revoked_at = NOW()
+     WHERE token_hash = $1 AND revoked_at IS NULL`,
+    [tokenHash],
+  );
+};
+
+export const revokeTokenFamily = async (familyId) => {
+  await dbQuery(
+    `UPDATE refresh_tokens
+     SET revoked_at = NOW()
+     WHERE family_id = $1 AND revoked_at IS NULL`,
+    [familyId],
+  );
+};
+
+// ─── Auth flows ───────────────────────────────────────────────────────────────
 
 export const registerUser = async ({ name = "", email, password }) => {
   const { normalizedEmail, normalizedPassword } = validateCredentials({
@@ -86,7 +194,7 @@ export const registerUser = async ({ name = "", email, password }) => {
       [normalizedName, normalizedEmail, passwordHash, trialEndsAt.toISOString()],
     );
 
-    return createAuthResult(result.rows[0]);
+    return { user: sanitizeUser(result.rows[0]) };
   } catch (error) {
     if (error.code === "23505") {
       throw createError(409, "Usuario ja cadastrado.");
@@ -131,10 +239,8 @@ export const loginUser = async ({ email, password }) => {
     throw createError(401, "Credenciais invalidas.");
   }
 
-  return createAuthResult(user);
+  return { user: sanitizeUser(user) };
 };
-
-export const verifyAuthToken = (token) => jwt.verify(token, getJwtSecret());
 
 export const setUserPassword = async ({
   userId,
@@ -266,7 +372,7 @@ export const loginOrRegisterWithGoogle = async ({ idToken } = {}) => {
   );
 
   if (identityResult.rows.length > 0) {
-    return createAuthResult(identityResult.rows[0]);
+    return { user: sanitizeUser(identityResult.rows[0]) };
   }
 
   // 2. Email already in users → link identity to existing account
@@ -294,5 +400,7 @@ export const loginOrRegisterWithGoogle = async ({ idToken } = {}) => {
     [user.id, googleId, email],
   );
 
-  return createAuthResult(user);
+  return { user: sanitizeUser(user) };
 };
+
+export { randomUUID };

@@ -1,19 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { authService } from "../services/auth.service";
 import type {
-  AuthResponse,
+  AuthUserResponse,
   AuthUser,
   GoogleLoginPayload,
   LoginPayload,
   RegisterPayload,
 } from "../services/auth.service";
-import {
-  clearStoredToken,
-  getStoredToken,
-  setUnauthorizedHandler,
-  setStoredToken,
-} from "../services/api";
+import { setUnauthorizedHandler } from "../services/api";
 import { AuthContext } from "./auth-context";
 import type { AuthContextValue } from "./auth-context";
 
@@ -40,20 +35,51 @@ const getApiErrorMessage = (error: unknown, fallbackMessage: string): string => 
 };
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-  const [token, setToken] = useState<string>(() => getStoredToken());
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const bootstrapped = useRef(false);
+
+  // Register the unauthorized handler before bootstrap runs
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setUser(null);
+      setErrorMessage("");
+    });
+
+    return () => {
+      setUnauthorizedHandler(undefined);
+    };
+  }, []);
+
+  // Bootstrap: attempt to restore session via refresh token cookie.
+  // Cookies are httpOnly so JS cannot read them — we probe with a refresh call.
+  useEffect(() => {
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+
+    authService
+      .refresh()
+      .then(({ user: refreshedUser }) => {
+        setUser(refreshedUser);
+      })
+      .catch(() => {
+        // No valid session — stay unauthenticated
+        setUser(null);
+      })
+      .finally(() => {
+        setIsInitializing(false);
+      });
+  }, []);
 
   const login = useCallback(
-    async ({ email, password }: LoginPayload): Promise<AuthResponse> => {
+    async ({ email, password }: LoginPayload): Promise<AuthUserResponse> => {
       setIsLoading(true);
       setErrorMessage("");
 
       try {
         const response = await authService.login({ email, password });
-        setStoredToken(response.token);
-        setToken(response.token);
         setUser(response.user);
         return response;
       } catch (error) {
@@ -68,7 +94,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   );
 
   const register = useCallback(
-    async ({ name, email, password }: RegisterPayload): Promise<AuthResponse> => {
+    async ({ name, email, password }: RegisterPayload): Promise<AuthUserResponse> => {
       setIsLoading(true);
       setErrorMessage("");
 
@@ -87,14 +113,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   );
 
   const loginWithGoogle = useCallback(
-    async ({ idToken }: GoogleLoginPayload): Promise<AuthResponse> => {
+    async ({ idToken }: GoogleLoginPayload): Promise<AuthUserResponse> => {
       setIsLoading(true);
       setErrorMessage("");
 
       try {
         const response = await authService.loginWithGoogle({ idToken });
-        setStoredToken(response.token);
-        setToken(response.token);
         setUser(response.user);
         return response;
       } catch (error) {
@@ -108,43 +132,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     [],
   );
 
-  const logout = useCallback((): void => {
-    clearStoredToken();
-    setToken("");
-    setUser(null);
-    setErrorMessage("");
+  const logout = useCallback(async (): Promise<void> => {
+    try {
+      await authService.logout();
+    } catch {
+      // Best-effort: clear local state even if the server call fails
+    } finally {
+      setUser(null);
+      setErrorMessage("");
+    }
   }, []);
 
   const clearError = useCallback((): void => {
     setErrorMessage("");
   }, []);
 
-  useEffect(() => {
-    setUnauthorizedHandler(() => {
-      setToken("");
-      setUser(null);
-      setErrorMessage("");
-    });
-
-    return () => {
-      setUnauthorizedHandler(undefined);
-    };
-  }, []);
-
   const value = useMemo<AuthContextValue>(
     () => ({
-      token,
       user,
       isLoading,
+      isInitializing,
       errorMessage,
-      isAuthenticated: Boolean(token),
+      isAuthenticated: !isInitializing && user !== null,
       login,
       register,
       loginWithGoogle,
       logout,
       clearError,
     }),
-    [token, user, isLoading, errorMessage, login, register, loginWithGoogle, logout, clearError],
+    [user, isLoading, isInitializing, errorMessage, login, register, loginWithGoogle, logout, clearError],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
