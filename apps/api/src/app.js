@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import healthRoutes from "./routes/health.routes.js";
 import metricsRoutes from "./routes/metrics.routes.js";
@@ -80,6 +81,7 @@ app.use(
 
 app.use("/billing/webhooks", stripeWebhooksRoutes);
 app.use(express.json());
+app.use(cookieParser());
 app.use("/health", healthRoutes);
 app.use("/metrics", metricsRoutes);
 app.use("/auth", authRoutes);

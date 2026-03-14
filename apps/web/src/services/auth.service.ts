@@ -6,8 +6,7 @@ export interface AuthUser {
   email: string;
 }
 
-export interface AuthResponse {
-  token: string;
+export interface AuthUserResponse {
   user: AuthUser;
 }
 
@@ -20,6 +19,10 @@ export interface RegisterPayload {
   name?: string;
   email: string;
   password: string;
+}
+
+export interface GoogleLoginPayload {
+  idToken: string;
 }
 
 const INVALID_AUTH_RESPONSE_MESSAGE = "Resposta de autenticacao invalida.";
@@ -40,53 +43,53 @@ const isAuthUser = (value: unknown): value is AuthUser => {
   );
 };
 
-const parseAuthResponse = (responseData: unknown): AuthResponse => {
+const parseUserResponse = (responseData: unknown): AuthUserResponse => {
   if (!isRecord(responseData)) {
     throw new Error(INVALID_AUTH_RESPONSE_MESSAGE);
   }
 
-  const token = responseData.token;
-  const user = responseData.user;
-  const normalizedToken = typeof token === "string" ? token.trim() : "";
-
-  if (!normalizedToken || !isAuthUser(user)) {
+  if (!isAuthUser(responseData.user)) {
     throw new Error(INVALID_AUTH_RESPONSE_MESSAGE);
   }
 
-  return {
-    token: normalizedToken,
-    user,
-  };
+  return { user: responseData.user };
 };
-
-export interface GoogleLoginPayload {
-  idToken: string;
-}
 
 export const authService = {
   register: async ({
     name = "",
     email,
     password,
-  }: RegisterPayload): Promise<AuthResponse> => {
+  }: RegisterPayload): Promise<AuthUserResponse> => {
     const { data } = await api.post("/auth/register", {
       name,
       email,
       password,
     });
 
-    return parseAuthResponse(data);
+    return parseUserResponse(data);
   },
-  login: async ({ email, password }: LoginPayload): Promise<AuthResponse> => {
+
+  login: async ({ email, password }: LoginPayload): Promise<AuthUserResponse> => {
     const { data } = await api.post("/auth/login", {
       email,
       password,
     });
 
-    return parseAuthResponse(data);
+    return parseUserResponse(data);
   },
-  loginWithGoogle: async ({ idToken }: GoogleLoginPayload): Promise<AuthResponse> => {
+
+  loginWithGoogle: async ({ idToken }: GoogleLoginPayload): Promise<AuthUserResponse> => {
     const { data } = await api.post("/auth/google", { idToken });
-    return parseAuthResponse(data);
+    return parseUserResponse(data);
+  },
+
+  refresh: async (): Promise<AuthUserResponse> => {
+    const { data } = await api.post("/auth/refresh");
+    return parseUserResponse(data);
+  },
+
+  logout: async (): Promise<void> => {
+    await api.delete("/auth/logout");
   },
 };

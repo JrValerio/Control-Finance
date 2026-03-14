@@ -18,7 +18,7 @@ type ApiConfigurationError = Error & {
   code: "API_URL_NOT_CONFIGURED";
 };
 
-const normalizeToken = (token: string): string => token.trim();
+type QueueEntry = { resolve: () => void; reject: (err: unknown) => void };
 
 export const resolveApiUrl = (env: EnvConfig = import.meta.env) => {
   const configuredApiUrl = env?.VITE_API_URL?.trim();
@@ -35,11 +35,12 @@ export const resolveApiUrl = (env: EnvConfig = import.meta.env) => {
 };
 
 const API_URL = resolveApiUrl();
-export const AUTH_TOKEN_STORAGE_KEY = "control_finance.auth_token";
 const REQUEST_ID_HEADER_NAME = "x-request-id";
 const isApiConfigured = Boolean(API_URL);
 let unauthorizedHandler: UnauthorizedHandler = undefined;
 let paymentRequiredHandler: PaymentRequiredHandler = undefined;
+let isRefreshing = false;
+let pendingQueue: QueueEntry[] = [];
 
 const createApiConfigurationError = (): ApiConfigurationError => {
   const error = new Error(API_CONFIGURATION_ERROR_MESSAGE) as ApiConfigurationError;
@@ -126,39 +127,15 @@ const resolveErrorRequestId = (error: unknown) => {
 
 const shouldLogApiErrors = () => import.meta.env?.MODE !== "test";
 
-export const getStoredToken = () => {
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  const storedToken = window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
-  if (!storedToken) {
-    return "";
-  }
-
-  return normalizeToken(storedToken);
-};
-
-export const setStoredToken = (token: string) => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  const normalizedToken = normalizeToken(token);
-  if (!normalizedToken) {
-    clearStoredToken();
-    return;
-  }
-
-  window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, normalizedToken);
-};
-
-export const clearStoredToken = () => {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+const drainQueue = (error?: unknown) => {
+  pendingQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve();
+    }
+  });
+  pendingQueue = [];
 };
 
 export const setUnauthorizedHandler = (handler: UnauthorizedHandler) => {
@@ -172,6 +149,7 @@ export const setPaymentRequiredHandler = (handler: PaymentRequiredHandler) => {
 export const api = axios.create({
   baseURL: API_URL || undefined,
   timeout: 8000,
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
@@ -180,20 +158,13 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   }
 
   setRequestHeader(config, REQUEST_ID_HEADER_NAME, createRequestId());
-  const token = getStoredToken();
-
-  if (!token) {
-    return config;
-  }
-
-  setRequestHeader(config, "Authorization", `Bearer ${token}`);
 
   return config;
 });
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const requestId = resolveErrorRequestId(error);
 
     if (requestId && shouldLogApiErrors()) {
@@ -207,10 +178,45 @@ api.interceptors.response.use(
     }
 
     if (error?.response?.status === 401) {
-      clearStoredToken();
+      const originalRequest = error.config as InternalAxiosRequestConfig & {
+        _retry?: boolean;
+      };
 
-      if (typeof unauthorizedHandler === "function") {
-        unauthorizedHandler();
+      const isRefreshEndpoint =
+        typeof originalRequest?.url === "string" &&
+        originalRequest.url.includes("/auth/refresh");
+
+      if (isRefreshEndpoint || originalRequest?._retry) {
+        drainQueue(error);
+        if (typeof unauthorizedHandler === "function") {
+          unauthorizedHandler();
+        }
+        return Promise.reject(error);
+      }
+
+      if (isRefreshing) {
+        return new Promise<void>((resolve, reject) => {
+          pendingQueue.push({ resolve, reject });
+        })
+          .then(() => api.request(originalRequest))
+          .catch(() => Promise.reject(error));
+      }
+
+      isRefreshing = true;
+      originalRequest._retry = true;
+
+      try {
+        await api.post("/auth/refresh");
+        drainQueue();
+        return api.request(originalRequest);
+      } catch (refreshError) {
+        drainQueue(refreshError);
+        if (typeof unauthorizedHandler === "function") {
+          unauthorizedHandler();
+        }
+        return Promise.reject(error);
+      } finally {
+        isRefreshing = false;
       }
     }
 

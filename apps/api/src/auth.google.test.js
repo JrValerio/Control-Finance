@@ -5,6 +5,7 @@ import { clearDbClientForTests, dbQuery } from "./db/index.js";
 import {
   setupTestDb,
   expectErrorResponseWithRequestId,
+  extractAccessToken,
 } from "./test-helpers.js";
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import {
@@ -43,23 +44,27 @@ describe("POST /auth/google", () => {
     resetImportRateLimiterState();
     resetWriteRateLimiterState();
     resetHttpMetricsForTests();
+    await dbQuery("DELETE FROM refresh_tokens");
     await dbQuery("DELETE FROM transactions");
     await dbQuery("DELETE FROM users");
   });
 
-  it("cria novo usuario e retorna token", async () => {
+  it("cria novo usuario, seta cookies e nao retorna token no body", async () => {
     const response = await request(app)
       .post("/auth/google")
       .send({ idToken: "valid-google-id-token" });
 
     expect(response.status).toBe(200);
-    expect(typeof response.body.token).toBe("string");
-    expect(response.body.token.length).toBeGreaterThan(10);
+    expect(response.body.token).toBeUndefined();
     expect(response.body.user.email).toBe(FAKE_EMAIL);
     expect(response.body.user.name).toBe(FAKE_NAME);
     expect(Number.isInteger(response.body.user.id)).toBe(true);
     expect(response.body.user.id).toBeGreaterThan(0);
     expect(response.body.user.password_hash).toBeUndefined();
+
+    const token = extractAccessToken(response);
+    expect(typeof token).toBe("string");
+    expect(token.length).toBeGreaterThan(10);
   });
 
   it("retorna mesmo usuario em login subsequente com mesma identidade Google", async () => {

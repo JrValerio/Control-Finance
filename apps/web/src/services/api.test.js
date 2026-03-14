@@ -1,12 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  AUTH_TOKEN_STORAGE_KEY,
   api,
-  clearStoredToken,
   getApiHealth,
-  getStoredToken,
   resolveApiUrl,
-  setStoredToken,
   setUnauthorizedHandler,
   setPaymentRequiredHandler,
 } from "./api";
@@ -17,6 +13,8 @@ var responseErrorInterceptor;
 vi.mock("axios", () => {
   const instance = {
     get: vi.fn(),
+    post: vi.fn(),
+    request: vi.fn(),
     interceptors: {
       request: {
         use: vi.fn((handler) => {
@@ -42,9 +40,9 @@ vi.mock("axios", () => {
 
 describe("api service", () => {
   beforeEach(() => {
-    window.localStorage.clear();
     setUnauthorizedHandler(undefined);
     setPaymentRequiredHandler(undefined);
+    vi.clearAllMocks();
   });
 
   it("consulta o healthcheck da API", async () => {
@@ -76,44 +74,7 @@ describe("api service", () => {
     expect(url).toBe("");
   });
 
-  it("persiste token de autenticacao no localStorage", () => {
-    setStoredToken("jwt_token");
-
-    expect(getStoredToken()).toBe("jwt_token");
-    expect(window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe("jwt_token");
-
-    clearStoredToken();
-
-    expect(getStoredToken()).toBe("");
-  });
-
-  it("normaliza token salvo removendo espacos extras", () => {
-    setStoredToken("  jwt_token  ");
-
-    expect(getStoredToken()).toBe("jwt_token");
-    expect(window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe("jwt_token");
-  });
-
-  it("nao persiste token vazio apos normalizacao", () => {
-    setStoredToken("   ");
-
-    expect(getStoredToken()).toBe("");
-    expect(window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
-  });
-
-  it("injeta header Authorization quando existe token", () => {
-    setStoredToken("jwt_token");
-
-    const nextConfig = requestInterceptor({
-      headers: {},
-    });
-
-    expect(nextConfig.headers.Authorization).toBe("Bearer jwt_token");
-    expect(typeof nextConfig.headers["x-request-id"]).toBe("string");
-    expect(nextConfig.headers["x-request-id"].length).toBeGreaterThan(0);
-  });
-
-  it("injeta x-request-id mesmo sem token", () => {
+  it("injeta x-request-id em todas as requisicoes", () => {
     const nextConfig = requestInterceptor({
       headers: {},
     });
@@ -123,36 +84,90 @@ describe("api service", () => {
     expect(nextConfig.headers["x-request-id"].length).toBeGreaterThan(0);
   });
 
-  it("limpa token e executa handler quando API retorna 401", async () => {
+  // ─── 401 / Refresh interceptor ───────────────────────────────────────────────
+
+  it("tenta refresh e retenta request quando API retorna 401", async () => {
     const onUnauthorized = vi.fn();
     setUnauthorizedHandler(onUnauthorized);
-    setStoredToken("jwt_token");
+
+    api.post.mockResolvedValueOnce({}); // refresh succeeds
+    api.request.mockResolvedValueOnce({ data: "retried" }); // original request retried
+
+    const result = await responseErrorInterceptor({
+      response: { status: 401 },
+      config: { url: "/transactions", headers: {} },
+    });
+
+    expect(api.post).toHaveBeenCalledWith("/auth/refresh");
+    expect(api.request).toHaveBeenCalled();
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(result).toEqual({ data: "retried" });
+  });
+
+  it("executa unauthorizedHandler quando refresh falha em 401", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+
+    api.post.mockRejectedValueOnce(new Error("refresh failed"));
 
     await expect(
       responseErrorInterceptor({
         response: { status: 401 },
+        config: { url: "/transactions", headers: {} },
       }),
     ).rejects.toBeTruthy();
 
-    expect(getStoredToken()).toBe("");
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
-  it("nao executa handler se ele for removido", async () => {
+  it("nao tenta refresh quando 401 vem da rota de refresh (evita loop)", async () => {
     const onUnauthorized = vi.fn();
     setUnauthorizedHandler(onUnauthorized);
-    setUnauthorizedHandler(undefined);
-    setStoredToken("jwt_token");
 
     await expect(
       responseErrorInterceptor({
         response: { status: 401 },
+        config: { url: "/auth/refresh", headers: {} },
       }),
     ).rejects.toBeTruthy();
 
-    expect(getStoredToken()).toBe("");
+    expect(api.post).not.toHaveBeenCalled();
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("nao tenta refresh quando request ja foi retentado (_retry=true)", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+
+    await expect(
+      responseErrorInterceptor({
+        response: { status: 401 },
+        config: { url: "/transactions", headers: {}, _retry: true },
+      }),
+    ).rejects.toBeTruthy();
+
+    expect(api.post).not.toHaveBeenCalled();
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it("nao executa unauthorizedHandler se ele for removido", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    setUnauthorizedHandler(undefined);
+
+    api.post.mockRejectedValueOnce(new Error("refresh failed"));
+
+    await expect(
+      responseErrorInterceptor({
+        response: { status: 401 },
+        config: { url: "/transactions", headers: {} },
+      }),
+    ).rejects.toBeTruthy();
+
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
+
+  // ─── 402 handler ─────────────────────────────────────────────────────────────
 
   it("chama paymentRequiredHandler com a mensagem quando status e 402", async () => {
     const onPaymentRequired = vi.fn();

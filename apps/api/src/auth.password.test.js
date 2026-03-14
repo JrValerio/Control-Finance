@@ -6,6 +6,7 @@ import {
   setupTestDb,
   registerAndLogin,
   expectErrorResponseWithRequestId,
+  extractAccessToken,
 } from "./test-helpers.js";
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import {
@@ -124,7 +125,7 @@ describe("PATCH /auth/password", () => {
       .post("/auth/google")
       .send({ idToken: "valid-google-token" });
     expect(googleResponse.status).toBe(200);
-    const { token } = googleResponse.body;
+    const token = extractAccessToken(googleResponse);
 
     const response = await request(app)
       .patch("/auth/password")

@@ -13,10 +13,37 @@ import {
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 import {
   expectErrorResponseWithRequestId,
+  extractAccessToken,
   setupTestDb,
   snapshotAuthSecurityEnv,
   restoreAuthSecurityEnv,
 } from "./test-helpers.js";
+
+// Helper: extract cf_refresh raw value from Set-Cookie header
+const extractRefreshToken = (response) => {
+  const cookies = response.headers["set-cookie"] || [];
+  const refreshCookie = cookies.find((c) => c.startsWith("cf_refresh="));
+  if (!refreshCookie) return null;
+  return refreshCookie.split(";")[0].split("=")[1];
+};
+
+// Helper: assert both auth cookies are present on a response
+const expectAuthCookies = (response) => {
+  const cookies = response.headers["set-cookie"] || [];
+  expect(cookies.some((c) => c.startsWith("cf_access="))).toBe(true);
+  expect(cookies.some((c) => c.startsWith("cf_refresh="))).toBe(true);
+};
+
+// Helper: assert both auth cookies are cleared (maxAge=0)
+const expectClearedCookies = (response) => {
+  const cookies = response.headers["set-cookie"] || [];
+  const access = cookies.find((c) => c.startsWith("cf_access="));
+  const refresh = cookies.find((c) => c.startsWith("cf_refresh="));
+  expect(access).toBeDefined();
+  expect(refresh).toBeDefined();
+  expect(access).toMatch(/Max-Age=0/i);
+  expect(refresh).toMatch(/Max-Age=0/i);
+};
 
 describe("auth", () => {
   beforeAll(async () => {
@@ -32,11 +59,14 @@ describe("auth", () => {
     resetImportRateLimiterState();
     resetWriteRateLimiterState();
     resetHttpMetricsForTests();
+    await dbQuery("DELETE FROM refresh_tokens");
     await dbQuery("DELETE FROM transactions");
     await dbQuery("DELETE FROM users");
   });
 
-  it("POST /auth/register cria usuario", async () => {
+  // ─── Register ───────────────────────────────────────────────────────────────
+
+  it("POST /auth/register cria usuario e seta cookies", async () => {
     const response = await request(app).post("/auth/register").send({
       name: "Junior",
       email: "jr@controlfinance.dev",
@@ -44,8 +74,7 @@ describe("auth", () => {
     });
 
     expect(response.status).toBe(201);
-    expect(typeof response.body.token).toBe("string");
-    expect(response.body.token.length).toBeGreaterThan(10);
+    expect(response.body.token).toBeUndefined();
     expect(response.body.user).toMatchObject({
       name: "Junior",
       email: "jr@controlfinance.dev",
@@ -53,6 +82,11 @@ describe("auth", () => {
     expect(Number.isInteger(response.body.user.id)).toBe(true);
     expect(response.body.user.id).toBeGreaterThan(0);
     expect(response.body.user.password_hash).toBeUndefined();
+    expectAuthCookies(response);
+
+    const token = extractAccessToken(response);
+    expect(typeof token).toBe("string");
+    expect(token.length).toBeGreaterThan(10);
   });
 
   it("POST /auth/register bloqueia email duplicado", async () => {
@@ -87,7 +121,9 @@ describe("auth", () => {
     expectErrorResponseWithRequestId(response, 400, "Email e senha sao obrigatorios.");
   });
 
-  it("POST /auth/login retorna token", async () => {
+  // ─── Login ──────────────────────────────────────────────────────────────────
+
+  it("POST /auth/login seta cookies e nao retorna token no body", async () => {
     await request(app).post("/auth/register").send({
       email: "login@controlfinance.dev",
       password: "Senha123",
@@ -100,9 +136,13 @@ describe("auth", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.user.email).toBe("login@controlfinance.dev");
-    expect(typeof response.body.token).toBe("string");
-    expect(response.body.token.length).toBeGreaterThan(10);
+    expect(response.body.token).toBeUndefined();
     expect(response.body.user.password_hash).toBeUndefined();
+    expectAuthCookies(response);
+
+    const token = extractAccessToken(response);
+    expect(typeof token).toBe("string");
+    expect(token.length).toBeGreaterThan(10);
   });
 
   it("POST /auth/login retorna erro quando email esta vazio", async () => {
@@ -122,6 +162,8 @@ describe("auth", () => {
 
     expectErrorResponseWithRequestId(response, 400, "Email e senha sao obrigatorios.");
   });
+
+  // ─── Brute-force protection ──────────────────────────────────────────────────
 
   it("aplica bloqueio por brute force e desbloqueia apos janela", async () => {
     const envSnapshot = snapshotAuthSecurityEnv();
@@ -212,6 +254,8 @@ describe("auth", () => {
     }
   });
 
+  // ─── Password rules ──────────────────────────────────────────────────────────
+
   it.each([
     ["12345678", "somente-numeros"],
     ["abcdefgh", "somente-letras"],
@@ -240,23 +284,128 @@ describe("auth", () => {
     expect(response.status).toBe(201);
   });
 
+  // ─── /auth/me ────────────────────────────────────────────────────────────────
+
   it("GET /auth/me retorna 401 sem token", async () => {
     const response = await request(app).get("/auth/me");
     expect(response.status).toBe(401);
   });
 
-  it("GET /auth/me retorna id e email do usuario autenticado", async () => {
+  it("GET /auth/me retorna id e email com bearer token (fallback)", async () => {
     const reg = await request(app)
       .post("/auth/register")
       .send({ email: "me@controlfinance.dev", password: "Senha123" });
 
+    const token = extractAccessToken(reg);
+
     const response = await request(app)
       .get("/auth/me")
-      .set("Authorization", `Bearer ${reg.body.token}`);
+      .set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(200);
     expect(response.body.email).toBe("me@controlfinance.dev");
     expect(Number.isInteger(response.body.id)).toBe(true);
     expect(response.body.id).toBeGreaterThan(0);
+  });
+
+  // ─── /auth/refresh ──────────────────────────────────────────────────────────
+
+  it("POST /auth/refresh emite novos cookies com refresh token valido", async () => {
+    const loginRes = await request(app).post("/auth/register").send({
+      email: "refresh@controlfinance.dev",
+      password: "Senha123",
+    });
+    const refreshToken = extractRefreshToken(loginRes);
+
+    const refreshRes = await request(app)
+      .post("/auth/refresh")
+      .set("Cookie", `cf_refresh=${refreshToken}`);
+
+    expect(refreshRes.status).toBe(200);
+    expect(refreshRes.body.user.email).toBe("refresh@controlfinance.dev");
+    expectAuthCookies(refreshRes);
+
+    const newRefreshToken = extractRefreshToken(refreshRes);
+    expect(newRefreshToken).not.toBe(refreshToken);
+  });
+
+  it("POST /auth/refresh retorna 401 sem cookie", async () => {
+    const response = await request(app).post("/auth/refresh");
+    expect(response.status).toBe(401);
+  });
+
+  it("POST /auth/refresh retorna 401 com token invalido", async () => {
+    const response = await request(app)
+      .post("/auth/refresh")
+      .set("Cookie", "cf_refresh=token-invalido-qualquer");
+    expect(response.status).toBe(401);
+  });
+
+  it("POST /auth/refresh invalida toda a familia ao reusar token revogado", async () => {
+    const loginRes = await request(app).post("/auth/register").send({
+      email: "reuse@controlfinance.dev",
+      password: "Senha123",
+    });
+    const originalRefresh = extractRefreshToken(loginRes);
+
+    // First rotation — original token is now revoked
+    const firstRefresh = await request(app)
+      .post("/auth/refresh")
+      .set("Cookie", `cf_refresh=${originalRefresh}`);
+    expect(firstRefresh.status).toBe(200);
+
+    const rotatedRefresh = extractRefreshToken(firstRefresh);
+
+    // Replay the already-revoked original token — triggers family revocation
+    const reuseAttempt = await request(app)
+      .post("/auth/refresh")
+      .set("Cookie", `cf_refresh=${originalRefresh}`);
+    expect(reuseAttempt.status).toBe(401);
+
+    // The rotated token (from the same family) is also now invalid
+    const familyTokenAttempt = await request(app)
+      .post("/auth/refresh")
+      .set("Cookie", `cf_refresh=${rotatedRefresh}`);
+    expect(familyTokenAttempt.status).toBe(401);
+  });
+
+  // ─── /auth/logout ────────────────────────────────────────────────────────────
+
+  it("DELETE /auth/logout limpa cookies e retorna 204", async () => {
+    const loginRes = await request(app).post("/auth/register").send({
+      email: "logout@controlfinance.dev",
+      password: "Senha123",
+    });
+    const refreshToken = extractRefreshToken(loginRes);
+
+    const logoutRes = await request(app)
+      .delete("/auth/logout")
+      .set("Cookie", `cf_refresh=${refreshToken}`);
+
+    expect(logoutRes.status).toBe(204);
+    expectClearedCookies(logoutRes);
+  });
+
+  it("DELETE /auth/logout retorna 204 mesmo sem cookie (idempotente)", async () => {
+    const response = await request(app).delete("/auth/logout");
+    expect(response.status).toBe(204);
+  });
+
+  it("DELETE /auth/logout revoga refresh token (nao pode ser reusado)", async () => {
+    const loginRes = await request(app).post("/auth/register").send({
+      email: "logout-revoke@controlfinance.dev",
+      password: "Senha123",
+    });
+    const refreshToken = extractRefreshToken(loginRes);
+
+    await request(app)
+      .delete("/auth/logout")
+      .set("Cookie", `cf_refresh=${refreshToken}`);
+
+    const refreshAfterLogout = await request(app)
+      .post("/auth/refresh")
+      .set("Cookie", `cf_refresh=${refreshToken}`);
+
+    expect(refreshAfterLogout.status).toBe(401);
   });
 });

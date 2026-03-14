@@ -6,15 +6,17 @@ const createUnauthorizedResponse = (req, message) => ({
 });
 
 export const authMiddleware = (req, res, next) => {
-  const authorizationHeader = req.headers.authorization;
+  // Priority 1: httpOnly cookie (browser sessions)
+  const cookieToken = req.cookies?.cf_access;
 
-  if (!authorizationHeader || !authorizationHeader.startsWith("Bearer ")) {
-    return res
-      .status(401)
-      .json(createUnauthorizedResponse(req, "Token de autenticacao ausente ou invalido."));
-  }
+  // Priority 2: Authorization Bearer fallback (tests, Postman, scripts)
+  const authHeader = req.headers.authorization;
+  const bearerToken =
+    authHeader && authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length).trim()
+      : null;
 
-  const token = authorizationHeader.slice("Bearer ".length).trim();
+  const token = cookieToken || bearerToken;
 
   if (!token) {
     return res
@@ -32,6 +34,8 @@ export const authMiddleware = (req, res, next) => {
 
     return next();
   } catch {
-    return res.status(401).json(createUnauthorizedResponse(req, "Token invalido ou expirado."));
+    return res
+      .status(401)
+      .json(createUnauthorizedResponse(req, "Token invalido ou expirado."));
   }
 };
