@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import ConfirmDialog from "../components/ConfirmDialog";
 import {
   categoriesService,
   type CategoryItem,
@@ -61,6 +62,10 @@ const CategoriesSettings = ({
   const [pageErrorMessage, setPageErrorMessage] = useState("");
   const [categoryModalErrorMessage, setCategoryModalErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    onConfirm: () => Promise<void>;
+  } | null>(null);
 
   const loadCategories = useCallback(async () => {
     setLoadingCategories(true);
@@ -140,52 +145,42 @@ const CategoriesSettings = ({
     }
   };
 
-  const handleDeleteCategory = async (category: CategoryItem) => {
-    const isConfirmed =
-      typeof window === "undefined"
-        ? true
-        : window.confirm(`Remover categoria "${category.name}"?`);
-
-    if (!isConfirmed) {
-      return;
-    }
-
-    setPageErrorMessage("");
-    setSuccessMessage("");
-
-    try {
-      await categoriesService.deleteCategory(category.id);
-      setSuccessMessage("Categoria removida.");
-      await loadCategories();
-    } catch (error) {
-      setPageErrorMessage(
-        resolveCategoryMutationErrorMessage(error, "Não foi possível remover a categoria."),
-      );
-    }
+  const handleDeleteCategory = (category: CategoryItem) => {
+    setPendingConfirm({
+      title: `Remover categoria "${category.name}"?`,
+      onConfirm: async () => {
+        setPageErrorMessage("");
+        setSuccessMessage("");
+        try {
+          await categoriesService.deleteCategory(category.id);
+          setSuccessMessage("Categoria removida.");
+          await loadCategories();
+        } catch (error) {
+          setPageErrorMessage(
+            resolveCategoryMutationErrorMessage(error, "Não foi possível remover a categoria."),
+          );
+        }
+      },
+    });
   };
 
-  const handleRestoreCategory = async (category: CategoryItem) => {
-    const isConfirmed =
-      typeof window === "undefined"
-        ? true
-        : window.confirm(`Restaurar categoria "${category.name}"?`);
-
-    if (!isConfirmed) {
-      return;
-    }
-
-    setPageErrorMessage("");
-    setSuccessMessage("");
-
-    try {
-      await categoriesService.restoreCategory(category.id);
-      setSuccessMessage("Categoria restaurada.");
-      await loadCategories();
-    } catch (error) {
-      setPageErrorMessage(
-        resolveCategoryMutationErrorMessage(error, "Não foi possível restaurar a categoria."),
-      );
-    }
+  const handleRestoreCategory = (category: CategoryItem) => {
+    setPendingConfirm({
+      title: `Restaurar categoria "${category.name}"?`,
+      onConfirm: async () => {
+        setPageErrorMessage("");
+        setSuccessMessage("");
+        try {
+          await categoriesService.restoreCategory(category.id);
+          setSuccessMessage("Categoria restaurada.");
+          await loadCategories();
+        } catch (error) {
+          setPageErrorMessage(
+            resolveCategoryMutationErrorMessage(error, "Não foi possível restaurar a categoria."),
+          );
+        }
+      },
+    });
   };
 
   const handleToggleIncludeDeleted = (nextCheckedState: boolean) => {
@@ -345,6 +340,17 @@ const CategoriesSettings = ({
           ) : null}
         </section>
       </main>
+
+      <ConfirmDialog
+        isOpen={pendingConfirm !== null}
+        title={pendingConfirm?.title ?? ""}
+        onConfirm={() => {
+          const action = pendingConfirm;
+          setPendingConfirm(null);
+          void action?.onConfirm();
+        }}
+        onCancel={() => setPendingConfirm(null)}
+      />
 
       {isCategoryModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

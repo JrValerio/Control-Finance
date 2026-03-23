@@ -934,7 +934,6 @@ describe("App", () => {
 
   it("exclui meta mensal e recarrega estado vazio", async () => {
     const user = userEvent.setup();
-    const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(true);
     transactionsService.getMonthlyBudgets
       .mockResolvedValueOnce(
         buildMonthlyBudgetsResponse([
@@ -953,17 +952,14 @@ describe("App", () => {
       )
       .mockResolvedValueOnce(buildMonthlyBudgetsResponse([]));
 
-    try {
-      render(<App />);
+    render(<App />);
 
-      expect(await screen.findByText("Transporte")).toBeInTheDocument();
-      await user.click(screen.getByRole("button", { name: "Excluir meta: Transporte" }));
+    expect(await screen.findByText("Transporte")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Excluir meta: Transporte" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
 
-      expect(transactionsService.deleteMonthlyBudget).toHaveBeenCalledWith(11);
-      expect(await screen.findByText("Nenhuma meta cadastrada para o mês selecionado.")).toBeInTheDocument();
-    } finally {
-      confirmMock.mockRestore();
-    }
+    expect(transactionsService.deleteMonthlyBudget).toHaveBeenCalledWith(11);
+    expect(await screen.findByText("Nenhuma meta cadastrada para o mês selecionado.")).toBeInTheDocument();
   });
 
   it("aplica filtro por categoria e envia categoryId para listagem", async () => {

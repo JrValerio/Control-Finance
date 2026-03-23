@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ConfirmDialog from "../components/ConfirmDialog";
 import Modal from "../components/Modal";
 import ImportCsvModal from "../components/ImportCsvModal";
 import ImportHistoryModal from "../components/ImportHistoryModal";
@@ -494,6 +495,7 @@ const App = ({
   const [editingBudget, setEditingBudget] = useState<MonthlyBudget | null>(null);
   const [budgetForm, setBudgetForm] = useState<BudgetFormState>(DEFAULT_BUDGET_FORM);
   const [pendingDeleteTransactionId, setPendingDeleteTransactionId] = useState<number | null>(null);
+  const [pendingDeleteBudget, setPendingDeleteBudget] = useState<MonthlyBudget | null>(null);
   const [undoState, setUndoState] = useState<UndoState | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoadingTransactions, setLoadingTransactions] = useState(false);
@@ -929,15 +931,14 @@ const App = ({
     }
   };
 
-  const handleDeleteBudget = async (budget: MonthlyBudget) => {
-    const confirmationMessage = `Excluir meta de "${budget.categoryName}"?`;
-    // In non-browser test environments, skip native confirm prompt.
-    const isConfirmed = typeof window === "undefined" ? true : window.confirm(confirmationMessage);
+  const handleDeleteBudget = (budget: MonthlyBudget) => {
+    setPendingDeleteBudget(budget);
+  };
 
-    if (!isConfirmed) {
-      return;
-    }
-
+  const handleConfirmDeleteBudget = async () => {
+    if (!pendingDeleteBudget) return;
+    const budget = pendingDeleteBudget;
+    setPendingDeleteBudget(null);
     setBudgetsError("");
     clearBudgetSuccessMessage();
 
@@ -2783,32 +2784,22 @@ const App = ({
         </div>
       ) : null}
 
-      {pendingDeleteTransactionId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded bg-cf-surface p-4 shadow-lg">
-            <h3 className="text-base font-semibold text-cf-text-primary">Confirmar exclusão</h3>
-            <p className="mt-2 text-sm text-cf-text-secondary">
-              Deseja realmente excluir esta transação?
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={closeDeleteDialog}
-                className="rounded border border-cf-border px-3 py-1.5 text-sm font-semibold text-cf-text-secondary"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={confirmDeleteTransaction}
-                className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700"
-              >
-                Confirmar exclusão
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ConfirmDialog
+        isOpen={pendingDeleteTransactionId !== null}
+        title="Confirmar exclusão"
+        description="Deseja realmente excluir esta transação?"
+        confirmLabel="Confirmar exclusão"
+        onConfirm={confirmDeleteTransaction}
+        onCancel={closeDeleteDialog}
+      />
+
+      <ConfirmDialog
+        isOpen={pendingDeleteBudget !== null}
+        title={`Excluir meta de "${pendingDeleteBudget?.categoryName}"?`}
+        confirmLabel="Confirmar"
+        onConfirm={handleConfirmDeleteBudget}
+        onCancel={() => setPendingDeleteBudget(null)}
+      />
 
       <Modal
         isOpen={isModalOpen}
