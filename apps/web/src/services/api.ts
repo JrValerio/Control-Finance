@@ -162,6 +162,46 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
+const PAYWALL_COPY: Array<{ pattern: RegExp; reason: string }> = [
+  {
+    pattern: /\/transactions\/import/,
+    reason: "Importe transações de outros apps e bancos direto para o Control Finance.",
+  },
+  {
+    pattern: /\/transactions\/export/,
+    reason: "Exporte suas transações para planilhas e ferramentas financeiras.",
+  },
+  {
+    pattern: /\/forecasts/,
+    reason: "Saiba exatamente quanto vai ter no saldo no fim do mês.",
+  },
+  {
+    pattern: /\/analytics\/trend/,
+    reason: "Acesse até 24 meses de histórico e veja sua evolução financeira completa.",
+  },
+  {
+    pattern: /\/salary/,
+    reason: "Planeje seu salário com cálculo real de INSS e IRRF.",
+  },
+];
+
+const isTrialExpiredMessage = (msg: string): boolean =>
+  msg.toLowerCase().includes("teste encerrado");
+
+const resolvePaywallReason = (url: string, serverMessage: string): string => {
+  if (isTrialExpiredMessage(serverMessage)) {
+    return serverMessage;
+  }
+
+  for (const entry of PAYWALL_COPY) {
+    if (entry.pattern.test(url)) {
+      return entry.reason;
+    }
+  }
+
+  return serverMessage;
+};
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -221,13 +261,16 @@ api.interceptors.response.use(
     }
 
     if (error?.response?.status === 402) {
-      const message: string =
+      const serverMessage: string =
         typeof error?.response?.data?.message === "string"
           ? error.response.data.message
           : "";
 
+      const url: string = error?.config?.url ?? "";
+      const reason = resolvePaywallReason(url, serverMessage);
+
       if (typeof paymentRequiredHandler === "function") {
-        paymentRequiredHandler(message);
+        paymentRequiredHandler(reason);
       }
     }
 
