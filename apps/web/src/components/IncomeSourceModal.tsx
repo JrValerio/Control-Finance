@@ -71,7 +71,7 @@ const IncomeSourceModal = ({
 
       const trimmedName = name.trim();
       if (!trimmedName) {
-        setErrorMessage("Nome e obrigatorio.");
+        setErrorMessage("Nome é obrigatório.");
         return;
       }
 
@@ -98,7 +98,7 @@ const IncomeSourceModal = ({
       } catch (error) {
         const err = error as { response?: { data?: { message?: string } }; message?: string };
         setErrorMessage(
-          err?.response?.data?.message || err?.message || "Nao foi possivel salvar.",
+          err?.response?.data?.message || err?.message || "Não foi possível salvar.",
         );
       } finally {
         setIsSaving(false);
@@ -111,7 +111,7 @@ const IncomeSourceModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-gray-100 bg-opacity-50 p-6 sm:items-center"
+      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-black/50 p-6 sm:items-center"
       onClick={handleBackdropClick}
       role="presentation"
     >

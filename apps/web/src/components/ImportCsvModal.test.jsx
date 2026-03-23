@@ -60,7 +60,7 @@ describe("ImportCsvModal", () => {
   it("shows validation message when preview is requested without file", async () => {
     render(<ImportCsvModal isOpen onClose={vi.fn()} />);
 
-    await userEvent.click(screen.getByRole("button", { name: "Pre-visualizar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     expect(screen.getByText("Selecione um arquivo CSV.")).toBeInTheDocument();
     expect(transactionsService.dryRunImportCsv).not.toHaveBeenCalled();
@@ -73,14 +73,14 @@ describe("ImportCsvModal", () => {
     render(<ImportCsvModal isOpen onClose={vi.fn()} />);
 
     await userEvent.upload(screen.getByLabelText("Arquivo CSV"), file);
-    await userEvent.click(screen.getByRole("button", { name: "Pre-visualizar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     await waitFor(() => {
       expect(transactionsService.dryRunImportCsv).toHaveBeenCalledWith(file);
     });
 
-    const validRowsCard = screen.getByText("Validas").closest("div");
-    const invalidRowsCard = screen.getByText("Invalidas").closest("div");
+    const validRowsCard = screen.getByText("Válidas").closest("div");
+    const invalidRowsCard = screen.getByText("Inválidas").closest("div");
 
     expect(validRowsCard).toHaveTextContent("1");
     expect(invalidRowsCard).toHaveTextContent("1");
@@ -99,7 +99,7 @@ describe("ImportCsvModal", () => {
     render(<ImportCsvModal isOpen onClose={vi.fn()} onImported={onImported} />);
 
     await userEvent.upload(screen.getByLabelText("Arquivo CSV"), file);
-    await userEvent.click(screen.getByRole("button", { name: "Pre-visualizar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Importar" })).not.toBeDisabled();
@@ -118,13 +118,13 @@ describe("ImportCsvModal", () => {
 
     transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildDryRunResponse());
     transactionsService.commitImportCsv.mockRejectedValueOnce({
-      response: { data: { message: "Sessao de importacao expirada." } },
+      response: { data: { message: "Sessão de importação expirada." } },
     });
 
     render(<ImportCsvModal isOpen onClose={vi.fn()} />);
 
     await userEvent.upload(screen.getByLabelText("Arquivo CSV"), file);
-    await userEvent.click(screen.getByRole("button", { name: "Pre-visualizar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Importar" })).not.toBeDisabled();
@@ -134,7 +134,7 @@ describe("ImportCsvModal", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText("Sessao de importacao expirada. Rode a pre-visualizacao novamente."),
+        screen.getByText("Sessão de importação expirada. Rode a pré-visualização novamente."),
       ).toBeInTheDocument();
     });
   });

@@ -6,7 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const WEAK_PASSWORD_MESSAGE =
-  "Senha fraca: use no minimo 8 caracteres com letras e numeros.";
+  "Senha fraca: use no mínimo 8 caracteres com letras e números.";
 
 type AuthMode = "login" | "register";
 
@@ -60,7 +60,7 @@ const Login = (): JSX.Element => {
     resetErrors();
 
     if (!email.trim() || !password.trim()) {
-      setLocalError("Email e senha sao obrigatorios.");
+      setLocalError("Email e senha são obrigatórios.");
       return;
     }
 
@@ -72,7 +72,7 @@ const Login = (): JSX.Element => {
         }
 
         if (password.trim() !== confirmPassword.trim()) {
-          setLocalError("As senhas nao conferem.");
+          setLocalError("As senhas não conferem.");
           return;
         }
 

@@ -57,7 +57,7 @@ const SecuritySettings = ({
       setHasPassword(me.hasPassword !== false);
       setLinkedProviders(me.linkedProviders ?? []);
     } catch (error) {
-      setLoadError(getApiErrorMessage(error, "Nao foi possivel carregar as informacoes da conta."));
+      setLoadError(getApiErrorMessage(error, "Não foi possível carregar as informações da conta."));
     } finally {
       setIsLoadingAccount(false);
     }
@@ -76,12 +76,12 @@ const SecuritySettings = ({
     setPasswordSuccess(false);
 
     if (!PASSWORD_REGEX.test(newPassword)) {
-      setPasswordError("Senha fraca: use no minimo 8 caracteres com letras e numeros.");
+      setPasswordError("Senha fraca: use no mínimo 8 caracteres com letras e números.");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setPasswordError("As senhas nao coincidem.");
+      setPasswordError("As senhas não coincidem.");
       return;
     }
 
@@ -100,7 +100,7 @@ const SecuritySettings = ({
       passwordTimerRef.current = setTimeout(() => setPasswordSuccess(false), 4000);
     } catch (error) {
       setPasswordError(
-        getApiErrorMessage(error, "Nao foi possivel alterar a senha. Tente novamente."),
+        getApiErrorMessage(error, "Não foi possível alterar a senha. Tente novamente."),
       );
     } finally {
       setIsSavingPassword(false);
@@ -117,7 +117,7 @@ const SecuritySettings = ({
       setLinkedProviders((prev) => (prev.includes("google") ? prev : [...prev, "google"]));
     } catch (error) {
       setGoogleError(
-        getApiErrorMessage(error, "Nao foi possivel vincular a conta Google. Tente novamente."),
+        getApiErrorMessage(error, "Não foi possível vincular a conta Google. Tente novamente."),
       );
     } finally {
       setIsLinkingGoogle(false);
@@ -161,7 +161,7 @@ const SecuritySettings = ({
             <div className="mt-4 space-y-3" role="status" aria-live="polite">
               <div className="h-10 animate-pulse rounded border border-cf-border bg-cf-bg-subtle" />
               <div className="h-10 animate-pulse rounded border border-cf-border bg-cf-bg-subtle" />
-              <span className="sr-only">Carregando informacoes de seguranca...</span>
+              <span className="sr-only">Carregando informações de segurança...</span>
             </div>
           ) : null}
 

@@ -54,7 +54,7 @@ const TransactionChart = ({ data }) => {
   if (!hasAnyValue) {
     return (
       <div className="rounded border border-cf-border bg-cf-surface p-4 text-center text-sm text-cf-text-primary">
-        Sem dados suficientes para exibir o grafico no periodo selecionado.
+        Sem dados suficientes para exibir o gráfico no período selecionado.
       </div>
     );
   }
@@ -62,7 +62,7 @@ const TransactionChart = ({ data }) => {
   return (
     <div className="rounded border border-cf-border bg-cf-surface p-4">
       <h3 className="mb-3 text-sm font-semibold text-cf-text-primary">
-        Receita x Despesa no periodo
+        Receita x Despesa no período
       </h3>
       <div className="h-64 w-full">
         <ResponsiveContainer>

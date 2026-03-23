@@ -32,7 +32,7 @@ const resolveCategoryMutationErrorMessage = (error: unknown, fallbackMessage: st
   }
 
   if (normalizedError?.response?.status === 404) {
-    return "Categoria nao encontrada.";
+    return "Categoria não encontrada.";
   }
 
   return getApiErrorMessage(error, fallbackMessage);
@@ -71,7 +71,7 @@ const CategoriesSettings = ({
       setCategories(Array.isArray(response) ? response : []);
     } catch (error) {
       setCategories([]);
-      setPageErrorMessage(getApiErrorMessage(error, "Nao foi possivel carregar as categorias."));
+      setPageErrorMessage(getApiErrorMessage(error, "Não foi possível carregar as categorias."));
     } finally {
       setLoadingCategories(false);
     }
@@ -111,7 +111,7 @@ const CategoriesSettings = ({
 
     const normalizedName = String(categoryFormName || "").trim();
     if (!normalizedName) {
-      setCategoryModalErrorMessage("Nome da categoria e obrigatorio.");
+      setCategoryModalErrorMessage("Nome da categoria é obrigatório.");
       return;
     }
 
@@ -133,7 +133,7 @@ const CategoriesSettings = ({
       await loadCategories();
     } catch (error) {
       setCategoryModalErrorMessage(
-        resolveCategoryMutationErrorMessage(error, "Nao foi possivel salvar a categoria."),
+        resolveCategoryMutationErrorMessage(error, "Não foi possível salvar a categoria."),
       );
     } finally {
       setSavingCategory(false);
@@ -159,7 +159,7 @@ const CategoriesSettings = ({
       await loadCategories();
     } catch (error) {
       setPageErrorMessage(
-        resolveCategoryMutationErrorMessage(error, "Nao foi possivel remover a categoria."),
+        resolveCategoryMutationErrorMessage(error, "Não foi possível remover a categoria."),
       );
     }
   };
@@ -183,7 +183,7 @@ const CategoriesSettings = ({
       await loadCategories();
     } catch (error) {
       setPageErrorMessage(
-        resolveCategoryMutationErrorMessage(error, "Nao foi possivel restaurar a categoria."),
+        resolveCategoryMutationErrorMessage(error, "Não foi possível restaurar a categoria."),
       );
     }
   };
@@ -208,7 +208,7 @@ const CategoriesSettings = ({
             <div>
               <h1 className="text-xl font-semibold text-cf-text-primary">Settings - Categorias</h1>
               <p className="mt-1 text-sm text-cf-text-secondary">
-                Gerencie categorias ativas e removidas para os lancamentos.
+                Gerencie categorias ativas e removidas para os lançamentos.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -347,7 +347,7 @@ const CategoriesSettings = ({
       </main>
 
       {isCategoryModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100 bg-opacity-50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div
             role="dialog"
             aria-modal="true"

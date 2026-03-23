@@ -40,7 +40,7 @@ vi.mock("../components/TrendChart", () => ({
         ))}
       </div>
     ) : (
-      <div>Sem dados suficientes para exibir a evolucao historica.</div>
+      <div>Sem dados suficientes para exibir a evolução histórica.</div>
     ),
 }));
 
@@ -547,7 +547,7 @@ describe("App", () => {
     render(<App />);
 
     const moversRegion = await screen.findByRole("region", {
-      name: "Top variacoes por categoria",
+      name: "Top variações por categoria",
     });
     const moverItems = within(moversRegion).getAllByTestId("category-mover-item");
 
@@ -567,7 +567,7 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      await screen.findByText("Sem variacoes por categoria para o comparativo do mes."),
+      await screen.findByText("Sem variações por categoria para o comparativo do mês."),
     ).toBeInTheDocument();
   });
 
@@ -591,8 +591,8 @@ describe("App", () => {
 
     render(<App />);
 
-    await screen.findByRole("region", { name: "Top variacoes por categoria" });
-    await user.click(screen.getByRole("button", { name: "Ver transacoes categoria: Mercado" }));
+    await screen.findByRole("region", { name: "Top variações por categoria" });
+    await user.click(screen.getByRole("button", { name: "Ver transações categoria: Mercado" }));
 
     await waitFor(() => {
       const calls = transactionsService.listPage.mock.calls;
@@ -626,7 +626,7 @@ describe("App", () => {
     render(<App />);
 
     expect((await screen.findAllByText("Alimentacao")).length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Proximo do limite").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Próximo do limite").length).toBeGreaterThan(0);
     expect(screen.getByText("Orcado: R$ 1.000,00")).toBeInTheDocument();
     expect(screen.getByText("Realizado: R$ 855,50")).toBeInTheDocument();
     expect(screen.getByText("Restante: R$ 144,50")).toBeInTheDocument();
@@ -675,7 +675,7 @@ describe("App", () => {
 
     render(<App />);
 
-    const alertRegion = await screen.findByRole("region", { name: "Alertas de orcamento" });
+    const alertRegion = await screen.findByRole("region", { name: "Alertas de orçamento" });
     const alertItems = within(alertRegion).getAllByTestId("budget-alert-item");
 
     expect(alertItems).toHaveLength(2);
@@ -704,7 +704,7 @@ describe("App", () => {
 
     const proactiveBanner = await screen.findByTestId("budget-near-limit-banner");
     expect(proactiveBanner).toHaveTextContent(
-      "Alerta: voce ja utilizou 82.00% da meta de Alimentacao neste mes.",
+      "Alerta: você já utilizou 82.00% da meta de Alimentacao neste mês.",
     );
   });
 
@@ -752,8 +752,8 @@ describe("App", () => {
 
     render(<App />);
 
-    await screen.findByRole("region", { name: "Alertas de orcamento" });
-    await user.click(screen.getByRole("button", { name: "Ver transacoes: Lazer" }));
+    await screen.findByRole("region", { name: "Alertas de orçamento" });
+    await user.click(screen.getByRole("button", { name: "Ver transações: Lazer" }));
 
     await waitFor(() => {
       const calls = transactionsService.listPage.mock.calls;
@@ -787,10 +787,10 @@ describe("App", () => {
 
     render(<App />);
 
-    await screen.findByRole("region", { name: "Alertas de orcamento" });
+    await screen.findByRole("region", { name: "Alertas de orçamento" });
     await user.click(screen.getByRole("button", { name: "Ajustar meta: Educacao" }));
 
-    const budgetDialog = screen.getByRole("dialog", { name: "Meta do mes" });
+    const budgetDialog = screen.getByRole("dialog", { name: "Meta do mês" });
     expect(within(budgetDialog).getByText("Editando:")).toBeInTheDocument();
     expect(within(budgetDialog).getByText("Educacao")).toBeInTheDocument();
   });
@@ -815,7 +815,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Transporte")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Alertas de orcamento" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Alertas de orçamento" })).not.toBeInTheDocument();
   });
 
   it("exibe erro nas metas mensais e permite tentar novamente", async () => {
@@ -840,10 +840,10 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Nao foi possivel carregar as metas mensais.")).toBeInTheDocument();
+    expect(await screen.findByText("Não foi possível carregar as metas mensais.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
     expect(await screen.findByText("Transporte")).toBeInTheDocument();
-    expect(screen.queryByText("Nao foi possivel carregar as metas mensais.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Não foi possível carregar as metas mensais.")).not.toBeInTheDocument();
   });
 
   it("exibe CTA de empty state e abre modal de meta", async () => {
@@ -853,13 +853,13 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Nenhuma meta cadastrada para o mes selecionado.")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhuma meta cadastrada para o mês selecionado.")).toBeInTheDocument();
     const emptyStateCta = screen.getByRole("button", { name: "Criar meta" });
     expect(emptyStateCta).toBeEnabled();
 
     await user.click(emptyStateCta);
 
-    expect(screen.getByRole("dialog", { name: "Meta do mes" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Meta do mês" })).toBeInTheDocument();
   });
 
   it("exibe categoria bloqueada no modo edicao de meta", async () => {
@@ -885,7 +885,7 @@ describe("App", () => {
     expect(await screen.findByText("Transporte")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Editar meta: Transporte" }));
 
-    const budgetDialog = screen.getByRole("dialog", { name: "Meta do mes" });
+    const budgetDialog = screen.getByRole("dialog", { name: "Meta do mês" });
     expect(within(budgetDialog).getByText("Editando:")).toBeInTheDocument();
     expect(within(budgetDialog).getByText("Transporte")).toBeInTheDocument();
     expect(within(budgetDialog).getByText("Categoria bloqueada no modo edicao")).toBeInTheDocument();
@@ -919,7 +919,7 @@ describe("App", () => {
     await waitFor(() => expect(newBudgetButton).toBeEnabled());
     await user.click(newBudgetButton);
 
-    const budgetDialog = screen.getByRole("dialog", { name: "Meta do mes" });
+    const budgetDialog = screen.getByRole("dialog", { name: "Meta do mês" });
     await user.selectOptions(within(budgetDialog).getByLabelText("Categoria da meta"), "3");
     await user.type(within(budgetDialog).getByLabelText("Valor da meta"), "900");
     await user.click(within(budgetDialog).getByRole("button", { name: "Salvar meta" }));
@@ -960,7 +960,7 @@ describe("App", () => {
       await user.click(screen.getByRole("button", { name: "Excluir meta: Transporte" }));
 
       expect(transactionsService.deleteMonthlyBudget).toHaveBeenCalledWith(11);
-      expect(await screen.findByText("Nenhuma meta cadastrada para o mes selecionado.")).toBeInTheDocument();
+      expect(await screen.findByText("Nenhuma meta cadastrada para o mês selecionado.")).toBeInTheDocument();
     } finally {
       confirmMock.mockRestore();
     }
@@ -1332,14 +1332,14 @@ describe("App", () => {
 
     expect(await screen.findByText("Antes do preset")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Filtros" }));
-    expect(screen.getByRole("button", { name: "Este mes" })).toHaveAttribute("aria-pressed", "false");
-    await user.click(screen.getByRole("button", { name: "Este mes" }));
+    expect(screen.getByRole("button", { name: "Este mês" })).toHaveAttribute("aria-pressed", "false");
+    await user.click(screen.getByRole("button", { name: "Este mês" }));
 
     expect(await screen.findByText("Depois do preset")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Este mes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Este mês" })).not.toBeInTheDocument();
     expect(screen.getByText("Filtros ativos (1)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Editar filtros" })).toBeInTheDocument();
-    expect(screen.getByText(`Periodo: ${startDate} -> ${endDate}`)).toBeInTheDocument();
+    expect(screen.getByText(`Período: ${startDate} -> ${endDate}`)).toBeInTheDocument();
     expect(transactionsService.listPage).toHaveBeenLastCalledWith({
       limit: 20,
       offset: 0,
@@ -1487,7 +1487,7 @@ describe("App", () => {
 
     expect(await screen.findByText("Sem filtros ativos")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Filtros" }));
-    expect(screen.getByRole("button", { name: "Este mes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Este mês" })).toBeInTheDocument();
     expect(screen.queryByText(/Filtros ativos \(\d+\)/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Limpar tudo" })).not.toBeInTheDocument();
 
@@ -1497,7 +1497,7 @@ describe("App", () => {
     expect(await screen.findByText("Com filtros ativos")).toBeInTheDocument();
     expect(screen.getByText("Filtros ativos (1)")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Limpar tudo" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Este mes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Este mês" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Editar filtros" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Filtrar entradas" }));
@@ -1530,7 +1530,7 @@ describe("App", () => {
     expect(screen.getByText("Filtros ativos (4)")).toBeInTheDocument();
     expect(screen.getByText('Busca: "aluguel"')).toBeInTheDocument();
     expect(screen.getByText("Tipo: Entradas")).toBeInTheDocument();
-    expect(screen.getByText("Periodo: 2026-02-01 -> 2026-02-28")).toBeInTheDocument();
+    expect(screen.getByText("Período: 2026-02-01 -> 2026-02-28")).toBeInTheDocument();
     expect(screen.getByText("Categoria: #3")).toBeInTheDocument();
     expect(screen.getByText("Ordenacao: Valor (maior)")).toBeInTheDocument();
   });
@@ -1635,7 +1635,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("Com periodo aplicado")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Remover filtro: Periodo" }));
+    await user.click(screen.getByRole("button", { name: "Remover filtro: Período" }));
 
     expect(await screen.findByText("Sem periodo aplicado")).toBeInTheDocument();
     expect(transactionsService.listPage).toHaveBeenLastCalledWith({
@@ -1667,7 +1667,7 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Sem dados para o mes selecionado.")).toBeInTheDocument();
+    expect(await screen.findByText("Sem dados para o mês selecionado.")).toBeInTheDocument();
   });
 
   it("exibe erro no resumo mensal e permite tentar novamente", async () => {
@@ -1709,14 +1709,14 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      await screen.findByText("Nao foi possivel carregar o resumo mensal."),
+      await screen.findByText("Não foi possível carregar o resumo mensal."),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
 
     expect(await screen.findByTestId("mom-balance")).toBeInTheDocument();
     expect(screen.getByText("R$ 700,00")).toBeInTheDocument();
-    expect(screen.queryByText("Nao foi possivel carregar o resumo mensal.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Não foi possível carregar o resumo mensal.")).not.toBeInTheDocument();
   });
 
   it("abre historico de imports com loading e renderiza itens", async () => {
@@ -1730,9 +1730,9 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Historico de imports" }));
+    await user.click(screen.getByRole("button", { name: "Histórico de imports" }));
 
-    expect(await screen.findByText("Carregando historico...")).toBeInTheDocument();
+    expect(await screen.findByText("Carregando histórico...")).toBeInTheDocument();
 
     resolveHistoryRequest(
       buildImportHistoryResponse({
@@ -1772,7 +1772,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Historico de imports" }));
+    await user.click(screen.getByRole("button", { name: "Histórico de imports" }));
 
     expect(await screen.findByText("Sem imports para exibir.")).toBeInTheDocument();
   });
@@ -1789,7 +1789,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Historico de imports" }));
+    await user.click(screen.getByRole("button", { name: "Histórico de imports" }));
 
     expect(await screen.findByText("Falha ao carregar historico.")).toBeInTheDocument();
   });
@@ -1848,9 +1848,9 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Historico de imports" }));
+    await user.click(screen.getByRole("button", { name: "Histórico de imports" }));
     expect(await screen.findByText("Mostrando 1-20")).toBeInTheDocument();
-    const historyDialog = screen.getByRole("dialog", { name: "Historico de imports" });
+    const historyDialog = screen.getByRole("dialog", { name: "Histórico de imports" });
 
     await user.click(within(historyDialog).getByRole("button", { name: "Proxima" }));
 
@@ -1929,7 +1929,7 @@ describe("App", () => {
         "aria-expanded",
         "false",
       );
-      expect(screen.queryByLabelText("Periodo")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Período")).not.toBeInTheDocument();
 
       await user.click(screen.getByRole("button", { name: "Filtros" }));
 
@@ -1937,7 +1937,7 @@ describe("App", () => {
         "aria-expanded",
         "true",
       );
-      expect(screen.getByLabelText("Periodo")).toBeInTheDocument();
+      expect(screen.getByLabelText("Período")).toBeInTheDocument();
     } finally {
       Object.defineProperty(window, "innerWidth", {
         configurable: true,
@@ -1972,7 +1972,7 @@ describe("App", () => {
         "aria-expanded",
         "true",
       );
-      expect(screen.getByLabelText("Periodo")).toBeInTheDocument();
+      expect(screen.getByLabelText("Período")).toBeInTheDocument();
     } finally {
       window.history.replaceState(null, "", originalPathWithSearch);
       Object.defineProperty(window, "innerWidth", {
@@ -2041,13 +2041,13 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Importar CSV" }));
     await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
-    await user.click(screen.getByRole("button", { name: "Pre-visualizar" }));
+    await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     expect(transactionsService.dryRunImportCsv).toHaveBeenCalledTimes(1);
     expect(transactionsService.dryRunImportCsv.mock.calls[0][0]).toBe(csvFile);
     expect(await screen.findByText("Salario")).toBeInTheDocument();
     expect(screen.getByText("Valor invalido.")).toBeInTheDocument();
-    expect(screen.getByText("Sessao expira em: 2026-03-01T10:00:00.000Z")).toBeInTheDocument();
+    expect(screen.getByText("Sessão expira em: 2026-03-01T10:00:00.000Z")).toBeInTheDocument();
   });
 
   it("mantem botao importar desabilitado quando dry-run nao tem linhas validas", async () => {
@@ -2075,7 +2075,7 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Importar CSV" }));
     await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
-    await user.click(screen.getByRole("button", { name: "Pre-visualizar" }));
+    await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
     expect(await screen.findByText("Cafe")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Importar" })).toBeDisabled();
   });
@@ -2095,7 +2095,7 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Importar CSV" }));
     await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
-    await user.click(screen.getByRole("button", { name: "Pre-visualizar" }));
+    await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
     await screen.findByText("Salario");
     await user.click(screen.getByRole("button", { name: "Importar" }));
 
@@ -2128,7 +2128,7 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Importar CSV" }));
     await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
-    await user.click(screen.getByRole("button", { name: "Pre-visualizar" }));
+    await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     expect(await screen.findByText("Arquivo invalido. Envie um CSV.")).toBeInTheDocument();
   });
@@ -2144,19 +2144,19 @@ describe("App", () => {
     );
     transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildImportDryRunResponse());
     transactionsService.commitImportCsv.mockRejectedValueOnce({
-      response: { data: { message: "Sessao de importacao expirada." } },
+      response: { data: { message: "Sessão de importação expirada." } },
     });
 
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Importar CSV" }));
     await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
-    await user.click(screen.getByRole("button", { name: "Pre-visualizar" }));
+    await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
     await screen.findByText("Salario");
     await user.click(screen.getByRole("button", { name: "Importar" }));
 
     expect(
-      await screen.findByText("Sessao de importacao expirada. Rode a pre-visualizacao novamente."),
+      await screen.findByText("Sessão de importação expirada. Rode a pré-visualização novamente."),
     ).toBeInTheDocument();
   });
 
@@ -2358,7 +2358,7 @@ describe("App", () => {
     await screen.findByText("Nenhum valor cadastrado.");
     await user.click(screen.getByRole("button", { name: "Registrar novo valor" }));
     await user.type(screen.getByLabelText("Valor"), "100,50");
-    await user.type(screen.getByLabelText("Descricao"), "Extra");
+    await user.type(screen.getByLabelText("Descrição"), "Extra");
     fireEvent.change(screen.getByLabelText("Data"), {
       target: { value: "2026-02-13" },
     });
@@ -2417,8 +2417,8 @@ describe("App", () => {
     const modalQueries = within(modalForm);
 
     await user.type(modalQueries.getByLabelText("Valor"), "60,00");
-    await user.type(modalQueries.getByLabelText("Descricao"), "Cinema");
-    await user.click(modalQueries.getByRole("button", { name: "Saida" }));
+    await user.type(modalQueries.getByLabelText("Descrição"), "Cinema");
+    await user.click(modalQueries.getByRole("button", { name: "Saída" }));
     await user.selectOptions(modalQueries.getByLabelText("Categoria"), "7");
     fireEvent.change(modalQueries.getByLabelText("Data"), {
       target: { value: "2026-02-13" },
@@ -2458,7 +2458,7 @@ describe("App", () => {
             type: CATEGORY_EXIT,
             date: "2026-02-12",
             description: "Mercado",
-            notes: "Compra do mes",
+            notes: "Compra do mês",
           },
         ]),
       );
@@ -2468,14 +2468,14 @@ describe("App", () => {
       type: CATEGORY_EXIT,
       date: "2026-02-12",
       description: "Mercado",
-      notes: "Compra do mes",
+      notes: "Compra do mês",
     });
 
     render(<App />);
 
     await screen.findByText("Salario");
-    await user.click(screen.getByRole("button", { name: /Editar transacao 1/i }));
-    const modalForm = screen.getByRole("button", { name: "Salvar alteracoes" }).closest("form");
+    await user.click(screen.getByRole("button", { name: /Editar transação 1/i }));
+    const modalForm = screen.getByRole("button", { name: "Salvar alterações" }).closest("form");
 
     if (!modalForm) {
       throw new Error("Formulario de edicao nao encontrado.");
@@ -2485,12 +2485,12 @@ describe("App", () => {
 
     await user.clear(modalQueries.getByLabelText("Valor"));
     await user.type(modalQueries.getByLabelText("Valor"), "120,50");
-    await user.clear(modalQueries.getByLabelText("Descricao"));
-    await user.type(modalQueries.getByLabelText("Descricao"), "Mercado");
-    await user.clear(modalQueries.getByLabelText("Observacoes"));
-    await user.type(modalQueries.getByLabelText("Observacoes"), "Compra do mes");
-    await user.click(modalQueries.getByRole("button", { name: "Saida" }));
-    await user.click(modalQueries.getByRole("button", { name: "Salvar alteracoes" }));
+    await user.clear(modalQueries.getByLabelText("Descrição"));
+    await user.type(modalQueries.getByLabelText("Descrição"), "Mercado");
+    await user.clear(modalQueries.getByLabelText("Observações"));
+    await user.type(modalQueries.getByLabelText("Observações"), "Compra do mês");
+    await user.click(modalQueries.getByRole("button", { name: "Saída" }));
+    await user.click(modalQueries.getByRole("button", { name: "Salvar alterações" }));
 
     await waitFor(() => {
       expect(transactionsService.update).toHaveBeenCalledWith(1, {
@@ -2499,12 +2499,12 @@ describe("App", () => {
         category_id: null,
         date: "2026-02-12",
         description: "Mercado",
-        notes: "Compra do mes",
+        notes: "Compra do mês",
       });
     });
 
     expect(await screen.findByText("Mercado")).toBeInTheDocument();
-    expect(screen.getByText("Compra do mes")).toBeInTheDocument();
+    expect(screen.getByText("Compra do mês")).toBeInTheDocument();
   });
 
   it("exibe aviso e salva como Sem categoria ao editar transacao com categoria removida", async () => {
@@ -2536,15 +2536,15 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByText("Taxi");
-    await user.click(screen.getByRole("button", { name: /Editar transacao 14/i }));
+    await user.click(screen.getByRole("button", { name: /Editar transação 14/i }));
 
     expect(
       await screen.findByText(
-        "Categoria removida. Ao salvar, a transacao sera atualizada para Sem categoria.",
+        "Categoria removida. Ao salvar, a transação será atualizada para Sem categoria.",
       ),
     ).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Salvar alteracoes" }));
+    await user.click(screen.getByRole("button", { name: "Salvar alterações" }));
 
     await waitFor(() => {
       expect(transactionsService.update).toHaveBeenCalledWith(14, {
@@ -2583,7 +2583,7 @@ describe("App", () => {
     const modalQueries = within(modalForm);
 
     await user.type(modalQueries.getByLabelText("Valor"), "34,90");
-    await user.type(modalQueries.getByLabelText("Descricao"), "Padaria");
+    await user.type(modalQueries.getByLabelText("Descrição"), "Padaria");
     await user.selectOptions(modalQueries.getByLabelText("Categoria"), "5");
     await user.click(modalQueries.getByRole("button", { name: "Inserir valor" }));
 
@@ -2634,14 +2634,14 @@ describe("App", () => {
     render(<App />);
 
     await screen.findByText("Freela");
-    await user.click(screen.getByRole("button", { name: /Excluir transacao 1/i }));
-    await user.click(screen.getByRole("button", { name: "Confirmar exclusao" }));
+    await user.click(screen.getByRole("button", { name: /Excluir transação 1/i }));
+    await user.click(screen.getByRole("button", { name: "Confirmar exclusão" }));
 
     await waitFor(() => {
       expect(transactionsService.remove).toHaveBeenCalledWith(1);
     });
 
-    expect(await screen.findByText("Transacao removida.")).toBeInTheDocument();
+    expect(await screen.findByText("Transação removida.")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Desfazer" }));
 
     await waitFor(() => {
@@ -2673,14 +2673,14 @@ describe("App", () => {
 
       await screen.findByText("Resumo financeiro");
       await user.click(screen.getByRole("button", { name: "Filtros" }));
-      await user.selectOptions(screen.getByLabelText("Periodo"), "Personalizado");
+      await user.selectOptions(screen.getByLabelText("Período"), "Personalizado");
       fireEvent.change(screen.getByLabelText("Data inicial"), {
         target: { value: "2026-02-01" },
       });
       fireEvent.change(screen.getByLabelText("Data final"), {
         target: { value: "2026-02-20" },
       });
-      await user.click(screen.getByRole("button", { name: "Filtrar saidas" }));
+      await user.click(screen.getByRole("button", { name: "Filtrar saídas" }));
       await user.click(screen.getByRole("button", { name: "Exportar CSV" }));
 
       await waitFor(() => {
@@ -2770,7 +2770,7 @@ describe("App", () => {
       render(<App />);
 
       expect(
-        await screen.findByText("Grafico de evolucao indisponivel."),
+        await screen.findByText("Gráfico de evolução indisponível."),
       ).toBeInTheDocument();
     });
 
@@ -2780,7 +2780,7 @@ describe("App", () => {
 
       render(<App />);
 
-      expect(await screen.findByText("Carregando evolucao...")).toBeInTheDocument();
+      expect(await screen.findByText("Carregando evolução...")).toBeInTheDocument();
 
       await act(async () => {
         deferred.resolve(buildTrendResponse());
@@ -2887,11 +2887,11 @@ describe("App", () => {
     await waitFor(() => expect(newBudgetButton).toBeEnabled());
     await user.click(newBudgetButton);
 
-    expect(screen.getByRole("dialog", { name: "Meta do mes" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Meta do mês" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Registrar novo valor" }));
 
-    expect(screen.queryByRole("dialog", { name: "Meta do mes" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Meta do mês" })).not.toBeInTheDocument();
     expect(screen.getByText("Registro de valor")).toBeInTheDocument();
   });
 

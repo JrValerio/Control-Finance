@@ -86,7 +86,7 @@ const Modal = ({
 
     setSelectedCategoryId("");
     setRemovedCategoryMessage(
-      "Categoria removida. Ao salvar, a transacao sera atualizada para Sem categoria.",
+      "Categoria removida. Ao salvar, a transação será atualizada para Sem categoria.",
     );
   }, [categories, hasLoadedCategories, isEditing, isOpen, selectedCategoryId]);
 
@@ -112,12 +112,12 @@ const Modal = ({
 
     const parsedValue = parseCurrencyInput(value);
     if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
-      setErrorMessage("Digite um valor valido maior que zero.");
+      setErrorMessage("Digite um valor válido maior que zero.");
       return;
     }
 
     if (!isValidISODate(transactionDate)) {
-      setErrorMessage("Selecione uma data valida.");
+      setErrorMessage("Selecione uma data válida.");
       return;
     }
 
@@ -143,14 +143,14 @@ const Modal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-gray-100 bg-opacity-50 p-6 sm:items-center"
+      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-black/50 p-6 sm:items-center"
       onClick={handleBackdropClick}
       role="presentation"
     >
       <div className="w-full max-w-md rounded-lg bg-cf-surface p-4 sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-cf-text-primary">
-            {isEditing ? "Editar transacao" : "Registro de valor"}
+            {isEditing ? "Editar transação" : "Registro de valor"}
           </h2>
           <button
             type="button"
@@ -164,8 +164,8 @@ const Modal = ({
 
         <p className="mb-4 text-sm text-cf-text-secondary">
           {isEditing
-            ? "Atualize os campos da transacao."
-            : "Digite o valor, selecione o tipo e a data da transacao."}
+            ? "Atualize os campos da transação."
+            : "Digite o valor, selecione o tipo e a data da transação."}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -211,7 +211,7 @@ const Modal = ({
 
           <div className="flex flex-col gap-2">
             <label htmlFor="descricao" className="text-sm font-medium text-cf-text-primary">
-              Descricao
+              Descrição
             </label>
             <input
               id="descricao"
@@ -223,13 +223,13 @@ const Modal = ({
                 setErrorMessage("");
                 onClearSubmitError?.();
               }}
-              placeholder="Ex.: Mercado, Salario, Aluguel"
+              placeholder="Ex.: Mercado, Salário, Aluguel"
             />
           </div>
 
           <div className="flex flex-col gap-2">
             <label htmlFor="observacoes" className="text-sm font-medium text-cf-text-primary">
-              Observacoes
+              Observações
             </label>
             <textarea
               id="observacoes"
@@ -240,7 +240,7 @@ const Modal = ({
                 setErrorMessage("");
                 onClearSubmitError?.();
               }}
-              placeholder="Detalhes opcionais da transacao"
+              placeholder="Detalhes opcionais da transação"
             />
           </div>
 
@@ -273,7 +273,7 @@ const Modal = ({
                   onClearSubmitError?.();
                 }}
               >
-                Saida
+                Saída
               </button>
             </div>
           </div>
@@ -332,7 +332,7 @@ const Modal = ({
               type="submit"
               className="rounded border border-brand-1 bg-brand-1 px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-brand-2"
             >
-              {isEditing ? "Salvar alteracoes" : "Inserir valor"}
+              {isEditing ? "Salvar alterações" : "Inserir valor"}
             </button>
           </div>
         </form>

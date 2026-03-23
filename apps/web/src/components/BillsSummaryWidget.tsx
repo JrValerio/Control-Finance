@@ -23,7 +23,7 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
   if (isLoading) {
     return (
       <div className="rounded border border-cf-border bg-cf-surface p-4">
-        <p className="text-xs text-cf-text-secondary">Carregando pendencias...</p>
+        <p className="text-xs text-cf-text-secondary">Carregando pendências...</p>
       </div>
     );
   }
@@ -33,14 +33,14 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
   return (
     <div className="rounded border border-cf-border bg-cf-surface p-4">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-cf-text-primary">Pendencias</h3>
+        <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
         {onOpenBills ? (
           <button
             type="button"
             onClick={onOpenBills}
             className="text-xs text-brand-1 hover:underline"
           >
-            Ver pendencias →
+            Ver pendências →
           </button>
         ) : null}
       </div>

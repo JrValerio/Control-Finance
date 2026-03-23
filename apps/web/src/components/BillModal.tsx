@@ -101,18 +101,18 @@ const BillModal = ({
 
       const trimmedTitle = title.trim();
       if (!trimmedTitle) {
-        setErrorMessage("Titulo e obrigatorio.");
+        setErrorMessage("Título é obrigatório.");
         return;
       }
 
       const parsedAmount = parseCurrencyInput(amount);
       if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-        setErrorMessage("Digite um valor valido maior que zero.");
+        setErrorMessage("Digite um valor válido maior que zero.");
         return;
       }
 
       if (!isValidISODate(dueDate)) {
-        setErrorMessage("Data de vencimento invalida.");
+        setErrorMessage("Data de vencimento inválida.");
         return;
       }
 
@@ -152,7 +152,7 @@ const BillModal = ({
       } catch (error) {
         const err = error as { response?: { data?: { message?: string } }; message?: string };
         setErrorMessage(
-          err?.response?.data?.message || err?.message || "Nao foi possivel salvar a pendencia.",
+          err?.response?.data?.message || err?.message || "Não foi possível salvar a pendência.",
         );
       } finally {
         setIsSaving(false);
@@ -165,7 +165,7 @@ const BillModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-gray-100 bg-opacity-50 p-6 sm:items-center"
+      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-black/50 p-6 sm:items-center"
       onClick={handleBackdropClick}
       role="presentation"
     >
@@ -173,7 +173,7 @@ const BillModal = ({
         {/* Header */}
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-cf-text-primary">
-            {isEditing ? "Editar pendencia" : "Nova pendencia"}
+            {isEditing ? "Editar pendência" : "Nova pendência"}
           </h2>
           <button
             type="button"
@@ -278,7 +278,7 @@ const BillModal = ({
           {/* Reference Month */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="bill-ref-month" className="text-sm font-medium text-cf-text-primary">
-              Mes de referencia <span className="text-xs font-normal text-cf-text-secondary">(opcional, YYYY-MM)</span>
+              Mês de referência <span className="text-xs font-normal text-cf-text-secondary">(opcional, YYYY-MM)</span>
             </label>
             <input
               id="bill-ref-month"

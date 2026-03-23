@@ -220,13 +220,13 @@ describe("BillsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText("Nenhuma pendencia encontrada.")).toBeInTheDocument();
+      expect(screen.getByText("Nenhuma pendência encontrada.")).toBeInTheDocument();
     });
   });
 
-  it("botao Proxima chama list com offset 20", async () => {
+  it("botao Próxima chama list com offset 20", async () => {
     const user = userEvent.setup();
-    // Return full page (20 items) to enable "Proxima"
+    // Return full page (20 items) to enable "Próxima"
     const fullPage = Array.from({ length: 20 }, (_, i) =>
       buildBill({ id: i + 1, title: `Bill ${i + 1}` }),
     );
@@ -241,7 +241,7 @@ describe("BillsPage", () => {
       expect(screen.getByText("Bill 1")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "Proxima" }));
+    await user.click(screen.getByRole("button", { name: "Próxima" }));
 
     await waitFor(() => {
       expect(billsService.list).toHaveBeenCalledWith(
@@ -263,7 +263,7 @@ describe("BillsPage", () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("Conta de Agua")).toBeInTheDocument());
 
-    await user.click(screen.getByRole("button", { name: /Nova pendencia/ }));
+    await user.click(screen.getByRole("button", { name: /Nova pendência/ }));
     await user.type(screen.getByLabelText(/Titulo/), "IPTU");
     await user.type(screen.getByLabelText(/Valor/), "500");
     await user.click(screen.getByRole("checkbox", { name: /Parcelar/ }));
@@ -294,7 +294,7 @@ describe("BillsPage", () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("Conta de Agua")).toBeInTheDocument());
 
-    await user.click(screen.getByRole("button", { name: /Nova pendencia/ }));
+    await user.click(screen.getByRole("button", { name: /Nova pendência/ }));
     await user.type(screen.getByLabelText(/Titulo/), "IPTU");
     await user.type(screen.getByLabelText(/Valor/), "500");
     await user.click(screen.getByRole("checkbox", { name: /Parcelar/ }));
