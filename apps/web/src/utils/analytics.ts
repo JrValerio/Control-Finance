@@ -17,10 +17,12 @@ export interface PaywallEvent {
 
 /**
  * Tracks a paywall interaction event.
- *
- * Today: logs to console. Swap this implementation to send events to
- * PostHog, Mixpanel, or a backend endpoint without touching call sites.
+ * Fire-and-forget: never blocks the UI, never throws.
  */
 export const trackPaywallEvent = (event: PaywallEvent): void => {
-  console.log("[paywall]", event);
+  import("../services/api").then(({ api }) => {
+    void api.post("/analytics/paywall", event).catch(() => {
+      // Silently discard — tracking must never degrade the user experience
+    });
+  });
 };
