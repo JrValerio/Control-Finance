@@ -65,7 +65,7 @@ export const requireFeature = (featureName) => async (req, res, next) => {
     const features = await getActivePlanFeaturesForUser(req.user.id);
 
     if (features[featureName] === false) {
-      return next(createPaymentRequiredError());
+      return next(createPaymentRequiredError("Recurso disponivel apenas no plano Pro.", "FEATURE_GATED"));
     }
 
     return next();

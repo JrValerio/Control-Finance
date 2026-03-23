@@ -199,7 +199,8 @@ const resolvePaywallPayload = (
   serverCode: string,
 ): PaymentRequiredPayload => {
   // Prefer the structured code field from the API response.
-  // Fall back to string-matching for backwards compatibility during rolling deploys.
+  // TODO: remove the string-match fallback once fix/paywall-structured-error is stable
+  //       (no old API instances running) — the includes("teste encerrado") branch is then dead code.
   const isTrialExpired =
     serverCode === "TRIAL_EXPIRED" ||
     serverMessage.toLowerCase().includes("teste encerrado");
