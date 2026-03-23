@@ -3,25 +3,7 @@ import {
   billingService,
   type SubscriptionSummary,
 } from "../services/billing.service";
-
-interface ApiLikeError {
-  response?: {
-    data?: {
-      message?: string;
-    };
-    status?: number;
-  };
-  message?: string;
-}
-
-const getApiErrorMessage = (error: unknown, fallbackMessage: string): string => {
-  const normalizedError = error as ApiLikeError;
-  return (
-    normalizedError?.response?.data?.message ||
-    normalizedError?.message ||
-    fallbackMessage
-  );
-};
+import { getApiErrorMessage, getApiErrorStatus } from "../utils/apiError";
 
 const formatDate = (isoString: string | null | undefined): string => {
   if (!isoString) return "";
@@ -112,7 +94,7 @@ const BillingSettings = ({
       const { url } = await billingService.createPortal();
       window.location.href = url;
     } catch (error) {
-      const status = (error as ApiLikeError)?.response?.status;
+      const status = getApiErrorStatus(error);
       if (status === 422) {
         setActionError(
           "Portal de gerenciamento indisponivel. Entre em contato com o suporte.",
