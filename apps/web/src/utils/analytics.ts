@@ -26,3 +26,15 @@ export const trackPaywallEvent = (event: PaywallEvent): void => {
     });
   });
 };
+
+export type ActivationEvent =
+  | "welcome_cta_clicked"
+  | "first_transaction_created";
+
+/**
+ * Tracks a user activation event.
+ * Today: logs to console. Swap for a persistence endpoint when ready.
+ */
+export const trackActivationEvent = (event: ActivationEvent): void => {
+  console.log("[activation]", event);
+};

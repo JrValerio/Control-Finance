@@ -1,3 +1,5 @@
+import { trackActivationEvent } from "../utils/analytics";
+
 interface WelcomeCardProps {
   onAddTransaction: () => void;
   onOpenProfileSettings?: () => void;
@@ -49,7 +51,10 @@ const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardPro
         <div className="flex shrink-0 flex-col gap-2 sm:items-end">
           <button
             type="button"
-            onClick={onAddTransaction}
+            onClick={() => {
+              trackActivationEvent("welcome_cta_clicked");
+              onAddTransaction();
+            }}
             className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2 whitespace-nowrap"
           >
             + Registrar primeira transação

@@ -35,6 +35,7 @@ import {
 } from "../components/DatabaseUtils";
 import { analyticsService, type TrendPoint } from "../services/analytics.service";
 import { setPaymentRequiredHandler, type PaymentRequiredPayload } from "../services/api";
+import { trackActivationEvent } from "../utils/analytics";
 import type { PaywallFeature, PaywallContext } from "../utils/analytics";
 import {
   useFilters,
@@ -1271,6 +1272,9 @@ const App = ({
           notes,
         });
       } else {
+        if (transactions.length === 0) {
+          trackActivationEvent("first_transaction_created");
+        }
         await transactionsService.create({
           value,
           type,
