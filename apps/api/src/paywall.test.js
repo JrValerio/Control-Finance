@@ -51,7 +51,9 @@ testApp.get(
 );
 // eslint-disable-next-line no-unused-vars
 testApp.use((err, _req, res, next) => {
-  res.status(err.status || 500).json({ message: err.message });
+  const body = { message: err.message };
+  if (typeof err.publicCode === "string" && err.publicCode) body.code = err.publicCode;
+  res.status(err.status || 500).json(body);
 });
 
 const resetState = async () => {
@@ -206,6 +208,23 @@ describe("requireActiveTrialOrPaidPlan", () => {
 
     expect(res.status).toBe(402);
   });
+
+  it("402 por trial expirado inclui code TRIAL_EXPIRED no body", async () => {
+    const token = await registerAndLogin("paywall-code-trial@test.dev");
+    const userId = await getUserIdByEmail("paywall-code-trial@test.dev");
+
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+
+    const res = await request(testApp)
+      .get("/trial-gated")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(402);
+    expect(res.body.code).toBe("TRIAL_EXPIRED");
+  });
 });
 
 describe("paywall bypass (PAYWALL_BYPASS_ENABLED)", () => {
@@ -301,5 +320,45 @@ describe("paywall bypass (PAYWALL_BYPASS_ENABLED)", () => {
       process.env.PAYWALL_BYPASS_EMAILS  = originalEmails;
       process.env.NODE_ENV = originalEnv;
     }
+  });
+});
+
+describe("structured error codes in 402 responses", () => {
+  beforeAll(async () => { await setupTestDb(); });
+  afterAll(async () => { await clearDbClientForTests(); });
+  beforeEach(resetState);
+
+  it("requireActiveTrialOrPaidPlan retorna code TRIAL_EXPIRED quando trial expirou", async () => {
+    const token = await registerAndLogin("code-trial-expired@test.dev");
+    const userId = await getUserIdByEmail("code-trial-expired@test.dev");
+
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+
+    const res = await request(testApp)
+      .get("/trial-gated")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(402);
+    expect(res.body.code).toBe("TRIAL_EXPIRED");
+  });
+
+  it("requireFeature retorna code FEATURE_GATED para usuario free", async () => {
+    const token = await registerAndLogin("code-feature-gated@test.dev");
+    const userId = await getUserIdByEmail("code-feature-gated@test.dev");
+
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+
+    const res = await request(testApp)
+      .get("/feature-gated")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(402);
+    expect(res.body.code).toBe("FEATURE_GATED");
   });
 });
