@@ -5,12 +5,15 @@ import {
   loginOrRegisterWithGoogle,
   setUserPassword,
   linkGoogleIdentity,
+  requestPasswordReset,
+  resetPassword,
   issueAuthToken,
   issueRefreshToken,
   rotateRefreshToken,
   revokeRefreshToken,
   randomUUID,
 } from "../services/auth.service.js";
+import { sendPasswordResetEmail } from "../services/email.service.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import {
   bruteForceLoginGuard,
@@ -146,6 +149,38 @@ router.delete("/logout", async (req, res) => {
 
   clearAuthCookies(res);
   return res.status(204).send();
+});
+
+router.post("/forgot-password", loginRateLimiter, async (req, res, next) => {
+  try {
+    const result = await requestPasswordReset({ email: req.body?.email });
+
+    if (result) {
+      const appUrl = (process.env.APP_URL || "http://localhost:5173").replace(/\/$/, "");
+      const resetUrl = `${appUrl}/reset-password?token=${result.rawToken}`;
+      // Fire-and-forget — email failure must not reveal whether the email exists
+      void sendPasswordResetEmail({ email: result.email, resetUrl }).catch((err) => {
+        console.error("[email] password_reset send error:", err?.message);
+      });
+    }
+
+    // Always neutral — never reveal whether the email is registered
+    res.status(200).json({ message: "Se o email estiver cadastrado, enviaremos as instrucoes." });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/reset-password", async (req, res, next) => {
+  try {
+    await resetPassword({
+      token: req.body?.token,
+      newPassword: req.body?.newPassword,
+    });
+    res.status(200).json({ message: "Senha redefinida com sucesso." });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.patch("/password", authMiddleware, async (req, res, next) => {

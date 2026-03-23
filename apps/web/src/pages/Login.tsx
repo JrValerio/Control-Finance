@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../hooks/useAuth";
 
@@ -254,6 +254,14 @@ const Login = (): JSX.Element => {
                 ? "Criar conta e entrar"
                 : "Entrar"}
           </button>
+
+          {mode === "login" ? (
+            <p className="text-right text-sm">
+              <Link to="/forgot-password" className="text-brand-1 hover:underline">
+                Esqueci minha senha
+              </Link>
+            </p>
+          ) : null}
 
           <div className="flex items-center gap-2">
             <hr className="flex-1 border-cf-border" />

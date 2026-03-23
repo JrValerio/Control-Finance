@@ -4,7 +4,9 @@ import BillingSettings from "./pages/BillingSettings";
 import BillsPage from "./pages/BillsPage";
 import CategoriesSettings from "./pages/CategoriesSettings";
 import IncomeSourcesPage from "./pages/IncomeSourcesPage";
+import ForgotPassword from "./pages/ForgotPassword";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import ProfileSettings from "./pages/ProfileSettings";
 import SecuritySettings from "./pages/SecuritySettings";
 import ProtectedRoute from "./routers/ProtectedRoute";
@@ -156,6 +158,9 @@ const AppRoutes = () => {
   return (
     <Routes>
       <Route path="/" element={<Login />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route
         path="/app"
         element={

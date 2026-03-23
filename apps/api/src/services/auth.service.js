@@ -284,6 +284,102 @@ export const setUserPassword = async ({
   ]);
 };
 
+// ─── Password recovery ────────────────────────────────────────────────────────
+
+// Returns { rawToken, email } for the found user, or undefined when the email
+// is not registered (caller must always respond neutrally to the client).
+export const requestPasswordReset = async ({ email } = {}) => {
+  const normalizedEmail = getNormalizedEmail(email);
+  if (!normalizedEmail) {
+    throw createError(400, "Email e obrigatorio.");
+  }
+
+  const result = await dbQuery(
+    `SELECT id FROM users WHERE email = $1 LIMIT 1`,
+    [normalizedEmail],
+  );
+
+  if (result.rows.length === 0) {
+    return undefined; // Email not registered — caller returns neutral response
+  }
+
+  const userId = Number(result.rows[0].id);
+  const rawToken = randomBytes(32).toString("hex");
+  const tokenHash = hashToken(rawToken);
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  // Invalidate any previous active tokens for this user
+  await dbQuery(
+    `UPDATE password_reset_tokens
+     SET used_at = NOW()
+     WHERE user_id = $1 AND used_at IS NULL AND expires_at > NOW()`,
+    [userId],
+  );
+
+  await dbQuery(
+    `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+     VALUES ($1, $2, $3)`,
+    [userId, tokenHash, expiresAt.toISOString()],
+  );
+
+  return { rawToken, email: normalizedEmail };
+};
+
+export const resetPassword = async ({ token, newPassword } = {}) => {
+  const normalizedToken = typeof token === "string" ? token.trim() : "";
+  if (!normalizedToken) {
+    throw createError(400, "Token invalido ou expirado.");
+  }
+
+  const normalizedNew = typeof newPassword === "string" ? newPassword.trim() : "";
+  if (!normalizedNew) {
+    throw createError(400, "Nova senha e obrigatoria.");
+  }
+  validatePasswordStrength(normalizedNew);
+
+  const tokenHash = hashToken(normalizedToken);
+  const result = await dbQuery(
+    `SELECT id, user_id, expires_at, used_at
+     FROM password_reset_tokens
+     WHERE token_hash = $1
+     LIMIT 1`,
+    [tokenHash],
+  );
+
+  if (result.rows.length === 0) {
+    throw createError(400, "Token invalido ou expirado.");
+  }
+
+  const tokenRow = result.rows[0];
+
+  if (tokenRow.used_at !== null) {
+    throw createError(400, "Token invalido ou expirado.");
+  }
+
+  if (new Date(tokenRow.expires_at) < new Date()) {
+    throw createError(400, "Token invalido ou expirado.");
+  }
+
+  // Mark token used before updating password to prevent replay on DB error
+  await dbQuery(
+    `UPDATE password_reset_tokens SET used_at = NOW() WHERE id = $1`,
+    [tokenRow.id],
+  );
+
+  const newHash = await bcrypt.hash(normalizedNew, 10);
+  await dbQuery(`UPDATE users SET password_hash = $1 WHERE id = $2`, [
+    newHash,
+    Number(tokenRow.user_id),
+  ]);
+
+  // Revoke all active refresh tokens — forces re-login with new password
+  await dbQuery(
+    `UPDATE refresh_tokens SET revoked_at = NOW()
+     WHERE user_id = $1 AND revoked_at IS NULL`,
+    [Number(tokenRow.user_id)],
+  );
+};
+
 export const linkGoogleIdentity = async ({ userId, idToken } = {}) => {
   if (!idToken || typeof idToken !== "string" || !idToken.trim()) {
     throw createError(400, "Token Google ausente ou invalido.");
