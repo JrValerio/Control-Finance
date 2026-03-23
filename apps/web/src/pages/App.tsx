@@ -1239,6 +1239,9 @@ const App = ({
   );
 
   const openCreateModal = () => {
+    if (transactions.length === 0) {
+      trackActivationEvent("transaction_modal_opened");
+    }
     setBudgetModalOpen(false);
     setEditingTransaction(null);
     setModalRequestError("");
@@ -1861,7 +1864,7 @@ const App = ({
         {showActivationBanner && (
           <div className="flex items-center justify-between rounded border border-green-600/30 bg-green-600/10 px-4 py-3 text-sm text-green-700 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-400">
             <span>
-              Transação registrada. Seu saldo já está sendo calculado.
+              Primeira transação registrada. Seu saldo já está atualizado acima ↑
             </span>
             <button
               type="button"

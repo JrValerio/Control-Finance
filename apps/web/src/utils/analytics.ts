@@ -30,6 +30,7 @@ export const trackPaywallEvent = (event: PaywallEvent): void => {
 export type ActivationEvent =
   | "welcome_card_viewed"
   | "welcome_cta_clicked"
+  | "transaction_modal_opened"
   | "first_transaction_created";
 
 /**
