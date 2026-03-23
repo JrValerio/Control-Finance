@@ -51,6 +51,8 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
   const subtitle = isTrialExpired
     ? "Continue com acesso total por menos de R$ 0,33 por dia."
     : reason;
+  const ctaLabel = isTrialExpired ? "Reativar acesso Pro" : "Começar meu plano Pro";
+  const dismissLabel = isTrialExpired ? "Agora não" : "Continuar no plano gratuito";
 
   const handleUpgrade = () => {
     onClose();
@@ -91,6 +93,7 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
             </span>
             <span className="text-sm text-cf-text-secondary">/mês</span>
           </div>
+          <p className="mt-0.5 text-xs text-cf-text-secondary">≈ R$ 0,33 por dia — menos que um café</p>
         </div>
 
         {/* Benefits */}
@@ -138,7 +141,7 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
             onClick={handleUpgrade}
             className="w-full rounded bg-brand-1 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-2"
           >
-            Começar meu plano Pro
+            {ctaLabel}
           </button>
           <p className="text-center text-xs text-cf-text-secondary">
             Cancele quando quiser. Sem fidelidade.
@@ -148,7 +151,7 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
             onClick={onClose}
             className="text-center text-xs text-cf-text-secondary hover:text-cf-text-primary"
           >
-            Agora não
+            {dismissLabel}
           </button>
         </div>
       </div>
