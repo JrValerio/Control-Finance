@@ -2160,7 +2160,7 @@ const App = ({
             <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
             <p className="text-xs font-medium uppercase text-cf-text-secondary">Saldo</p>
-            <p className="text-base font-medium text-cf-text-primary">
+            <p className="text-xl font-semibold text-cf-text-primary">
               {isLoadingSummary ? "Carregando..." : formatCurrency(monthlySummary.balance)}
             </p>
             <p
@@ -2186,7 +2186,7 @@ const App = ({
           </div>
           <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
             <p className="text-xs font-medium uppercase text-cf-text-secondary">Entradas</p>
-            <p className="text-base font-medium text-cf-text-primary">
+            <p className="text-xl font-semibold text-cf-text-primary">
               {isLoadingSummary ? "Carregando..." : formatCurrency(monthlySummary.income)}
             </p>
             <p
@@ -2212,7 +2212,7 @@ const App = ({
           </div>
           <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
             <p className="text-xs font-medium uppercase text-cf-text-secondary">Saídas</p>
-            <p className="text-base font-medium text-cf-text-primary">
+            <p className="text-xl font-semibold text-cf-text-primary">
               {isLoadingSummary ? "Carregando..." : formatCurrency(monthlySummary.expense)}
             </p>
             <p
