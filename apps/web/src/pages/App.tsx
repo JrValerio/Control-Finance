@@ -1552,7 +1552,7 @@ const App = ({
   return (
     <div className="App min-h-screen bg-cf-bg-page pb-10">
       <header className="w-full bg-cf-header-bg py-3 shadow-md sm:py-4">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <h1 className="text-2xl font-semibold sm:text-3xl lg:text-4xl">
             <span className="text-brand-1">Control</span>
             <span className="text-cf-text-primary">Finance</span>
