@@ -2,15 +2,29 @@ import { Router } from "express";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { attachEntitlements, requireActiveTrialOrPaidPlan } from "../middlewares/entitlement.middleware.js";
 import { getMonthlyTrendForUser } from "../services/analytics.service.js";
+import { recordPaywallEvent } from "../services/paywall-events.service.js";
 
 const router = Router();
 
 const DEFAULT_MONTHS = 6;
 const MAX_MONTHS = 24;
 
-router.use(authMiddleware, requireActiveTrialOrPaidPlan);
+router.post("/paywall", authMiddleware, async (req, res, next) => {
+  try {
+    const { feature, action, context } = req.body ?? {};
+    const event = await recordPaywallEvent({
+      userId: req.user.id,
+      feature,
+      action,
+      context,
+    });
+    res.status(201).json(event);
+  } catch (error) {
+    next(error);
+  }
+});
 
-router.get("/trend", attachEntitlements, async (req, res, next) => {
+router.get("/trend", authMiddleware, requireActiveTrialOrPaidPlan, attachEntitlements, async (req, res, next) => {
   try {
     const cap = req.entitlements.analytics_months_max;
     const rawMonths = req.query?.months;
