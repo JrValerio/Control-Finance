@@ -7,11 +7,23 @@ interface UpgradeModalProps {
   onClose: () => void;
 }
 
-const FEATURES = [
-  { label: "Controle de metas", free: "✓", pro: "✓" },
-  { label: "Analytics (histórico)", free: "6 meses", pro: "24 meses" },
-  { label: "Exportar CSV", free: "—", pro: "✓" },
-  { label: "Importar CSV", free: "—", pro: "✓" },
+const PRICE_MONTHLY = "R$ 9,90";
+
+const FEATURES: { label: string; free: string; pro: string }[] = [
+  { label: "Transações e categorias", free: "✓", pro: "✓" },
+  { label: "Metas mensais",           free: "✓", pro: "✓" },
+  { label: "Histórico de analytics",  free: "6 meses", pro: "24 meses" },
+  { label: "Previsão financeira",     free: "—", pro: "✓" },
+  { label: "Controle salarial",       free: "—", pro: "✓" },
+  { label: "Exportar CSV",            free: "—", pro: "✓" },
+  { label: "Importar CSV",            free: "—", pro: "✓" },
+];
+
+const BENEFITS = [
+  "Saiba quanto vai ter no saldo no fim do mês",
+  "Entenda exatamente para onde seu dinheiro está indo",
+  "Planeje seu salário com cálculo real de INSS e IRRF",
+  "Exporte e importe transações com facilidade",
 ];
 
 const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
@@ -33,7 +45,9 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
   if (!isOpen) return null;
 
   const isTrialExpired = reason.toLowerCase().includes("teste encerrado");
-  const title = isTrialExpired ? "Seu período de teste encerrou" : "Recurso disponível no plano Pro";
+  const title = isTrialExpired
+    ? "Seu período de teste encerrou"
+    : "Desbloqueie o Control Finance Pro";
 
   const handleUpgrade = () => {
     onClose();
@@ -49,52 +63,89 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
         role="dialog"
         aria-modal="true"
         aria-labelledby="upgrade-modal-title"
-        className="w-full max-w-md rounded bg-cf-surface p-6 shadow-lg"
+        className="w-full max-w-lg rounded-lg bg-cf-surface p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 id="upgrade-modal-title" className="text-base font-semibold text-cf-text-primary">
+        {/* Header */}
+        <h3
+          id="upgrade-modal-title"
+          className="text-xl font-semibold text-cf-text-primary"
+        >
           {title}
         </h3>
-
         {reason ? (
           <p className="mt-1 text-sm text-cf-text-secondary">{reason}</p>
         ) : null}
 
-        <div className="mt-4 overflow-hidden rounded border border-cf-border">
+        {/* Price anchor */}
+        <div className="mt-5">
+          <span className="inline-block rounded bg-brand-1 px-2 py-0.5 text-xs font-medium text-white">
+            Mais escolhido
+          </span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-4xl font-bold text-cf-text-primary">
+              {PRICE_MONTHLY}
+            </span>
+            <span className="text-sm text-cf-text-secondary">/mês</span>
+          </div>
+        </div>
+
+        {/* Benefits */}
+        <ul className="mt-3 space-y-1.5">
+          {BENEFITS.map((benefit) => (
+            <li key={benefit} className="flex items-start gap-2 text-sm text-cf-text-secondary">
+              <span className="mt-0.5 text-brand-1 shrink-0">✓</span>
+              {benefit}
+            </li>
+          ))}
+        </ul>
+
+        {/* Feature comparison */}
+        <div className="mt-5 overflow-hidden rounded border border-cf-border">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-cf-bg-subtle">
                 <th className="px-3 py-2 text-left font-medium text-cf-text-primary">Recurso</th>
                 <th className="px-3 py-2 text-center font-medium text-cf-text-secondary">Gratuito</th>
-                <th className="px-3 py-2 text-center font-medium text-brand-1">Pro</th>
+                <th className="bg-brand-1/5 px-3 py-2 text-center font-semibold text-brand-1">Pro</th>
               </tr>
             </thead>
             <tbody>
               {FEATURES.map((feature, index) => (
                 <tr key={feature.label} className={index % 2 === 0 ? "" : "bg-cf-bg-subtle"}>
-                  <td className="border-t border-cf-border px-3 py-2 text-cf-text-primary">{feature.label}</td>
-                  <td className="border-t border-cf-border px-3 py-2 text-center text-cf-text-secondary">{feature.free}</td>
-                  <td className="border-t border-cf-border px-3 py-2 text-center font-medium text-cf-text-primary">{feature.pro}</td>
+                  <td className="border-t border-cf-border px-3 py-2 text-cf-text-primary">
+                    {feature.label}
+                  </td>
+                  <td className="border-t border-cf-border px-3 py-2 text-center text-cf-text-secondary">
+                    {feature.free}
+                  </td>
+                  <td className="border-t border-cf-border bg-brand-1/5 px-3 py-2 text-center font-medium text-cf-text-primary">
+                    {feature.pro}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded border border-cf-border px-3 py-1.5 text-sm font-semibold text-cf-text-secondary hover:bg-cf-bg-subtle"
-          >
-            Fechar
-          </button>
+        {/* CTA */}
+        <div className="mt-5 flex flex-col gap-3">
           <button
             type="button"
             onClick={handleUpgrade}
-            className="rounded bg-brand-1 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-2"
+            className="w-full rounded bg-brand-1 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-2"
           >
-            Ativar plano Pro
+            Começar meu plano Pro
+          </button>
+          <p className="text-center text-xs text-cf-text-secondary">
+            Cancele quando quiser. Sem fidelidade.
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-center text-xs text-cf-text-secondary hover:text-cf-text-primary"
+          >
+            Agora não
           </button>
         </div>
       </div>
