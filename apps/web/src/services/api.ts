@@ -11,8 +11,11 @@ type EnvConfig = {
   VITE_API_URL?: string;
 };
 
+import type { PaywallFeature, PaywallContext } from "../utils/analytics";
+
 type UnauthorizedHandler = (() => void) | undefined;
-type PaymentRequiredHandler = ((message: string) => void) | undefined;
+export type PaymentRequiredPayload = { reason: string; feature: PaywallFeature; context: PaywallContext };
+type PaymentRequiredHandler = ((payload: PaymentRequiredPayload) => void) | undefined;
 
 type ApiConfigurationError = Error & {
   code: "API_URL_NOT_CONFIGURED";
@@ -162,44 +165,52 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
-const PAYWALL_COPY: Array<{ pattern: RegExp; reason: string }> = [
+const PAYWALL_COPY: Array<{ pattern: RegExp; reason: string; feature: PaywallFeature }> = [
   {
     pattern: /\/transactions\/import/,
     reason: "Importe transações de outros apps e bancos direto para o Control Finance.",
+    feature: "csv_import",
   },
   {
     pattern: /\/transactions\/export/,
     reason: "Exporte suas transações para planilhas e ferramentas financeiras.",
+    feature: "csv_export",
   },
   {
     pattern: /\/forecasts/,
     reason: "Saiba exatamente quanto vai ter no saldo no fim do mês.",
+    feature: "forecast",
   },
   {
     pattern: /\/analytics\/trend/,
     reason: "Acesse até 24 meses de histórico e veja sua evolução financeira completa.",
+    feature: "analytics_trend",
   },
   {
     pattern: /\/salary/,
     reason: "Planeje seu salário com cálculo real de INSS e IRRF.",
+    feature: "salary",
   },
 ];
 
 const isTrialExpiredMessage = (msg: string): boolean =>
   msg.toLowerCase().includes("teste encerrado");
 
-const resolvePaywallReason = (url: string, serverMessage: string): string => {
+const resolvePaywallPayload = (
+  url: string,
+  serverMessage: string,
+): PaymentRequiredPayload => {
   if (isTrialExpiredMessage(serverMessage)) {
-    return serverMessage;
+    return { reason: serverMessage, feature: "unknown", context: "trial_expired" };
   }
 
   for (const entry of PAYWALL_COPY) {
     if (entry.pattern.test(url)) {
-      return entry.reason;
+      return { reason: entry.reason, feature: entry.feature, context: "feature_gate" };
     }
   }
 
-  return serverMessage;
+  return { reason: serverMessage, feature: "unknown", context: "feature_gate" };
 };
 
 api.interceptors.response.use(
@@ -267,10 +278,10 @@ api.interceptors.response.use(
           : "";
 
       const url: string = error?.config?.url ?? "";
-      const reason = resolvePaywallReason(url, serverMessage);
+      const payload = resolvePaywallPayload(url, serverMessage);
 
       if (typeof paymentRequiredHandler === "function") {
-        paymentRequiredHandler(reason);
+        paymentRequiredHandler(payload);
       }
     }
 
