@@ -78,11 +78,16 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
         ) : null}
 
         {/* Price anchor */}
-        <div className="mt-5 flex items-baseline gap-1">
-          <span className="text-4xl font-bold text-cf-text-primary">
-            {PRICE_MONTHLY}
+        <div className="mt-5">
+          <span className="inline-block rounded bg-brand-1 px-2 py-0.5 text-xs font-medium text-white">
+            Mais escolhido
           </span>
-          <span className="text-sm text-cf-text-secondary">/mês</span>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-4xl font-bold text-cf-text-primary">
+              {PRICE_MONTHLY}
+            </span>
+            <span className="text-sm text-cf-text-secondary">/mês</span>
+          </div>
         </div>
 
         {/* Benefits */}
@@ -102,7 +107,7 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
               <tr className="bg-cf-bg-subtle">
                 <th className="px-3 py-2 text-left font-medium text-cf-text-primary">Recurso</th>
                 <th className="px-3 py-2 text-center font-medium text-cf-text-secondary">Gratuito</th>
-                <th className="px-3 py-2 text-center font-medium text-brand-1">Pro</th>
+                <th className="bg-brand-1/5 px-3 py-2 text-center font-semibold text-brand-1">Pro</th>
               </tr>
             </thead>
             <tbody>
@@ -114,7 +119,7 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
                   <td className="border-t border-cf-border px-3 py-2 text-center text-cf-text-secondary">
                     {feature.free}
                   </td>
-                  <td className="border-t border-cf-border px-3 py-2 text-center font-medium text-cf-text-primary">
+                  <td className="border-t border-cf-border bg-brand-1/5 px-3 py-2 text-center font-medium text-cf-text-primary">
                     {feature.pro}
                   </td>
                 </tr>
@@ -130,7 +135,7 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
             onClick={handleUpgrade}
             className="w-full rounded bg-brand-1 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-2"
           >
-            Fazer upgrade agora
+            Começar meu plano Pro
           </button>
           <p className="text-center text-xs text-cf-text-secondary">
             Cancele quando quiser. Sem fidelidade.
