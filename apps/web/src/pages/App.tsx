@@ -33,7 +33,8 @@ import {
   normalizeTransactionDate,
 } from "../components/DatabaseUtils";
 import { analyticsService, type TrendPoint } from "../services/analytics.service";
-import { setPaymentRequiredHandler } from "../services/api";
+import { setPaymentRequiredHandler, type PaymentRequiredPayload } from "../services/api";
+import type { PaywallFeature, PaywallContext } from "../utils/analytics";
 import {
   useFilters,
   type FilterState,
@@ -479,6 +480,8 @@ const App = ({
   const [isBudgetModalOpen, setBudgetModalOpen] = useState(false);
   const [isUpgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [upgradeModalReason, setUpgradeModalReason] = useState("");
+  const [upgradeModalFeature, setUpgradeModalFeature] = useState<PaywallFeature>("unknown");
+  const [upgradeModalContext, setUpgradeModalContext] = useState<PaywallContext>("feature_gate");
   const [editingTransaction, setEditingTransaction] = useState<TransactionWithCategoryName | null>(null);
   const [editingBudget, setEditingBudget] = useState<MonthlyBudget | null>(null);
   const [budgetForm, setBudgetForm] = useState<BudgetFormState>(DEFAULT_BUDGET_FORM);
@@ -599,8 +602,10 @@ const App = ({
   }, []);
 
   useEffect(() => {
-    setPaymentRequiredHandler((message: string) => {
-      setUpgradeModalReason(message);
+    setPaymentRequiredHandler(({ reason, feature, context }: PaymentRequiredPayload) => {
+      setUpgradeModalReason(reason);
+      setUpgradeModalFeature(feature);
+      setUpgradeModalContext(context);
       setUpgradeModalOpen(true);
     });
     return () => {
@@ -2807,6 +2812,8 @@ const App = ({
       <UpgradeModal
         isOpen={isUpgradeModalOpen}
         reason={upgradeModalReason}
+        feature={upgradeModalFeature}
+        context={upgradeModalContext}
         onClose={() => setUpgradeModalOpen(false)}
       />
 

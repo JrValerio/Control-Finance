@@ -1,9 +1,12 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { trackPaywallEvent, type PaywallFeature, type PaywallContext } from "../utils/analytics";
 
 interface UpgradeModalProps {
   isOpen: boolean;
   reason: string;
+  feature?: PaywallFeature;
+  context?: PaywallContext;
   onClose: () => void;
 }
 
@@ -26,11 +29,19 @@ const BENEFITS = [
   "Exporte e importe transações com facilidade",
 ];
 
-const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
+const UpgradeModal = ({
+  isOpen,
+  reason,
+  feature = "unknown",
+  context = "feature_gate",
+  onClose,
+}: UpgradeModalProps) => {
   const navigate = useNavigate();
 
   useEffect(() => {
     if (!isOpen) return;
+
+    trackPaywallEvent({ feature, action: "viewed", context });
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -40,7 +51,7 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, feature, context, onClose]);
 
   if (!isOpen) return null;
 
@@ -55,8 +66,14 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
   const dismissLabel = isTrialExpired ? "Agora não" : "Continuar no plano gratuito";
 
   const handleUpgrade = () => {
+    trackPaywallEvent({ feature, action: "clicked_upgrade", context });
     onClose();
     navigate("/app/settings/billing");
+  };
+
+  const handleDismiss = () => {
+    trackPaywallEvent({ feature, action: "dismissed", context });
+    onClose();
   };
 
   return (
@@ -148,7 +165,7 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
           </p>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleDismiss}
             className="text-center text-xs text-cf-text-secondary hover:text-cf-text-primary"
           >
             {dismissLabel}
