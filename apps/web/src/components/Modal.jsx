@@ -169,6 +169,40 @@ const Modal = ({
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <span className="text-sm font-medium text-cf-text-primary">Tipo de valor</span>
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+              <button
+                type="button"
+                className={`rounded border px-3.5 py-1 text-sm font-semibold transition-colors ${
+                  transactionType === CATEGORY_ENTRY
+                    ? "border-green-500 bg-green-50 text-green-700"
+                    : "border-cf-border bg-cf-surface text-cf-text-secondary"
+                }`}
+                onClick={() => {
+                  setTransactionType(CATEGORY_ENTRY);
+                  onClearSubmitError?.();
+                }}
+              >
+                Entrada
+              </button>
+              <button
+                type="button"
+                className={`rounded border px-3.5 py-1 text-sm font-semibold transition-colors ${
+                  transactionType === CATEGORY_EXIT
+                    ? "border-red-500 bg-red-50 text-red-700"
+                    : "border-cf-border bg-cf-surface text-cf-text-secondary"
+                }`}
+                onClick={() => {
+                  setTransactionType(CATEGORY_EXIT);
+                  onClearSubmitError?.();
+                }}
+              >
+                Saída
+              </button>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-2">
             <label htmlFor="valor" className="text-sm font-medium text-cf-text-primary">
               Valor
@@ -210,6 +244,30 @@ const Modal = ({
           </div>
 
           <div className="flex flex-col gap-2">
+            <label htmlFor="categoria" className="text-sm font-medium text-cf-text-primary">
+              Categoria
+            </label>
+            <select
+              id="categoria"
+              className="rounded border border-cf-border-input px-3 py-2 text-sm text-cf-text-secondary bg-cf-surface"
+              value={selectedCategoryId}
+              onChange={(event) => {
+                setSelectedCategoryId(event.target.value);
+                setErrorMessage("");
+                setRemovedCategoryMessage("");
+                onClearSubmitError?.();
+              }}
+            >
+              <option value="">Sem categoria</option>
+              {categories.map((categoryOption) => (
+                <option key={categoryOption.id} value={String(categoryOption.id)}>
+                  {categoryOption.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-2">
             <label htmlFor="descricao" className="text-sm font-medium text-cf-text-primary">
               Descrição
             </label>
@@ -242,64 +300,6 @@ const Modal = ({
               }}
               placeholder="Detalhes opcionais da transação"
             />
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <span className="text-sm font-medium text-cf-text-primary">Tipo de valor</span>
-            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-              <button
-                type="button"
-                className={`rounded border px-3.5 py-1 text-sm font-semibold transition-colors ${
-                  transactionType === CATEGORY_ENTRY
-                    ? "border-green-500 bg-green-50 text-green-700"
-                    : "border-cf-border bg-cf-surface text-cf-text-secondary"
-                }`}
-                onClick={() => {
-                  setTransactionType(CATEGORY_ENTRY);
-                  onClearSubmitError?.();
-                }}
-              >
-                Entrada
-              </button>
-              <button
-                type="button"
-                className={`rounded border px-3.5 py-1 text-sm font-semibold transition-colors ${
-                  transactionType === CATEGORY_EXIT
-                    ? "border-red-500 bg-red-50 text-red-700"
-                    : "border-cf-border bg-cf-surface text-cf-text-secondary"
-                }`}
-                onClick={() => {
-                  setTransactionType(CATEGORY_EXIT);
-                  onClearSubmitError?.();
-                }}
-              >
-                Saída
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label htmlFor="categoria" className="text-sm font-medium text-cf-text-primary">
-              Categoria
-            </label>
-            <select
-              id="categoria"
-              className="rounded border border-cf-border-input px-3 py-2 text-sm text-cf-text-secondary bg-cf-surface"
-              value={selectedCategoryId}
-              onChange={(event) => {
-                setSelectedCategoryId(event.target.value);
-                setErrorMessage("");
-                setRemovedCategoryMessage("");
-                onClearSubmitError?.();
-              }}
-            >
-              <option value="">Sem categoria</option>
-              {categories.map((categoryOption) => (
-                <option key={categoryOption.id} value={String(categoryOption.id)}>
-                  {categoryOption.name}
-                </option>
-              ))}
-            </select>
           </div>
 
           {removedCategoryMessage ? (
