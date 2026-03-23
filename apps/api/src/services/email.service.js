@@ -112,4 +112,37 @@ export const sendPaydayReminderEmail = async ({
   });
 };
 
+const buildPasswordResetSubject = () =>
+  `[${APP_NAME}] Redefinicao de senha`;
+
+const buildPasswordResetHtml = ({ email, resetUrl }) => `
+<p>Ola,</p>
+<p>Recebemos uma solicitacao para redefinir a senha da sua conta no ${APP_NAME}.</p>
+<p>
+  Clique no link abaixo para criar uma nova senha:<br>
+  <a href="${resetUrl}">${resetUrl}</a>
+</p>
+<p>Este link expira em <strong>1 hora</strong>. Se voce nao solicitou a redefinicao, ignore este email — sua senha nao sera alterada.</p>
+<p style="color:#6b7280;font-size:12px">
+  Este email foi enviado para ${email}.
+</p>
+`;
+
+export const sendPasswordResetEmail = async ({ email, resetUrl }) => {
+  if (!isSmtpConfigured()) {
+    console.log(
+      `[email] password_reset → ${email} | url=${resetUrl} (SMTP not configured — skipped)`,
+    );
+    return;
+  }
+
+  const transport = createTransport();
+  await transport.sendMail({
+    from: fromAddress(),
+    to: email,
+    subject: buildPasswordResetSubject(),
+    html: buildPasswordResetHtml({ email, resetUrl }),
+  });
+};
+
 export const FLIP_NEG_COOLDOWN = FLIP_NEG_COOLDOWN_MS;

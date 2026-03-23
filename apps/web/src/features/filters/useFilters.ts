@@ -21,10 +21,10 @@ import {
 
 export type SelectedCategory = "Todos" | "Entrada" | "Saida";
 export type SelectedPeriod =
-  | "Todo periodo"
+  | "Todo período"
   | "Hoje"
-  | "Ultimos 7 dias"
-  | "Ultimos 30 dias"
+  | "Últimos 7 dias"
+  | "Últimos 30 dias"
   | "Personalizado";
 export type FilterPresetId = "this-month" | "clear";
 export type RemovableChipId = "q" | "type" | "period" | "category" | "sort";
@@ -82,10 +82,10 @@ export const normalizeSortOption = (value: string | null | undefined): string =>
 };
 
 export const isSelectedPeriod = (value: string | null): value is SelectedPeriod =>
-  value === "Todo periodo" ||
+  value === "Todo período" ||
   value === "Hoje" ||
-  value === "Ultimos 7 dias" ||
-  value === "Ultimos 30 dias" ||
+  value === "Últimos 7 dias" ||
+  value === "Últimos 30 dias" ||
   value === "Personalizado";
 
 export const isCompactFiltersPanelMode = (): boolean =>
@@ -219,9 +219,9 @@ export function useFilters({
     if (selectedPeriod !== PERIOD_ALL) {
       const text =
         selectedPeriod === PERIOD_CUSTOM
-          ? `Periodo: ${customStartDate || "--"} -> ${customEndDate || "--"}`
-          : `Periodo: ${selectedPeriod}`;
-      chips.push({ id: "period", text, removable: true, removeLabel: "Periodo" });
+          ? `Período: ${customStartDate || "--"} -> ${customEndDate || "--"}`
+          : `Período: ${selectedPeriod}`;
+      chips.push({ id: "period", text, removable: true, removeLabel: "Período" });
     }
 
     if (selectedTransactionCategoryId) {

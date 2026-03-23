@@ -91,7 +91,7 @@ const ProfileSettings = ({
       setPayday(p?.payday !== null && p?.payday !== undefined ? String(p.payday) : "");
       setAvatarUrl(p?.avatarUrl ?? "");
     } catch (error) {
-      setLoadError(getApiErrorMessage(error, "Nao foi possivel carregar o perfil."));
+      setLoadError(getApiErrorMessage(error, "Não foi possível carregar o perfil."));
     } finally {
       setIsLoading(false);
     }
@@ -123,7 +123,7 @@ const ProfileSettings = ({
       setSaveSuccess(true);
       successTimerRef.current = setTimeout(() => setSaveSuccess(false), 4000);
     } catch (error) {
-      setSaveError(getApiErrorMessage(error, "Nao foi possivel salvar o perfil. Tente novamente."));
+      setSaveError(getApiErrorMessage(error, "Não foi possível salvar o perfil. Tente novamente."));
     } finally {
       setIsSaving(false);
     }
@@ -139,7 +139,7 @@ const ProfileSettings = ({
             <div>
               <h1 className="text-xl font-semibold text-cf-text-primary">Settings - Perfil</h1>
               <p className="mt-1 text-sm text-cf-text-secondary">
-                Personalize seu nome, salario e preferencias de conta.
+                Personalize seu nome, salário e preferências de conta.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -260,7 +260,7 @@ const ProfileSettings = ({
                     htmlFor="salary_monthly"
                     className="block text-sm font-semibold text-cf-text-primary"
                   >
-                    Salario mensal (R$)
+                    Salário mensal (R$)
                   </label>
                   <input
                     id="salary_monthly"
@@ -291,7 +291,7 @@ const ProfileSettings = ({
                     placeholder="Ex: 5"
                     className="mt-1 w-full rounded border border-cf-border-input bg-cf-surface px-3 py-1.5 text-sm text-cf-text-primary placeholder:text-cf-text-secondary focus:outline-none focus:ring-1 focus:ring-brand-1"
                   />
-                  <p className="mt-0.5 text-xs text-cf-text-secondary">Dia do mes (1 a 31)</p>
+                  <p className="mt-0.5 text-xs text-cf-text-secondary">Dia do mês (1 a 31)</p>
                 </div>
               </div>
 

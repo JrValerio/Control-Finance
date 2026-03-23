@@ -83,7 +83,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(response.user);
         return response;
       } catch (error) {
-        const message = getApiErrorMessage(error, "Nao foi possivel fazer login.");
+        const message = getApiErrorMessage(error, "Não foi possível fazer login.");
         setErrorMessage(message);
         throw error;
       } finally {
@@ -100,9 +100,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       try {
         const response = await authService.register({ name, email, password });
+        setUser(response.user);
         return response;
       } catch (error) {
-        const message = getApiErrorMessage(error, "Nao foi possivel criar conta.");
+        const message = getApiErrorMessage(error, "Não foi possível criar conta.");
         setErrorMessage(message);
         throw error;
       } finally {
@@ -122,7 +123,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(response.user);
         return response;
       } catch (error) {
-        const message = getApiErrorMessage(error, "Nao foi possivel autenticar com Google.");
+        const message = getApiErrorMessage(error, "Não foi possível autenticar com Google.");
         setErrorMessage(message);
         throw error;
       } finally {

@@ -121,17 +121,17 @@ const PERIOD_OPTIONS = [
   PERIOD_CUSTOM,
 ];
 const FILTER_PRESETS = [
-  { id: "this-month", label: "Este mes" },
+  { id: "this-month", label: "Este mês" },
 ] as const;
 const FILTER_BUTTON_LABELS: Record<SelectedCategory, string> = {
   Todos: "Todas",
   Entrada: "Entradas",
-  Saida: "Saidas",
+  Saida: "Saídas",
 };
 const FILTER_BUTTON_ARIA_LABELS: Record<SelectedCategory, string> = {
   Todos: "Filtrar todas",
   Entrada: "Filtrar entradas",
-  Saida: "Filtrar saidas",
+  Saida: "Filtrar saídas",
 };
 const DEFAULT_OFFSET = 0;
 const DEFAULT_LIMIT = 20;
@@ -182,7 +182,7 @@ const DEFAULT_BUDGET_FORM: BudgetFormState = {
 };
 const BUDGET_STATUS_LABELS: Record<MonthlyBudgetStatus, string> = {
   ok: "Dentro da meta",
-  near_limit: "Proximo do limite",
+  near_limit: "Próximo do limite",
   exceeded: "Acima da meta",
 };
 const BUDGET_STATUS_BADGE_CLASSNAMES: Record<MonthlyBudgetStatus, string> = {
@@ -795,7 +795,7 @@ const App = ({
         month: selectedSummaryMonth,
       });
       setSummaryError(
-        getApiErrorMessage(currentSummaryResult.reason, "Nao foi possivel carregar o resumo mensal."),
+        getApiErrorMessage(currentSummaryResult.reason, "Não foi possível carregar o resumo mensal."),
       );
     }
 
@@ -824,7 +824,7 @@ const App = ({
       setMonthlyBudgets(Array.isArray(budgets) ? budgets : []);
     } catch (error) {
       setMonthlyBudgets(DEFAULT_MONTHLY_BUDGETS);
-      setBudgetsError(getApiErrorMessage(error, "Nao foi possivel carregar as metas mensais."));
+      setBudgetsError(getApiErrorMessage(error, "Não foi possível carregar as metas mensais."));
     } finally {
       setLoadingBudgets(false);
     }
@@ -843,7 +843,7 @@ const App = ({
       setTrend(Array.isArray(trendData) ? trendData : DEFAULT_TREND);
     } catch {
       setTrend(DEFAULT_TREND);
-      setTrendError("Grafico de evolucao indisponivel.");
+      setTrendError("Gráfico de evolução indisponível.");
     } finally {
       setLoadingTrend(false);
     }
@@ -898,7 +898,7 @@ const App = ({
     const amount = Number(budgetForm.amount);
 
     if (!Number.isInteger(categoryId) || categoryId <= 0) {
-      setBudgetMutationError("Selecione uma categoria valida.");
+      setBudgetMutationError("Selecione uma categoria válida.");
       return;
     }
 
@@ -923,7 +923,7 @@ const App = ({
       setBudgetForm(DEFAULT_BUDGET_FORM);
       showBudgetSuccessMessage("Meta salva com sucesso.");
     } catch (error) {
-      setBudgetMutationError(getApiErrorMessage(error, "Nao foi possivel salvar a meta."));
+      setBudgetMutationError(getApiErrorMessage(error, "Não foi possível salvar a meta."));
     } finally {
       setSavingBudget(false);
     }
@@ -946,7 +946,7 @@ const App = ({
       await loadMonthlyBudgets();
       showBudgetSuccessMessage("Meta removida.");
     } catch (error) {
-      setBudgetsError(getApiErrorMessage(error, "Nao foi possivel remover a meta."));
+      setBudgetsError(getApiErrorMessage(error, "Não foi possível remover a meta."));
     }
   };
 
@@ -989,7 +989,7 @@ const App = ({
         total: 0,
         totalPages: 1,
       });
-      setRequestError(getApiErrorMessage(error, "Nao foi possivel carregar as transacoes."));
+      setRequestError(getApiErrorMessage(error, "Não foi possível carregar as transações."));
     } finally {
       setLoadingTransactions(false);
     }
@@ -1104,7 +1104,7 @@ const App = ({
   const chartData = useMemo(() => {
     return [
       { name: "Entradas", total: monthlySummary.income },
-      { name: "Saidas", total: monthlySummary.expense },
+      { name: "Saídas", total: monthlySummary.expense },
     ];
   }, [monthlySummary.expense, monthlySummary.income]);
 
@@ -1295,8 +1295,8 @@ const App = ({
       await loadCategories();
     } catch (error) {
       const fallbackMessage = editingTransaction
-        ? "Nao foi possivel atualizar a transacao."
-        : "Nao foi possivel cadastrar a transacao.";
+        ? "Não foi possível atualizar a transação."
+        : "Não foi possível cadastrar a transação.";
       const apiMessage = getApiErrorMessage(error, fallbackMessage);
 
       if (apiMessage === "Categoria nao encontrada.") {
@@ -1334,7 +1334,7 @@ const App = ({
       await loadMonthlySummary();
       await loadMonthlyBudgets();
     } catch (error) {
-      setRequestError(getApiErrorMessage(error, "Nao foi possivel excluir a transacao."));
+      setRequestError(getApiErrorMessage(error, "Não foi possível excluir a transação."));
     }
   };
 
@@ -1352,7 +1352,7 @@ const App = ({
       await loadMonthlySummary();
       await loadMonthlyBudgets();
     } catch (error) {
-      setRequestError(getApiErrorMessage(error, "Nao foi possivel desfazer a exclusao."));
+      setRequestError(getApiErrorMessage(error, "Não foi possível desfazer a exclusão."));
     }
   };
 
@@ -1382,7 +1382,7 @@ const App = ({
 
       downloadBlobFile(csvBlob, exportResponse.fileName || fallbackFileName);
     } catch (error) {
-      setRequestError(getApiErrorMessage(error, "Nao foi possivel exportar o CSV."));
+      setRequestError(getApiErrorMessage(error, "Não foi possível exportar o CSV."));
     } finally {
       setExportingCsv(false);
     }
@@ -1564,7 +1564,7 @@ const App = ({
     <div className="App min-h-screen bg-cf-bg-page pb-10">
       <header className="w-full bg-cf-header-bg py-3 shadow-md sm:py-4">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-          <h1 className="text-4xl font-semibold">
+          <h1 className="text-2xl font-semibold sm:text-3xl lg:text-4xl">
             <span className="text-brand-1">Control</span>
             <span className="text-cf-text-primary">Finance</span>
           </h1>
@@ -1597,7 +1597,7 @@ const App = ({
                         onClick={handleOpenBills}
                         className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                       >
-                        Pendencias
+                        Pendências
                       </button>
                     ) : null}
                     {onOpenIncomeSources ? (
@@ -1647,7 +1647,7 @@ const App = ({
                       onClick={handleOpenImportHistoryModal}
                       className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                     >
-                      Historico de imports
+                      Histórico de imports
                     </button>
                     {(onOpenProfileSettings || onOpenBillingSettings || onOpenSecuritySettings) ? (
                       <div className="my-1 h-px bg-cf-border" role="separator" />
@@ -1736,7 +1736,7 @@ const App = ({
                   onClick={handleOpenImportHistoryModal}
                   className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                 >
-                  Historico de imports
+                  Histórico de imports
                 </button>
                 {onOpenBills ? (
                   <button
@@ -1744,7 +1744,7 @@ const App = ({
                     onClick={handleOpenBills}
                     className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                   >
-                    Pendencias
+                    Pendências
                   </button>
                 ) : null}
                 {onOpenIncomeSources ? (
@@ -1980,7 +1980,7 @@ const App = ({
               htmlFor="periodo"
               className="mb-2 block text-sm font-medium text-cf-text-primary"
             >
-              Periodo
+              Período
             </label>
             <select
               id="periodo"
@@ -2065,7 +2065,7 @@ const App = ({
                   value={queryInput}
                   onChange={(event) => setQueryInput(event.target.value)}
                   onKeyDown={handleQueryInputKeyDown}
-                  placeholder="Descricao ou observacoes"
+                  placeholder="Descrição ou observações"
                   className="w-full rounded border border-cf-border-input bg-cf-surface px-3 py-2 text-sm text-cf-text-secondary"
                 />
                 <button
@@ -2123,19 +2123,13 @@ const App = ({
           </div>
         </section>
 
-        <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
-
-        <BillsSummaryWidget onOpenBills={handleOpenBills} />
-
-        <SalaryWidget />
-
         <div className="space-y-6">
           <section ref={summarySectionRef}>
             <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-cf-text-primary">Resumo mensal</h3>
           <input
             type="month"
-            aria-label="Mes do resumo"
+            aria-label="Mês do resumo"
             value={selectedSummaryMonth}
             onChange={(event) => setSelectedSummaryMonth(event.target.value)}
             className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-sm text-cf-text-primary"
@@ -2160,7 +2154,7 @@ const App = ({
             <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
             <p className="text-xs font-medium uppercase text-cf-text-secondary">Saldo</p>
-            <p className="text-base font-medium text-cf-text-primary">
+            <p className="text-xl font-semibold text-cf-text-primary">
               {isLoadingSummary ? "Carregando..." : formatCurrency(monthlySummary.balance)}
             </p>
             <p
@@ -2186,7 +2180,7 @@ const App = ({
           </div>
           <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
             <p className="text-xs font-medium uppercase text-cf-text-secondary">Entradas</p>
-            <p className="text-base font-medium text-cf-text-primary">
+            <p className="text-xl font-semibold text-cf-text-primary">
               {isLoadingSummary ? "Carregando..." : formatCurrency(monthlySummary.income)}
             </p>
             <p
@@ -2211,8 +2205,8 @@ const App = ({
             </p>
           </div>
           <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
-            <p className="text-xs font-medium uppercase text-cf-text-secondary">Saidas</p>
-            <p className="text-base font-medium text-cf-text-primary">
+            <p className="text-xs font-medium uppercase text-cf-text-secondary">Saídas</p>
+            <p className="text-xl font-semibold text-cf-text-primary">
               {isLoadingSummary ? "Carregando..." : formatCurrency(monthlySummary.expense)}
             </p>
             <p
@@ -2244,7 +2238,7 @@ const App = ({
             ) : null}
             {!isLoadingSummary && !summaryError && !hasMonthlySummaryData ? (
               <div className="mt-2 rounded border border-cf-border bg-cf-surface px-3 py-2 text-sm text-cf-text-secondary">
-                Sem dados para o mes selecionado.
+                Sem dados para o mês selecionado.
               </div>
             ) : null}
             {!isLoadingSummary &&
@@ -2273,10 +2267,10 @@ const App = ({
               <div
                 className="mt-3 rounded border border-cf-border bg-cf-surface p-3"
                 role="region"
-                aria-label="Top variacoes por categoria"
+                aria-label="Top variações por categoria"
               >
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
-                  Top variacoes por categoria
+                  Top variações por categoria
                 </h4>
                 {topCategoryMovers.length > 0 ? (
                   <ul className="mt-2 space-y-2">
@@ -2297,11 +2291,11 @@ const App = ({
                         <div className="mt-2 flex justify-end">
                           <button
                             type="button"
-                            aria-label={`Ver transacoes categoria: ${item.categoryName}`}
+                            aria-label={`Ver transações categoria: ${item.categoryName}`}
                             onClick={() => handleViewCategoryMoverTransactions(item.categoryId)}
                             className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                           >
-                            Ver transacoes
+                            Ver transações
                           </button>
                         </div>
                       </li>
@@ -2309,18 +2303,24 @@ const App = ({
                   </ul>
                 ) : (
                   <p className="mt-2 text-sm text-cf-text-secondary">
-                    Sem variacoes por categoria para o comparativo do mes.
+                    Sem variações por categoria para o comparativo do mês.
                   </p>
                 )}
               </div>
             ) : null}
           </section>
+        <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+
+        <BillsSummaryWidget onOpenBills={handleOpenBills} />
+
+        <SalaryWidget />
+
 
       <section>
         <div className="rounded border border-cf-border bg-cf-surface p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
-              <h3 className="text-sm font-medium text-cf-text-primary">Metas do mes</h3>
+              <h3 className="text-sm font-medium text-cf-text-primary">Metas do mês</h3>
               <span className="text-xs text-cf-text-secondary">{selectedSummaryMonth}</span>
             </div>
             <button
@@ -2364,18 +2364,18 @@ const App = ({
               aria-live="polite"
               data-testid="budget-near-limit-banner"
             >
-              {`Alerta: voce ja utilizou ${formatPercentage(proactiveNearLimitBudget.percentage)} da meta de ${proactiveNearLimitBudget.categoryName} neste mes.`}
+              {`Alerta: você já utilizou ${formatPercentage(proactiveNearLimitBudget.percentage)} da meta de ${proactiveNearLimitBudget.categoryName} neste mês.`}
             </div>
           ) : null}
           {!isLoadingBudgets && !budgetsError && budgetAlerts.length > 0 ? (
             <div
               className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-3"
               role="region"
-              aria-label="Alertas de orcamento"
+              aria-label="Alertas de orçamento"
             >
               <div className="mb-2 flex items-center justify-between gap-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                  Alertas de orcamento
+                  Alertas de orçamento
                 </h4>
                 <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
                   {budgetAlerts.length}
@@ -2403,11 +2403,11 @@ const App = ({
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         type="button"
-                        aria-label={`Ver transacoes: ${budget.categoryName}`}
+                        aria-label={`Ver transações: ${budget.categoryName}`}
                         onClick={() => handleViewBudgetTransactions(budget)}
                         className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                       >
-                        Ver transacoes
+                        Ver transações
                       </button>
                       <button
                         type="button"
@@ -2431,12 +2431,12 @@ const App = ({
                   className="h-16 animate-pulse rounded border border-cf-border bg-cf-bg-subtle"
                 />
               ))}
-              <span className="sr-only">Carregando metas do mes...</span>
+              <span className="sr-only">Carregando metas do mês...</span>
             </div>
           ) : null}
           {!isLoadingBudgets && !budgetsError && !hasMonthlyBudgetsData ? (
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-secondary">
-              <p>Nenhuma meta cadastrada para o mes selecionado.</p>
+              <p>Nenhuma meta cadastrada para o mês selecionado.</p>
               <button
                 type="button"
                 onClick={openCreateBudgetModal}
@@ -2532,13 +2532,13 @@ const App = ({
             aria-live="polite"
           >
             <div className="h-64 animate-pulse rounded bg-cf-bg-subtle" />
-            <span className="sr-only">Carregando evolucao...</span>
+            <span className="sr-only">Carregando evolução...</span>
           </div>
         ) : (
           <Suspense
             fallback={
               <div className="rounded border border-cf-border bg-cf-surface p-4 text-sm text-cf-text-primary">
-                Carregando evolucao...
+                Carregando evolução...
               </div>
             }
           >
@@ -2570,7 +2570,7 @@ const App = ({
                 className="h-20 animate-pulse rounded border border-cf-border bg-cf-bg-subtle"
               />
             ))}
-            <span className="sr-only">Carregando transacoes...</span>
+            <span className="sr-only">Carregando transações...</span>
           </div>
         ) : filteredTransactions.length === 0 ? (
           hasActiveFilters ? (
@@ -2674,7 +2674,7 @@ const App = ({
       {undoState ? (
         <div className="fixed bottom-4 left-1/2 z-40 w-[calc(100%-2rem)] max-w-500 -translate-x-1/2 rounded border border-brand-1 bg-cf-surface px-4 py-3 shadow-lg">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-cf-text-primary">Transacao removida.</p>
+            <p className="text-sm text-cf-text-primary">Transação removida.</p>
             <button
               type="button"
               onClick={restoreDeletedTransaction}
@@ -2687,7 +2687,7 @@ const App = ({
       ) : null}
 
       {isBudgetModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100 bg-opacity-50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div
             role="dialog"
             aria-modal="true"
@@ -2695,9 +2695,9 @@ const App = ({
             className="w-full max-w-sm rounded bg-cf-surface p-4 shadow-lg"
           >
             <h3 id="budget-modal-title" className="text-base font-semibold text-cf-text-primary">
-              Meta do mes
+              Meta do mês
             </h3>
-            <p className="mt-1 text-xs text-cf-text-secondary">Mes selecionado: {selectedSummaryMonth}</p>
+            <p className="mt-1 text-xs text-cf-text-secondary">Mês selecionado: {selectedSummaryMonth}</p>
             {editingBudget ? (
               <div className="mt-2 rounded border border-cf-border bg-cf-bg-subtle px-2 py-1 text-xs text-cf-text-secondary">
                 <p>
@@ -2784,11 +2784,11 @@ const App = ({
       ) : null}
 
       {pendingDeleteTransactionId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100 bg-opacity-50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-sm rounded bg-cf-surface p-4 shadow-lg">
-            <h3 className="text-base font-semibold text-cf-text-primary">Confirmar exclusao</h3>
+            <h3 className="text-base font-semibold text-cf-text-primary">Confirmar exclusão</h3>
             <p className="mt-2 text-sm text-cf-text-secondary">
-              Deseja realmente excluir esta transacao?
+              Deseja realmente excluir esta transação?
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -2803,7 +2803,7 @@ const App = ({
                 onClick={confirmDeleteTransaction}
                 className="rounded bg-red-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-red-700"
               >
-                Confirmar exclusao
+                Confirmar exclusão
               </button>
             </div>
           </div>

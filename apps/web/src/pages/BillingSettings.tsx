@@ -45,7 +45,7 @@ const STATUS_LABELS: Record<string, string> = {
   trialing: "Em teste",
   past_due: "Pagamento pendente",
   canceled: "Cancelado",
-  unpaid: "Nao pago",
+  unpaid: "Não pago",
 };
 
 const STATUS_CLASSES: Record<string, string> = {
@@ -80,7 +80,7 @@ const BillingSettings = ({
       setSummary(data);
     } catch (error) {
       setLoadError(
-        getApiErrorMessage(error, "Nao foi possivel carregar os dados da assinatura."),
+        getApiErrorMessage(error, "Não foi possível carregar os dados da assinatura."),
       );
     } finally {
       setIsLoading(false);
@@ -99,7 +99,7 @@ const BillingSettings = ({
       window.location.href = url;
     } catch (error) {
       setActionError(
-        getApiErrorMessage(error, "Nao foi possivel iniciar o checkout. Tente novamente."),
+        getApiErrorMessage(error, "Não foi possível iniciar o checkout. Tente novamente."),
       );
       setIsActionLoading(false);
     }
@@ -119,7 +119,7 @@ const BillingSettings = ({
         );
       } else {
         setActionError(
-          getApiErrorMessage(error, "Nao foi possivel abrir o portal. Tente novamente."),
+          getApiErrorMessage(error, "Não foi possível abrir o portal. Tente novamente."),
         );
       }
       setIsActionLoading(false);

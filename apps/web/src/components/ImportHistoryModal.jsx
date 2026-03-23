@@ -68,7 +68,7 @@ const ImportHistoryModal = ({ isOpen, onClose }) => {
       setOffset(Number(response.pagination?.offset) || 0);
     } catch (error) {
       setItems([]);
-      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel carregar o historico de imports."));
+      setErrorMessage(getApiErrorMessage(error, "Não foi possível carregar o histórico de imports."));
     } finally {
       setIsLoading(false);
     }
@@ -151,7 +151,7 @@ const ImportHistoryModal = ({ isOpen, onClose }) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-gray-100 bg-opacity-50 p-6 sm:items-center"
+      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-black/50 p-6 sm:items-center"
       onClick={handleBackdropClick}
       role="presentation"
     >
@@ -163,14 +163,14 @@ const ImportHistoryModal = ({ isOpen, onClose }) => {
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id="import-history-modal-title" className="text-lg font-semibold text-cf-text-primary">
-            Historico de imports
+            Histórico de imports
           </h2>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
             className="text-gray-200 transition-colors hover:text-gray-100"
-            aria-label="Fechar modal de historico de imports"
+            aria-label="Fechar modal de histórico de imports"
           >
             X
           </button>
@@ -191,7 +191,7 @@ const ImportHistoryModal = ({ isOpen, onClose }) => {
 
         {isLoading ? (
           <div className="rounded border border-cf-border bg-cf-surface px-3 py-3 text-sm text-cf-text-secondary">
-            Carregando historico...
+            Carregando histórico...
           </div>
         ) : null}
 
@@ -213,11 +213,11 @@ const ImportHistoryModal = ({ isOpen, onClose }) => {
                     <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Data</th>
                     <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Status</th>
                     <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
-                      Validas / Invalidas
+                      Válidas / Inválidas
                     </th>
                     <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Importadas</th>
                     <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Entradas</th>
-                    <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Saidas</th>
+                    <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Saídas</th>
                   </tr>
                 </thead>
                 <tbody>

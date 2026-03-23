@@ -65,7 +65,7 @@ describe("Login", () => {
 
     expect(
       screen.getByText(
-        "Senha fraca: use no minimo 8 caracteres com letras e numeros.",
+        "Senha fraca: use no mínimo 8 caracteres com letras e números.",
       ),
     ).toBeInTheDocument();
     expect(authState.register).not.toHaveBeenCalled();
@@ -85,7 +85,7 @@ describe("Login", () => {
     await user.type(screen.getByLabelText("Confirmar senha"), "Senha124");
     await user.click(screen.getByRole("button", { name: "Criar conta e entrar" }));
 
-    expect(screen.getByText("As senhas nao conferem.")).toBeInTheDocument();
+    expect(screen.getByText("As senhas não conferem.")).toBeInTheDocument();
     expect(authState.register).not.toHaveBeenCalled();
     expect(authState.login).not.toHaveBeenCalled();
   });

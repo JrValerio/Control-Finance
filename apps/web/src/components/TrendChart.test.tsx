@@ -41,7 +41,7 @@ vi.mock("recharts", () => ({
             label: "2025-10",
             payload: [
               { dataKey: "income", name: "Entradas", value: 2000, color: "#16a34a" },
-              { dataKey: "expense", name: "Saidas", value: 700, color: "#dc2626" },
+              { dataKey: "expense", name: "Saídas", value: 700, color: "#dc2626" },
             ],
           })
         : null}
@@ -69,15 +69,15 @@ describe("TrendChart", () => {
     );
 
     expect(
-      screen.getByText("Sem dados suficientes para exibir a evolucao historica."),
+      screen.getByText("Sem dados suficientes para exibir a evolução histórica."),
     ).toBeInTheDocument();
   });
 
   it("renders chart heading, month label formatting, and click hint", () => {
     render(<TrendChart data={trendData} onMonthClick={vi.fn()} />);
 
-    expect(screen.getByText("Evolucao (ultimos 6 meses)")).toBeInTheDocument();
-    expect(screen.getByText("— clique em um mes para navegar")).toBeInTheDocument();
+    expect(screen.getByText("Evolução (últimos 6 meses)")).toBeInTheDocument();
+    expect(screen.getByText("— clique em um mês para navegar")).toBeInTheDocument();
     expect(screen.getByTestId("x-axis-label")).toHaveTextContent("Out/25");
   });
 
@@ -101,7 +101,7 @@ describe("TrendChart", () => {
 
     expect(screen.getByText("Entradas: R$ 2.000,00")).toBeInTheDocument();
     expect(screen.getByText("+R$ 200,00", { exact: false })).toBeInTheDocument();
-    expect(screen.getByText("Saidas: R$ 700,00")).toBeInTheDocument();
+    expect(screen.getByText("Saídas: R$ 700,00")).toBeInTheDocument();
     expect(screen.getByText("+R$ 100,00", { exact: false })).toBeInTheDocument();
   });
 });

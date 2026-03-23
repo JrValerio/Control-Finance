@@ -113,7 +113,7 @@ const TrendChart = ({ data, onMonthClick, selectedMonth }: TrendChartProps) => {
   if (!hasAnyValue) {
     return (
       <div className="rounded border border-cf-border bg-cf-surface p-4 text-center text-sm text-cf-text-primary">
-        Sem dados suficientes para exibir a evolucao historica.
+        Sem dados suficientes para exibir a evolução histórica.
       </div>
     );
   }
@@ -126,10 +126,10 @@ const TrendChart = ({ data, onMonthClick, selectedMonth }: TrendChartProps) => {
   return (
     <div className="rounded border border-cf-border bg-cf-surface p-4">
       <h3 className="mb-3 text-sm font-semibold text-cf-text-primary">
-        Evolucao (ultimos 6 meses)
+        Evolução (últimos 6 meses)
         {onMonthClick && (
           <span className="ml-2 text-xs font-normal text-cf-text-secondary">
-            — clique em um mes para navegar
+            — clique em um mês para navegar
           </span>
         )}
       </h3>
@@ -171,7 +171,7 @@ const TrendChart = ({ data, onMonthClick, selectedMonth }: TrendChartProps) => {
             <Line
               type="monotone"
               dataKey="expense"
-              name="Saidas"
+              name="Saídas"
               stroke="#dc2626"
               dot={false}
               strokeWidth={2}

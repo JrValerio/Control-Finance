@@ -5,12 +5,15 @@ import {
   loginOrRegisterWithGoogle,
   setUserPassword,
   linkGoogleIdentity,
+  requestPasswordReset,
+  resetPassword,
   issueAuthToken,
   issueRefreshToken,
   rotateRefreshToken,
   revokeRefreshToken,
   randomUUID,
 } from "../services/auth.service.js";
+import { sendPasswordResetEmail } from "../services/email.service.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import {
   bruteForceLoginGuard,
@@ -29,9 +32,18 @@ const getRefreshMaxAgeMs = () =>
   parseInt(process.env.REFRESH_TOKEN_EXPIRES_DAYS || "30", 10) *
   24 * 60 * 60 * 1000;
 
+// COOKIE_SAME_SITE env var controls the SameSite policy:
+//   "lax"  (default) — same-site deploys (app.domain.com + api.domain.com)
+//   "none"           — cross-site deploys (e.g. Vercel + Render on different domains)
+//                      requires Secure=true, which is enforced in production
+const getSameSitePolicy = () => {
+  const value = (process.env.COOKIE_SAME_SITE || "lax").toLowerCase().trim();
+  return value === "none" || value === "strict" || value === "lax" ? value : "lax";
+};
+
 const buildCookieOptions = (path) => ({
   httpOnly: true,
-  sameSite: "lax",
+  sameSite: getSameSitePolicy(),
   secure: process.env.NODE_ENV === "production",
   path,
   ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
@@ -49,8 +61,10 @@ const setAuthCookies = (res, accessToken, rawRefreshToken) => {
 };
 
 const clearAuthCookies = (res) => {
-  res.cookie("cf_access", "", { httpOnly: true, maxAge: 0, path: "/" });
-  res.cookie("cf_refresh", "", { httpOnly: true, maxAge: 0, path: "/auth" });
+  // Attributes must match the Set-Cookie that created the cookie, otherwise
+  // the browser will not recognise it as the same cookie and won't clear it.
+  res.cookie("cf_access", "", { ...buildCookieOptions("/"), maxAge: 0 });
+  res.cookie("cf_refresh", "", { ...buildCookieOptions("/auth"), maxAge: 0 });
 };
 
 const issueSessionCookies = async (res, user, req) => {
@@ -135,6 +149,38 @@ router.delete("/logout", async (req, res) => {
 
   clearAuthCookies(res);
   return res.status(204).send();
+});
+
+router.post("/forgot-password", loginRateLimiter, async (req, res, next) => {
+  try {
+    const result = await requestPasswordReset({ email: req.body?.email });
+
+    if (result) {
+      const appUrl = (process.env.APP_URL || "http://localhost:5173").replace(/\/$/, "");
+      const resetUrl = `${appUrl}/reset-password?token=${result.rawToken}`;
+      // Fire-and-forget — email failure must not reveal whether the email exists
+      void sendPasswordResetEmail({ email: result.email, resetUrl }).catch((err) => {
+        console.error("[email] password_reset send error:", err?.message);
+      });
+    }
+
+    // Always neutral — never reveal whether the email is registered
+    res.status(200).json({ message: "Se o email estiver cadastrado, enviaremos as instrucoes." });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/reset-password", async (req, res, next) => {
+  try {
+    await resetPassword({
+      token: req.body?.token,
+      newPassword: req.body?.newPassword,
+    });
+    res.status(200).json({ message: "Senha redefinida com sucesso." });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.patch("/password", authMiddleware, async (req, res, next) => {

@@ -69,7 +69,7 @@ const IncomeDeductionModal = ({
 
       const trimmedLabel = label.trim();
       if (!trimmedLabel) {
-        setErrorMessage("Rotulo e obrigatorio.");
+        setErrorMessage("Rótulo é obrigatório.");
         return;
       }
 
@@ -95,7 +95,7 @@ const IncomeDeductionModal = ({
       } catch (error) {
         const err = error as { response?: { data?: { message?: string } }; message?: string };
         setErrorMessage(
-          err?.response?.data?.message || err?.message || "Nao foi possivel salvar.",
+          err?.response?.data?.message || err?.message || "Não foi possível salvar.",
         );
       } finally {
         setIsSaving(false);
@@ -108,7 +108,7 @@ const IncomeDeductionModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-gray-100 bg-opacity-50 p-6 sm:items-center"
+      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-black/50 p-6 sm:items-center"
       onClick={handleBackdropClick}
       role="presentation"
     >
@@ -176,7 +176,7 @@ const IncomeDeductionModal = ({
               className="rounded"
             />
             <label htmlFor="ded-variable" className="cursor-pointer text-sm text-cf-text-primary">
-              Valor variavel (muda todo mes)
+              Valor variável (muda todo mês)
             </label>
           </div>
 

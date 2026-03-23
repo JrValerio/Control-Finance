@@ -72,7 +72,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
       setDryRunResult(result);
     } catch (error) {
       setDryRunResult(null);
-      setErrorMessage(getApiErrorMessage(error, "Nao foi possivel processar o arquivo CSV."));
+      setErrorMessage(getApiErrorMessage(error, "Não foi possível processar o arquivo CSV."));
     } finally {
       setIsDryRunning(false);
     }
@@ -80,12 +80,12 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
 
   const handleCommit = async () => {
     if (!dryRunResult?.importId) {
-      setErrorMessage("Rode a pre-visualizacao antes de importar.");
+      setErrorMessage("Rode a pré-visualização antes de importar.");
       return;
     }
 
     if (!hasValidRows) {
-      setErrorMessage("Nao ha linhas validas para importar.");
+      setErrorMessage("Não há linhas válidas para importar.");
       return;
     }
 
@@ -101,12 +101,12 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
         return;
       }
 
-      setSuccessMessage(`Importacao concluida com sucesso (${commitResult.imported} linhas).`);
+      setSuccessMessage(`Importação concluída com sucesso (${commitResult.imported} linhas).`);
     } catch (error) {
-      const apiMessage = getApiErrorMessage(error, "Nao foi possivel confirmar a importacao.");
+      const apiMessage = getApiErrorMessage(error, "Não foi possível confirmar a importação.");
       setErrorMessage(
-        apiMessage === "Sessao de importacao expirada."
-          ? "Sessao de importacao expirada. Rode a pre-visualizacao novamente."
+        apiMessage === "Sessão de importação expirada."
+          ? "Sessão de importação expirada. Rode a pré-visualização novamente."
           : apiMessage,
       );
     } finally {
@@ -126,7 +126,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-gray-100 bg-opacity-50 p-6 sm:items-center"
+      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-black/50 p-6 sm:items-center"
       onClick={handleBackdropClick}
       role="presentation"
     >
@@ -144,14 +144,14 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
             type="button"
             onClick={onClose}
             className="text-gray-200 transition-colors hover:text-gray-100"
-            aria-label="Fechar modal de importacao CSV"
+            aria-label="Fechar modal de importação CSV"
           >
             X
           </button>
         </div>
 
         <p className="mb-4 text-sm text-cf-text-secondary">
-          Envie um CSV para pre-visualizar as linhas validas e confirmar a importacao.
+          Envie um CSV para pré-visualizar as linhas válidas e confirmar a importação.
         </p>
 
         <div className="rounded border border-cf-border bg-cf-surface p-3">
@@ -181,7 +181,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
             disabled={isDryRunning || isCommitting}
             className="rounded border border-brand-1 bg-brand-1 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isDryRunning ? "Processando..." : "Pre-visualizar"}
+            {isDryRunning ? "Processando..." : "Pré-visualizar"}
           </button>
           <button
             type="button"
@@ -220,11 +220,11 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                 <p className="text-sm font-semibold text-cf-text-primary">{dryRunResult.summary.totalRows}</p>
               </div>
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
-                <p className="text-xs font-medium uppercase text-cf-text-secondary">Validas</p>
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Válidas</p>
                 <p className="text-sm font-semibold text-cf-text-primary">{dryRunResult.summary.validRows}</p>
               </div>
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
-                <p className="text-xs font-medium uppercase text-cf-text-secondary">Invalidas</p>
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Inválidas</p>
                 <p className="text-sm font-semibold text-cf-text-primary">{dryRunResult.summary.invalidRows}</p>
               </div>
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
@@ -234,7 +234,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                 </p>
               </div>
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
-                <p className="text-xs font-medium uppercase text-cf-text-secondary">Saidas</p>
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Saídas</p>
                 <p className="text-sm font-semibold text-cf-text-primary">
                   {formatCurrency(dryRunResult.summary.expense)}
                 </p>
@@ -242,12 +242,12 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
             </div>
 
             <p className="text-xs text-cf-text-secondary">
-              Sessao expira em: {dryRunResult.expiresAt || "nao informado"}
+              Sessão expira em: {dryRunResult.expiresAt || "não informado"}
             </p>
 
             {dryRunResult.rows.length === 0 ? (
               <div className="rounded border border-cf-border bg-cf-surface px-3 py-2 text-sm text-cf-text-secondary">
-                Sem linhas para pre-visualizar.
+                Sem linhas para pré-visualizar.
               </div>
             ) : (
               <div className="max-h-80 overflow-auto rounded border border-cf-border">

@@ -21,7 +21,7 @@ const TransactionList = ({ transactions, onDelete, onEdit }) => {
         >
           <div className="flex min-w-0 flex-1 flex-col">
             <span className="break-words text-sm font-medium text-cf-text-primary">
-              {transaction.description || "Sem descricao"}
+              {transaction.description || "Sem descrição"}
             </span>
             <span className="text-base font-medium text-cf-text-primary">
               {formatCurrency(transaction.value)}
@@ -49,7 +49,7 @@ const TransactionList = ({ transactions, onDelete, onEdit }) => {
               type="button"
               onClick={() => onEdit(transaction)}
               className="whitespace-nowrap rounded border border-cf-border px-2 py-1 text-xs font-semibold text-cf-text-secondary transition-colors hover:border-cf-border-input hover:text-cf-text-primary"
-              aria-label={`Editar transacao ${transaction.id}`}
+              aria-label={`Editar transação ${transaction.id}`}
             >
               Editar
             </button>
@@ -57,7 +57,7 @@ const TransactionList = ({ transactions, onDelete, onEdit }) => {
               type="button"
               onClick={() => onDelete(transaction.id)}
               className="whitespace-nowrap rounded border border-cf-border px-2 py-1 text-xs font-semibold text-cf-text-secondary transition-colors hover:border-cf-border-input hover:text-cf-text-primary"
-              aria-label={`Excluir transacao ${transaction.id}`}
+              aria-label={`Excluir transação ${transaction.id}`}
             >
               Excluir
             </button>

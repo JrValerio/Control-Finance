@@ -97,7 +97,7 @@ const IncomeStatementModal = ({
       setErrorMessage("");
 
       if (!referenceMonth) {
-        setErrorMessage("Mes de referencia e obrigatorio.");
+        setErrorMessage("Mês de referência é obrigatório.");
         return;
       }
 
@@ -145,7 +145,7 @@ const IncomeStatementModal = ({
       } catch (error) {
         const err = error as { response?: { data?: { message?: string } }; message?: string };
         setErrorMessage(
-          err?.response?.data?.message || err?.message || "Nao foi possivel salvar.",
+          err?.response?.data?.message || err?.message || "Não foi possível salvar.",
         );
         setIsSaving(false);
       }
@@ -157,7 +157,7 @@ const IncomeStatementModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-gray-100 bg-opacity-50 p-6 sm:items-center"
+      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-black/50 p-6 sm:items-center"
       onClick={handleBackdropClick}
       role="presentation"
     >
@@ -180,7 +180,7 @@ const IncomeStatementModal = ({
           {/* Mes */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="stmt-month" className="text-sm font-medium text-cf-text-primary">
-              Mes de referencia <span className="text-red-500">*</span>
+              Mês de referência <span className="text-red-500">*</span>
             </label>
             <input
               id="stmt-month"

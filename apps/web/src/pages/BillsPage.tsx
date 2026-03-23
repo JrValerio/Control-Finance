@@ -97,7 +97,7 @@ const BillsPage = ({
       setSummary(data);
     } catch (error) {
       setSummary(null);
-      setPageError(getApiErrorMessage(error, "Nao foi possivel carregar o resumo."));
+      setPageError(getApiErrorMessage(error, "Não foi possível carregar o resumo."));
     } finally {
       setIsLoadingSummary(false);
     }
@@ -117,7 +117,7 @@ const BillsPage = ({
       } catch (error) {
         setItems([]);
         setPaginationTotal(0);
-        setPageError(getApiErrorMessage(error, "Nao foi possivel carregar as pendencias."));
+        setPageError(getApiErrorMessage(error, "Não foi possível carregar as pendências."));
       } finally {
         setIsLoadingList(false);
       }
@@ -197,7 +197,7 @@ const BillsPage = ({
 
   const handleBillSaved = () => {
     closeBillModal();
-    showSuccess(editingBill ? "Pendencia atualizada." : "Pendencia criada.");
+    showSuccess(editingBill ? "Pendência atualizada." : "Pendência criada.");
     void loadSummary();
     void loadList(offset, statusFilter);
   };
@@ -209,12 +209,12 @@ const BillsPage = ({
     try {
       const result = await billsService.markPaid(bill.id);
       showSuccess(
-        `Marcada como paga. Transacao de saida: ${formatCurrency(result.transaction.value)} em ${formatDueDate(result.transaction.date)}.`,
+        `Marcada como paga. Transação de saída: ${formatCurrency(result.transaction.value)} em ${formatDueDate(result.transaction.date)}.`,
       );
       void loadSummary();
       void loadList(offset, statusFilter);
     } catch (error) {
-      setPageError(getApiErrorMessage(error, "Nao foi possivel marcar como paga."));
+      setPageError(getApiErrorMessage(error, "Não foi possível marcar como paga."));
     }
   };
 
@@ -233,11 +233,11 @@ const BillsPage = ({
     setPageError("");
     try {
       await billsService.remove(id);
-      showSuccess("Pendencia excluida.");
+      showSuccess("Pendência excluída.");
       void loadSummary();
       void loadList(offset, statusFilter);
     } catch (error) {
-      setPageError(getApiErrorMessage(error, "Nao foi possivel excluir a pendencia."));
+      setPageError(getApiErrorMessage(error, "Não foi possível excluir a pendência."));
     }
   };
 
@@ -265,14 +265,14 @@ const BillsPage = ({
                 ← Voltar
               </button>
             ) : null}
-            <h1 className="text-xl font-bold text-cf-text-primary">Pendencias</h1>
+            <h1 className="text-xl font-bold text-cf-text-primary">Pendências</h1>
           </div>
           <button
             type="button"
             onClick={openCreateModal}
             className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2"
           >
-            + Nova pendencia
+            + Nova pendência
           </button>
         </div>
 
@@ -358,11 +358,11 @@ const BillsPage = ({
         <div className="space-y-2">
           {isLoadingList ? (
             <p className="py-4 text-center text-sm text-cf-text-secondary">
-              Carregando pendencias...
+              Carregando pendências...
             </p>
           ) : items.length === 0 ? (
             <p className="py-4 text-center text-sm text-cf-text-secondary">
-              Nenhuma pendencia encontrada.
+              Nenhuma pendência encontrada.
             </p>
           ) : (
             items.map((bill) => (
@@ -471,7 +471,7 @@ const BillsPage = ({
                 disabled={!hasNextPage || isLoadingList}
                 className="rounded border border-cf-border bg-cf-surface px-3 py-1.5 text-sm font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Proxima
+                Próxima
               </button>
             </div>
           </div>

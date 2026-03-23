@@ -2,10 +2,10 @@ export const CATEGORY_ALL = "Todos";
 export const CATEGORY_ENTRY = "Entrada";
 export const CATEGORY_EXIT = "Saida";
 
-export const PERIOD_ALL = "Todo periodo";
+export const PERIOD_ALL = "Todo período";
 export const PERIOD_TODAY = "Hoje";
-export const PERIOD_LAST_7_DAYS = "Ultimos 7 dias";
-export const PERIOD_LAST_30_DAYS = "Ultimos 30 dias";
+export const PERIOD_LAST_7_DAYS = "Últimos 7 dias";
+export const PERIOD_LAST_30_DAYS = "Últimos 30 dias";
 export const PERIOD_CUSTOM = "Personalizado";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;

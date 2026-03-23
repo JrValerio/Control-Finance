@@ -35,13 +35,13 @@ const FlipBanner = ({ direction }: { direction: "pos_to_neg" | "neg_to_pos" }) =
   if (direction === "pos_to_neg") {
     return (
       <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-        Atencao: a projecao cruzou para negativo desde o ultimo calculo.
+        Atenção: a projeção cruzou para negativo desde o último cálculo.
       </div>
     );
   }
   return (
     <div className="mt-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-700">
-      Otimo: a projecao voltou ao positivo desde o ultimo calculo.
+      Ótimo: a projeção voltou ao positivo desde o último cálculo.
     </div>
   );
 };
@@ -93,7 +93,7 @@ const ForecastCard = ({
       persistForecast(computed);
       setCardState("active");
     } catch {
-      setError("Nao foi possivel carregar a projecao.");
+      setError("Não foi possível carregar a projeção.");
       setCardState("active");
     }
   }, [trialExpired]);
@@ -111,7 +111,7 @@ const ForecastCard = ({
       setForecast(updated);
       persistForecast(updated);
     } catch {
-      setError("Erro ao atualizar projecao.");
+      setError("Erro ao atualizar projeção.");
     } finally {
       setIsRecomputing(false);
     }
@@ -120,7 +120,7 @@ const ForecastCard = ({
   if (cardState === "loading") {
     return (
       <div className="rounded border border-cf-border bg-cf-surface p-4">
-        <p className="text-xs text-cf-text-secondary">Carregando projecao...</p>
+        <p className="text-xs text-cf-text-secondary">Carregando projeção...</p>
       </div>
     );
   }
@@ -130,9 +130,9 @@ const ForecastCard = ({
       <div className="rounded border border-cf-border bg-cf-surface p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="text-sm font-semibold text-cf-text-primary">Projecao de saldo</h3>
+            <h3 className="text-sm font-semibold text-cf-text-primary">Projeção de saldo</h3>
             <p className="mt-1 text-xs text-cf-text-secondary">
-              Configure seu salario e dia de pagamento para ver sua projecao de saldo ao fim do mes.
+              Configure seu salário e dia de pagamento para ver sua projeção de saldo ao fim do mês.
             </p>
           </div>
           {onOpenProfileSettings ? (
@@ -155,7 +155,7 @@ const ForecastCard = ({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-semibold text-cf-text-primary">Projecao de saldo</h3>
+              <h3 className="text-sm font-semibold text-cf-text-primary">Projeção de saldo</h3>
               <span className="rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
                 Congelado
               </span>
@@ -166,18 +166,18 @@ const ForecastCard = ({
                   {formatCurrency(forecast.projectedBalance)}
                 </p>
                 <p className="mt-1 text-xs text-cf-text-secondary">
-                  Projecao do mes {forecast.month} - congelada no fim do periodo de teste.
+                  Projeção do mês {forecast.month} - congelada no fim do período de teste.
                 </p>
               </>
             ) : (
               <p className="mt-2 text-sm text-cf-text-secondary">
-                Sua ultima projecao esta congelada no plano free. Assine para continuar atualizando.
+                Sua última projeção está congelada no plano free. Assine para continuar atualizando.
               </p>
             )}
             {txCountSinceFreeze > 0 ? (
               <p className="mt-1 text-xs text-cf-text-secondary">
                 {txCountSinceFreeze}{" "}
-                {txCountSinceFreeze === 1 ? "transacao registrada" : "transacoes registradas"} desde
+                {txCountSinceFreeze === 1 ? "transação registrada" : "transações registradas"} desde
                 entao.
               </p>
             ) : null}
@@ -200,7 +200,7 @@ const ForecastCard = ({
   return (
     <div className="rounded border border-brand-1 bg-cf-surface p-4">
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-sm font-semibold text-cf-text-primary">Projecao de saldo</h3>
+        <h3 className="text-sm font-semibold text-cf-text-primary">Projeção de saldo</h3>
         <button
           type="button"
           onClick={handleRecompute}
@@ -217,7 +217,7 @@ const ForecastCard = ({
         <>
           <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
-              <p className="text-xs font-medium uppercase text-cf-text-secondary">Projecao ajustada</p>
+              <p className="text-xs font-medium uppercase text-cf-text-secondary">Projeção ajustada</p>
               <p
                 className={`mt-1 text-lg font-bold ${
                   forecast.adjustedProjectedBalance < 0 ? "text-red-600" : "text-cf-text-primary"
@@ -227,21 +227,21 @@ const ForecastCard = ({
               </p>
               {forecast.incomeExpected !== null ? (
                 <p className="mt-0.5 text-xs text-cf-text-secondary">
-                  Salario esperado: {formatCurrency(forecast.incomeExpected)}
+                  Salário esperado: {formatCurrency(forecast.incomeExpected)}
                 </p>
               ) : null}
               {forecast.billsPendingCount > 0 ? (
                 <p className="mt-0.5 text-xs text-amber-600">
                   {forecast.billsPendingCount}{" "}
-                  {forecast.billsPendingCount === 1 ? "pendencia incluida" : "pendencias incluidas"}
+                  {forecast.billsPendingCount === 1 ? "pendência incluída" : "pendências incluídas"}
                 </p>
               ) : (
-                <p className="mt-0.5 text-xs text-cf-text-secondary">Sem pendencias este mes</p>
+                <p className="mt-0.5 text-xs text-cf-text-secondary">Sem pendências este mês</p>
               )}
             </div>
 
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
-              <p className="text-xs font-medium uppercase text-cf-text-secondary">Gasto ate agora</p>
+              <p className="text-xs font-medium uppercase text-cf-text-secondary">Gasto até agora</p>
               <p className="mt-1 text-base font-semibold text-cf-text-primary">
                 {formatCurrency(forecast.spendingToDate)}
               </p>
@@ -255,11 +255,11 @@ const ForecastCard = ({
               <p className="mt-1 text-base font-semibold text-cf-text-primary">
                 {forecast.daysRemaining}
               </p>
-              <p className="mt-0.5 text-xs text-cf-text-secondary">mes {forecast.month}</p>
+              <p className="mt-0.5 text-xs text-cf-text-secondary">mês {forecast.month}</p>
             </div>
 
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
-              <p className="text-xs font-medium uppercase text-cf-text-secondary">Pendencias do mes</p>
+              <p className="text-xs font-medium uppercase text-cf-text-secondary">Pendências do mês</p>
               <p
                 className={`mt-1 text-base font-semibold ${
                   forecast.billsPendingCount > 0 ? "text-amber-600" : "text-cf-text-primary"
@@ -269,8 +269,8 @@ const ForecastCard = ({
               </p>
               <p className="mt-0.5 text-xs text-cf-text-secondary">
                 {forecast.billsPendingCount > 0
-                  ? `${forecast.billsPendingCount} ${forecast.billsPendingCount === 1 ? "conta" : "contas"} este mes`
-                  : "Nenhuma pendencia"}
+                  ? `${forecast.billsPendingCount} ${forecast.billsPendingCount === 1 ? "conta" : "contas"} este mês`
+                  : "Nenhuma pendência"}
               </p>
             </div>
           </div>

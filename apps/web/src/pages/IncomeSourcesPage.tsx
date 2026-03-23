@@ -69,7 +69,7 @@ const IncomeSourcesPage = ({
       setSources(data);
     } catch (error) {
       setSources([]);
-      setPageError(getApiErrorMessage(error, "Nao foi possivel carregar as fontes de renda."));
+      setPageError(getApiErrorMessage(error, "Não foi possível carregar as fontes de renda."));
     } finally {
       setIsLoading(false);
     }
@@ -153,7 +153,7 @@ const IncomeSourcesPage = ({
       showSuccess("Desconto removido.");
       void loadSources();
     } catch (error) {
-      setPageError(getApiErrorMessage(error, "Nao foi possivel remover o desconto."));
+      setPageError(getApiErrorMessage(error, "Não foi possível remover o desconto."));
     }
   };
 
@@ -167,7 +167,7 @@ const IncomeSourcesPage = ({
       showSuccess("Fonte removida.");
       void loadSources();
     } catch (error) {
-      setPageError(getApiErrorMessage(error, "Nao foi possivel remover a fonte."));
+      setPageError(getApiErrorMessage(error, "Não foi possível remover a fonte."));
     }
   };
 
@@ -365,7 +365,7 @@ const IncomeSourcesPage = ({
                                   onClick={() => setConfirmingDeleteDeductionId(null)}
                                   className="text-xs text-cf-text-secondary"
                                 >
-                                  Nao
+                                  Não
                                 </button>
                               </span>
                             ) : (

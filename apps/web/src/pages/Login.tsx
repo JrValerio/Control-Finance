@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
 import { useAuth } from "../hooks/useAuth";
 
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const WEAK_PASSWORD_MESSAGE =
-  "Senha fraca: use no minimo 8 caracteres com letras e numeros.";
+  "Senha fraca: use no mínimo 8 caracteres com letras e números.";
 
 type AuthMode = "login" | "register";
 
@@ -60,7 +60,7 @@ const Login = (): JSX.Element => {
     resetErrors();
 
     if (!email.trim() || !password.trim()) {
-      setLocalError("Email e senha sao obrigatorios.");
+      setLocalError("Email e senha são obrigatórios.");
       return;
     }
 
@@ -72,7 +72,7 @@ const Login = (): JSX.Element => {
         }
 
         if (password.trim() !== confirmPassword.trim()) {
-          setLocalError("As senhas nao conferem.");
+          setLocalError("As senhas não conferem.");
           return;
         }
 
@@ -254,6 +254,14 @@ const Login = (): JSX.Element => {
                 ? "Criar conta e entrar"
                 : "Entrar"}
           </button>
+
+          {mode === "login" ? (
+            <p className="text-right text-sm">
+              <Link to="/forgot-password" className="text-brand-1 hover:underline">
+                Esqueci minha senha
+              </Link>
+            </p>
+          ) : null}
 
           <div className="flex items-center gap-2">
             <hr className="flex-1 border-cf-border" />

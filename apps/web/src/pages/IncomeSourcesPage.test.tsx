@@ -176,7 +176,7 @@ describe("IncomeSourcesPage", () => {
     await user.click(screen.getByRole("button", { name: "Gerar extrato" }));
 
     expect(screen.getByRole("heading", { name: /Gerar extrato/ })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Mes de referencia/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Mês de referência/)).toBeInTheDocument();
     expect(screen.getByLabelText(/Valor liquido/)).toBeInTheDocument();
   });
 

@@ -30,7 +30,7 @@ describe("BillsSummaryWidget", () => {
   it("renderiza loading enquanto busca dados", () => {
     vi.mocked(billsService.getSummary).mockReturnValue(new Promise(() => {}));
     renderWidget();
-    expect(screen.getByText("Carregando pendencias...")).toBeInTheDocument();
+    expect(screen.getByText("Carregando pendências...")).toBeInTheDocument();
   });
 
   it("renderiza totais e contagens apos load", async () => {
@@ -81,10 +81,10 @@ describe("BillsSummaryWidget", () => {
     renderWidget(onOpenBills);
 
     await waitFor(() => {
-      expect(screen.getByText("Ver pendencias →")).toBeInTheDocument();
+      expect(screen.getByText("Ver pendências →")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText("Ver pendencias →"));
+    await user.click(screen.getByText("Ver pendências →"));
     expect(onOpenBills).toHaveBeenCalledOnce();
   });
 
@@ -95,7 +95,7 @@ describe("BillsSummaryWidget", () => {
       expect(screen.getByText(/450[,.]00/)).toBeInTheDocument();
     });
 
-    expect(screen.queryByText("Ver pendencias →")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ver pendências →")).not.toBeInTheDocument();
   });
 
   it("retorna null silenciosamente em caso de erro do getSummary", async () => {
@@ -103,7 +103,7 @@ describe("BillsSummaryWidget", () => {
     const { container } = renderWidget();
 
     await waitFor(() => {
-      expect(screen.queryByText("Carregando pendencias...")).not.toBeInTheDocument();
+      expect(screen.queryByText("Carregando pendências...")).not.toBeInTheDocument();
     });
 
     expect(container.firstChild).toBeNull();
