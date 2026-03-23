@@ -451,6 +451,11 @@ const App = ({
 }: AppProps): JSX.Element => {
   const initialFilterState = useMemo(() => getInitialFilterState(), []);
   const initialPaginationState = useMemo(() => getInitialPaginationState(), []);
+  // Guards first_transaction_created from duplicate fires within a session.
+  // Two guards are intentionally both required:
+  //   transactions.length === 0  → logical gate (only fires on true first creation)
+  //   hasTrackedFirstTransactionRef → re-render safety (ref survives re-renders; removing
+  //                                   either guard alone leaves the other as a partial defence)
   const hasTrackedFirstTransactionRef = useRef(false);
   const listSectionRef = useRef<HTMLElement | null>(null);
   const summarySectionRef = useRef<HTMLElement | null>(null);

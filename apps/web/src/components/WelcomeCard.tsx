@@ -9,6 +9,9 @@ interface WelcomeCardProps {
 const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardProps) => {
   const tracked = useRef(false);
   useEffect(() => {
+    // "cf_activation_welcome_viewed_v1": sessionStorage key that prevents re-firing on reload.
+    // Bump the version suffix (v2, v3…) whenever the WelcomeCard logic changes in a way
+    // that requires re-showing the card to users who have already seen it.
     if (!tracked.current && !sessionStorage.getItem("cf_activation_welcome_viewed_v1")) {
       tracked.current = true;
       sessionStorage.setItem("cf_activation_welcome_viewed_v1", "1");

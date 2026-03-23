@@ -88,6 +88,7 @@ export const categoriesWriteRateLimiter = createUserWriteRateLimiter("categories
 export const budgetsWriteRateLimiter = createUserWriteRateLimiter("budgets-write");
 export const billsWriteRateLimiter = createUserWriteRateLimiter("bills-write");
 export const incomeSourcesWriteRateLimiter = createUserWriteRateLimiter("income-sources-write");
+export const analyticsWriteRateLimiter = createUserWriteRateLimiter("analytics-write");
 
 export const resetImportRateLimiterState = () => {
   if (importRateLimiter?.store?.resetAll) {
@@ -102,6 +103,7 @@ export const resetWriteRateLimiterState = () => {
     budgetsWriteRateLimiter,
     billsWriteRateLimiter,
     incomeSourcesWriteRateLimiter,
+    analyticsWriteRateLimiter,
   ].forEach((limiter) => {
     if (limiter?.store?.resetAll) {
       limiter.store.resetAll();

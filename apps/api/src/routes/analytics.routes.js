@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { attachEntitlements, requireActiveTrialOrPaidPlan } from "../middlewares/entitlement.middleware.js";
+import { analyticsWriteRateLimiter } from "../middlewares/rate-limit.middleware.js";
 import { getMonthlyTrendForUser } from "../services/analytics.service.js";
 import { recordPaywallEvent } from "../services/paywall-events.service.js";
 import { recordActivationEvent } from "../services/activation-events.service.js";
@@ -10,7 +11,7 @@ const router = Router();
 const DEFAULT_MONTHS = 6;
 const MAX_MONTHS = 24;
 
-router.post("/paywall", authMiddleware, async (req, res, next) => {
+router.post("/paywall", authMiddleware, analyticsWriteRateLimiter, async (req, res, next) => {
   try {
     const { feature, action, context } = req.body ?? {};
     const event = await recordPaywallEvent({
@@ -25,7 +26,7 @@ router.post("/paywall", authMiddleware, async (req, res, next) => {
   }
 });
 
-router.post("/events", authMiddleware, async (req, res, next) => {
+router.post("/events", authMiddleware, analyticsWriteRateLimiter, async (req, res, next) => {
   try {
     const { event } = req.body ?? {};
     const record = await recordActivationEvent({ userId: req.user.id, event });
