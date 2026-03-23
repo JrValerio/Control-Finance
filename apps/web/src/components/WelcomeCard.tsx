@@ -9,9 +9,9 @@ interface WelcomeCardProps {
 const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardProps) => {
   const tracked = useRef(false);
   useEffect(() => {
-    if (!tracked.current && !sessionStorage.getItem("cf_welcome_viewed")) {
+    if (!tracked.current && !sessionStorage.getItem("cf_activation_welcome_viewed_v1")) {
       tracked.current = true;
-      sessionStorage.setItem("cf_welcome_viewed", "1");
+      sessionStorage.setItem("cf_activation_welcome_viewed_v1", "1");
       trackActivationEvent("welcome_card_viewed");
     }
   }, []);

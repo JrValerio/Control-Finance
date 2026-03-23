@@ -3,6 +3,7 @@ import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { attachEntitlements, requireActiveTrialOrPaidPlan } from "../middlewares/entitlement.middleware.js";
 import { getMonthlyTrendForUser } from "../services/analytics.service.js";
 import { recordPaywallEvent } from "../services/paywall-events.service.js";
+import { recordActivationEvent } from "../services/activation-events.service.js";
 
 const router = Router();
 
@@ -19,6 +20,16 @@ router.post("/paywall", authMiddleware, async (req, res, next) => {
       context,
     });
     res.status(201).json(event);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/events", authMiddleware, async (req, res, next) => {
+  try {
+    const { event } = req.body ?? {};
+    const record = await recordActivationEvent({ userId: req.user.id, event });
+    res.status(201).json(record);
   } catch (error) {
     next(error);
   }

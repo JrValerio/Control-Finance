@@ -35,8 +35,12 @@ export type ActivationEvent =
 
 /**
  * Tracks a user activation event.
- * Today: logs to console. Swap for a persistence endpoint when ready.
+ * Fire-and-forget: never blocks the UI, never throws.
  */
 export const trackActivationEvent = (event: ActivationEvent): void => {
-  console.log("[activation]", event);
+  import("../services/api").then(({ api }) => {
+    void api.post("/analytics/events", { event }).catch(() => {
+      // Silently discard — tracking must never degrade the user experience
+    });
+  });
 };
