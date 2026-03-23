@@ -2123,12 +2123,6 @@ const App = ({
           </div>
         </section>
 
-        <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
-
-        <BillsSummaryWidget onOpenBills={handleOpenBills} />
-
-        <SalaryWidget />
-
         <div className="space-y-6">
           <section ref={summarySectionRef}>
             <div className="mb-2 flex items-center justify-between gap-2">
@@ -2315,6 +2309,12 @@ const App = ({
               </div>
             ) : null}
           </section>
+        <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+
+        <BillsSummaryWidget onOpenBills={handleOpenBills} />
+
+        <SalaryWidget />
+
 
       <section>
         <div className="rounded border border-cf-border bg-cf-surface p-3">
