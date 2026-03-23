@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { trackActivationEvent } from "../utils/analytics";
 
 interface WelcomeCardProps {
@@ -6,6 +7,14 @@ interface WelcomeCardProps {
 }
 
 const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardProps) => {
+  const tracked = useRef(false);
+  useEffect(() => {
+    if (!tracked.current) {
+      tracked.current = true;
+      trackActivationEvent("welcome_card_viewed");
+    }
+  }, []);
+
   return (
     <section className="rounded border border-brand-1/40 bg-cf-surface p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

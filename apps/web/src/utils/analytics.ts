@@ -28,6 +28,7 @@ export const trackPaywallEvent = (event: PaywallEvent): void => {
 };
 
 export type ActivationEvent =
+  | "welcome_card_viewed"
   | "welcome_cta_clicked"
   | "first_transaction_created";
 
