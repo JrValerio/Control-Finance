@@ -48,6 +48,9 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
   const title = isTrialExpired
     ? "Seu período de teste encerrou"
     : "Desbloqueie o Control Finance Pro";
+  const subtitle = isTrialExpired
+    ? "Continue com acesso total por menos de R$ 0,33 por dia."
+    : reason;
 
   const handleUpgrade = () => {
     onClose();
@@ -73,8 +76,8 @@ const UpgradeModal = ({ isOpen, reason, onClose }: UpgradeModalProps) => {
         >
           {title}
         </h3>
-        {reason ? (
-          <p className="mt-1 text-sm text-cf-text-secondary">{reason}</p>
+        {subtitle ? (
+          <p className="mt-1 text-sm text-cf-text-secondary">{subtitle}</p>
         ) : null}
 
         {/* Price anchor */}
