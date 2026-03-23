@@ -6,33 +6,19 @@ import {
   categoriesService,
   type CategoryItem,
 } from "../services/categories.service";
+import { getApiErrorMessage, getApiErrorStatus } from "../utils/apiError";
 
 const parseIncludeDeletedParam = (value: string | null | undefined): boolean =>
   String(value || "").toLowerCase() === "true";
 
-interface ApiLikeError {
-  response?: {
-    data?: {
-      message?: string;
-    };
-    status?: number;
-  };
-  message?: string;
-}
-
-const getApiErrorMessage = (error: unknown, fallbackMessage: string): string => {
-  const normalizedError = error as ApiLikeError;
-  return normalizedError?.response?.data?.message || normalizedError?.message || fallbackMessage;
-};
-
 const resolveCategoryMutationErrorMessage = (error: unknown, fallbackMessage: string): string => {
-  const normalizedError = error as ApiLikeError;
+  const status = getApiErrorStatus(error);
 
-  if (normalizedError?.response?.status === 409) {
+  if (status === 409) {
     return "Categoria ja existe.";
   }
 
-  if (normalizedError?.response?.status === 404) {
+  if (status === 404) {
     return "Categoria não encontrada.";
   }
 

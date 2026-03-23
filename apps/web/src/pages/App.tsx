@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getApiErrorMessage } from "../utils/apiError";
 import ConfirmDialog from "../components/ConfirmDialog";
 import Modal from "../components/Modal";
 import ImportCsvModal from "../components/ImportCsvModal";
@@ -93,15 +94,6 @@ interface MonthOverMonthMetric {
   deltaPercent: number | null;
   direction: MonthOverMonthDirection;
   tone: MonthOverMonthTone;
-}
-
-interface ApiLikeError {
-  response?: {
-    data?: {
-      message?: string;
-    };
-  };
-  message?: string;
 }
 
 interface AppProps {
@@ -282,10 +274,6 @@ const getInitialFilterState = (): FilterState => {
   };
 };
 
-const getApiErrorMessage = (error: unknown, fallbackMessage: string): string => {
-  const normalizedError = error as ApiLikeError;
-  return normalizedError?.response?.data?.message || normalizedError?.message || fallbackMessage;
-};
 
 const normalizeTransactions = (transactions: unknown): Transaction[] => {
   if (!Array.isArray(transactions)) {

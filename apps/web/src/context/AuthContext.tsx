@@ -11,28 +11,11 @@ import type {
 import { setUnauthorizedHandler } from "../services/api";
 import { AuthContext } from "./auth-context";
 import type { AuthContextValue } from "./auth-context";
-
-interface ApiLikeError {
-  response?: {
-    data?: {
-      message?: string;
-    };
-  };
-  message?: string;
-}
+import { getApiErrorMessage } from "../utils/apiError";
 
 interface AuthProviderProps {
   children: ReactNode;
 }
-
-const getApiErrorMessage = (error: unknown, fallbackMessage: string): string => {
-  if (!error || typeof error !== "object") {
-    return fallbackMessage;
-  }
-
-  const apiError = error as ApiLikeError;
-  return apiError.response?.data?.message || apiError.message || fallbackMessage;
-};
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<AuthUser | null>(null);

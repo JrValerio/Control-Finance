@@ -1,19 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { profileService, type UserProfile } from "../services/profile.service";
-
-interface ApiLikeError {
-  response?: {
-    data?: { message?: string };
-    status?: number;
-  };
-  message?: string;
-}
-
-const getApiErrorMessage = (error: unknown, fallback: string): string => {
-  const e = error as ApiLikeError;
-  return e?.response?.data?.message || e?.message || fallback;
-};
+import { getApiErrorMessage } from "../utils/apiError";
 
 const getInitials = (displayName: string | null, email: string): string => {
   const trimmed = displayName?.trim();

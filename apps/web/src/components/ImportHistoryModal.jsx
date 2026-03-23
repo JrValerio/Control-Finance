@@ -2,12 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { transactionsService } from "../services/transactions.service";
 import { formatCurrency } from "../utils/formatCurrency";
+import { getApiErrorMessage } from "../utils/apiError";
 
 const DEFAULT_LIMIT = 20;
-
-const getApiErrorMessage = (error, fallbackMessage) => {
-  return error?.response?.data?.message || error?.message || fallbackMessage;
-};
 
 const formatDateTime = (value) => {
   if (!value) {

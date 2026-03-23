@@ -3,19 +3,7 @@ import type { FormEvent } from "react";
 import { GoogleLogin } from "@react-oauth/google";
 import { profileService } from "../services/profile.service";
 import { securityService } from "../services/security.service";
-
-interface ApiLikeError {
-  response?: {
-    data?: { message?: string };
-    status?: number;
-  };
-  message?: string;
-}
-
-const getApiErrorMessage = (error: unknown, fallback: string): string => {
-  const e = error as ApiLikeError;
-  return e?.response?.data?.message || e?.message || fallback;
-};
+import { getApiErrorMessage } from "../utils/apiError";
 
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 

@@ -2,10 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { transactionsService } from "../services/transactions.service";
 import { formatCurrency } from "../utils/formatCurrency";
-
-const getApiErrorMessage = (error, fallbackMessage) => {
-  return error?.response?.data?.message || error?.message || fallbackMessage;
-};
+import { getApiErrorMessage } from "../utils/apiError";
 
 const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   const fileInputRef = useRef(null);

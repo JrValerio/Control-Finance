@@ -10,21 +10,12 @@ import {
   type PostStatementResult,
 } from "../services/incomeSources.service";
 import { formatCurrency } from "../utils/formatCurrency";
+import { getApiErrorMessage } from "../utils/apiError";
 
 interface CategoryOption {
   id: number;
   name: string;
 }
-
-interface ApiLikeError {
-  response?: { data?: { message?: string } };
-  message?: string;
-}
-
-const getApiErrorMessage = (error: unknown, fallback: string): string => {
-  const e = error as ApiLikeError;
-  return e?.response?.data?.message || e?.message || fallback;
-};
 
 interface IncomeSourcesPageProps {
   onBack?: () => void;
