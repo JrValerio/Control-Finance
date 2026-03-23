@@ -193,14 +193,18 @@ const PAYWALL_COPY: Array<{ pattern: RegExp; reason: string; feature: PaywallFea
   },
 ];
 
-const isTrialExpiredMessage = (msg: string): boolean =>
-  msg.toLowerCase().includes("teste encerrado");
-
 const resolvePaywallPayload = (
   url: string,
   serverMessage: string,
+  serverCode: string,
 ): PaymentRequiredPayload => {
-  if (isTrialExpiredMessage(serverMessage)) {
+  // Prefer the structured code field from the API response.
+  // Fall back to string-matching for backwards compatibility during rolling deploys.
+  const isTrialExpired =
+    serverCode === "TRIAL_EXPIRED" ||
+    serverMessage.toLowerCase().includes("teste encerrado");
+
+  if (isTrialExpired) {
     return { reason: serverMessage, feature: "unknown", context: "trial_expired" };
   }
 
@@ -276,9 +280,13 @@ api.interceptors.response.use(
         typeof error?.response?.data?.message === "string"
           ? error.response.data.message
           : "";
+      const serverCode: string =
+        typeof error?.response?.data?.code === "string"
+          ? error.response.data.code
+          : "";
 
       const url: string = error?.config?.url ?? "";
-      const payload = resolvePaywallPayload(url, serverMessage);
+      const payload = resolvePaywallPayload(url, serverMessage, serverCode);
 
       if (typeof paymentRequiredHandler === "function") {
         paymentRequiredHandler(payload);

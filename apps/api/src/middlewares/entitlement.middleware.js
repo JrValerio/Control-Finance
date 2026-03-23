@@ -35,9 +35,10 @@ const BYPASS_FEATURES = {
 
 // ---------------------------------------------------------------------------
 
-const createPaymentRequiredError = (message = "Recurso disponivel apenas no plano Pro.") => {
+const createPaymentRequiredError = (message = "Recurso disponivel apenas no plano Pro.", publicCode = "FEATURE_GATED") => {
   const error = new Error(message);
   error.status = 402;
+  error.publicCode = publicCode;
   return error;
 };
 
@@ -128,7 +129,7 @@ export const requireActiveTrialOrPaidPlan = async (req, res, next) => {
       return next();
     }
 
-    return next(createPaymentRequiredError(TRIAL_EXPIRED_MESSAGE));
+    return next(createPaymentRequiredError(TRIAL_EXPIRED_MESSAGE, "TRIAL_EXPIRED"));
   } catch (error) {
     return next(error);
   }

@@ -35,6 +35,7 @@ router.get("/trend", authMiddleware, requireActiveTrialOrPaidPlan, attachEntitle
       if (Number.isInteger(parsedMonths) && parsedMonths >= 1 && parsedMonths <= MAX_MONTHS && parsedMonths > cap) {
         const error = new Error("Limite de historico excedido no plano gratuito.");
         error.status = 402;
+        error.publicCode = "FEATURE_GATED";
         return next(error);
       }
     }
