@@ -5,12 +5,16 @@ import {
   resolveApiVersion,
 } from "../config/version.js";
 import { checkDatabaseHealth } from "../db/index.js";
+import { getMigrationStatus } from "../db/migrate.js";
 
 const router = Router();
 
 router.get("/", async (req, res, next) => {
   try {
-    const db = await checkDatabaseHealth();
+    const [db, migrations] = await Promise.all([
+      checkDatabaseHealth(),
+      getMigrationStatus(),
+    ]);
     const responsePayload = {
       ok: db.status === "ok",
       version: resolveApiVersion(),
@@ -18,6 +22,7 @@ router.get("/", async (req, res, next) => {
       buildTimestamp: resolveApiBuildTimestamp(),
       uptimeSeconds: Math.floor(process.uptime()),
       db,
+      migrations,
       requestId: req.requestId || null,
     };
 

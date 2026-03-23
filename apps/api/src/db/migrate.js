@@ -82,6 +82,24 @@ export const runMigrations = async () => {
   });
 };
 
+export const getMigrationStatus = async () => {
+  try {
+    return await withDbClient(async (client) => {
+      const { rows } = await client.query(
+        `SELECT name FROM ${MIGRATIONS_TABLE} ORDER BY executed_at DESC LIMIT 1`,
+      );
+      const countResult = await client.query(`SELECT COUNT(*) AS total FROM ${MIGRATIONS_TABLE}`);
+      return {
+        applied: Number(countResult.rows[0].total),
+        latest: rows[0]?.name ?? null,
+      };
+    });
+  } catch {
+    // DB unavailable or schema_migrations doesn't exist yet
+    return { applied: 0, latest: null };
+  }
+};
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   runMigrations()
     .then(() => {
