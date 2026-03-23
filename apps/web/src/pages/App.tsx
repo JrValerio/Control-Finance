@@ -1,6 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getApiErrorMessage } from "../utils/apiError";
 import ConfirmDialog from "../components/ConfirmDialog";
+import WelcomeCard from "../components/WelcomeCard";
 import Modal from "../components/Modal";
 import ImportCsvModal from "../components/ImportCsvModal";
 import ImportHistoryModal from "../components/ImportHistoryModal";
@@ -1842,6 +1843,13 @@ const App = ({
       </header>
 
       <main className="mx-auto mt-8 w-full max-w-6xl space-y-6 px-4 sm:mt-10 sm:px-6">
+        {!isLoadingTransactions && transactions.length === 0 ? (
+          <WelcomeCard
+            onAddTransaction={openCreateModal}
+            onOpenProfileSettings={onOpenProfileSettings}
+          />
+        ) : null}
+
         <section ref={filtersPanelRef}>
           <div className="space-y-4 rounded border border-cf-border bg-cf-surface p-4">
             <div className="flex items-start justify-between gap-3 rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
