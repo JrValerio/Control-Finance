@@ -40,7 +40,6 @@ const renderPage = (initialPath = "/app/settings/categories") =>
 describe("CategoriesSettings", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.stubGlobal("confirm", vi.fn(() => true));
 
     categoriesService.listCategories.mockResolvedValue([buildCategory()]);
     categoriesService.createCategory.mockResolvedValue(buildCategory({ id: 2, name: "Mercado" }));
@@ -124,6 +123,7 @@ describe("CategoriesSettings", () => {
     expect(categoriesService.listCategories).toHaveBeenNthCalledWith(1, true);
 
     await user.click(screen.getByRole("button", { name: "Restaurar" }));
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }));
 
     await waitFor(() => {
       expect(categoriesService.restoreCategory).toHaveBeenCalledWith(7);
