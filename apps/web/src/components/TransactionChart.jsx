@@ -54,7 +54,7 @@ const TransactionChart = ({ data }) => {
   if (!hasAnyValue) {
     return (
       <div className="rounded border border-cf-border bg-cf-surface p-4 text-center text-sm text-cf-text-primary">
-        Sem dados suficientes para exibir o gráfico no período selecionado.
+        Adicione transações para visualizar receitas e gastos neste período.
       </div>
     );
   }

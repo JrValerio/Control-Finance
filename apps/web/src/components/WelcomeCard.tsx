@@ -1,9 +1,24 @@
+import { useEffect, useRef } from "react";
+import { trackActivationEvent } from "../utils/analytics";
+
 interface WelcomeCardProps {
   onAddTransaction: () => void;
   onOpenProfileSettings?: () => void;
 }
 
 const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardProps) => {
+  const tracked = useRef(false);
+  useEffect(() => {
+    // "cf_activation_welcome_viewed_v1": sessionStorage key that prevents re-firing on reload.
+    // Bump the version suffix (v2, v3…) whenever the WelcomeCard logic changes in a way
+    // that requires re-showing the card to users who have already seen it.
+    if (!tracked.current && !sessionStorage.getItem("cf_activation_welcome_viewed_v1")) {
+      tracked.current = true;
+      sessionStorage.setItem("cf_activation_welcome_viewed_v1", "1");
+      trackActivationEvent("welcome_card_viewed");
+    }
+  }, []);
+
   return (
     <section className="rounded border border-brand-1/40 bg-cf-surface p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -49,7 +64,10 @@ const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardPro
         <div className="flex shrink-0 flex-col gap-2 sm:items-end">
           <button
             type="button"
-            onClick={onAddTransaction}
+            onClick={() => {
+              trackActivationEvent("welcome_cta_clicked");
+              onAddTransaction();
+            }}
             className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2 whitespace-nowrap"
           >
             + Registrar primeira transação

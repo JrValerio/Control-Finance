@@ -35,6 +35,7 @@ import {
 } from "../components/DatabaseUtils";
 import { analyticsService, type TrendPoint } from "../services/analytics.service";
 import { setPaymentRequiredHandler, type PaymentRequiredPayload } from "../services/api";
+import { trackActivationEvent } from "../utils/analytics";
 import type { PaywallFeature, PaywallContext } from "../utils/analytics";
 import {
   useFilters,
@@ -450,6 +451,12 @@ const App = ({
 }: AppProps): JSX.Element => {
   const initialFilterState = useMemo(() => getInitialFilterState(), []);
   const initialPaginationState = useMemo(() => getInitialPaginationState(), []);
+  // Guards first_transaction_created from duplicate fires within a session.
+  // Two guards are intentionally both required:
+  //   transactions.length === 0  → logical gate (only fires on true first creation)
+  //   hasTrackedFirstTransactionRef → re-render safety (ref survives re-renders; removing
+  //                                   either guard alone leaves the other as a partial defence)
+  const hasTrackedFirstTransactionRef = useRef(false);
   const listSectionRef = useRef<HTMLElement | null>(null);
   const summarySectionRef = useRef<HTMLElement | null>(null);
   const mobileActionsButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -505,6 +512,7 @@ const App = ({
   const [budgetMutationError, setBudgetMutationError] = useState("");
   const [isSavingBudget, setSavingBudget] = useState(false);
   const [requestError, setRequestError] = useState("");
+  const [showActivationBanner, setShowActivationBanner] = useState(false);
   const [modalRequestError, setModalRequestError] = useState("");
   const [isLoadingBudgets, setLoadingBudgets] = useState(false);
   const [trend, setTrend] = useState<TrendPoint[]>(DEFAULT_TREND);
@@ -1236,6 +1244,9 @@ const App = ({
   );
 
   const openCreateModal = () => {
+    if (transactions.length === 0) {
+      trackActivationEvent("transaction_modal_opened");
+    }
     setBudgetModalOpen(false);
     setEditingTransaction(null);
     setModalRequestError("");
@@ -1271,6 +1282,11 @@ const App = ({
           notes,
         });
       } else {
+        if (transactions.length === 0 && !hasTrackedFirstTransactionRef.current) {
+          hasTrackedFirstTransactionRef.current = true;
+          trackActivationEvent("first_transaction_created");
+          setShowActivationBanner(true);
+        }
         await transactionsService.create({
           value,
           type,
@@ -1849,6 +1865,24 @@ const App = ({
             onOpenProfileSettings={onOpenProfileSettings}
           />
         ) : null}
+
+        {showActivationBanner && (
+          <div className="flex items-center justify-between rounded border border-green-600/30 bg-green-600/10 px-4 py-3 text-sm text-green-700 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-400">
+            <span>
+              Primeira transação registrada. Seu saldo já está atualizado acima ↑
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowActivationBanner(false)}
+              className="ml-4 shrink-0 text-green-700 opacity-60 hover:opacity-100 dark:text-green-400"
+              aria-label="Fechar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        )}
 
         <section ref={filtersPanelRef}>
           <div className="space-y-4 rounded border border-cf-border bg-cf-surface p-4">

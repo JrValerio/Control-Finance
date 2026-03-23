@@ -26,3 +26,21 @@ export const trackPaywallEvent = (event: PaywallEvent): void => {
     });
   });
 };
+
+export type ActivationEvent =
+  | "welcome_card_viewed"
+  | "welcome_cta_clicked"
+  | "transaction_modal_opened"
+  | "first_transaction_created";
+
+/**
+ * Tracks a user activation event.
+ * Fire-and-forget: never blocks the UI, never throws.
+ */
+export const trackActivationEvent = (event: ActivationEvent): void => {
+  import("../services/api").then(({ api }) => {
+    void api.post("/analytics/events", { event }).catch(() => {
+      // Silently discard — tracking must never degrade the user experience
+    });
+  });
+};
