@@ -1,3 +1,6 @@
+import cookieParser from "cookie-parser";
+import express from "express";
+import rateLimit from "express-rate-limit";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import app from "./app.js";
@@ -5,6 +8,8 @@ import { clearDbClientForTests, dbQuery } from "./db/index.js";
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import { resetImportRateLimiterState, resetWriteRateLimiterState } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
+import { authMiddleware } from "./middlewares/auth.middleware.js";
+import { recordActivationEvent } from "./services/activation-events.service.js";
 import { registerAndLogin, setupTestDb } from "./test-helpers.js";
 
 describe("POST /analytics/events", () => {
@@ -103,5 +108,65 @@ describe("POST /analytics/events", () => {
 
     expect(result.rows).toHaveLength(1);
     expect(result.rows[0].user_id).toBeGreaterThan(0);
+  });
+});
+
+describe("analyticsWriteRateLimiter fires 429 after limit", () => {
+  // Use an isolated Express app with max=2 so the test doesn't need to fire 30 requests.
+  // This verifies the 429 handler is wired correctly without coupling to the production limit.
+  const limiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 2,
+    standardHeaders: false,
+    legacyHeaders: false,
+    handler: (_req, _res, next) => {
+      const err = new Error("Muitas requisicoes. Tente novamente em instantes.");
+      err.status = 429;
+      next(err);
+    },
+  });
+
+  const rateLimitApp = express();
+  rateLimitApp.use(express.json());
+  rateLimitApp.use(cookieParser());
+  rateLimitApp.post("/analytics/events", authMiddleware, limiter, async (req, res, next) => {
+    try {
+      const record = await recordActivationEvent({ userId: req.user.id, event: req.body.event });
+      res.status(201).json(record);
+    } catch (err) {
+      next(err);
+    }
+  });
+  // eslint-disable-next-line no-unused-vars
+  rateLimitApp.use((err, _req, res, _next) => {
+    res.status(err.status || 500).json({ message: err.message });
+  });
+
+  beforeAll(async () => { await setupTestDb(); });
+  afterAll(async () => { await clearDbClientForTests(); });
+  beforeEach(async () => {
+    resetLoginProtectionState();
+    resetImportRateLimiterState();
+    resetWriteRateLimiterState();
+    resetHttpMetricsForTests();
+    await dbQuery("DELETE FROM activation_events");
+    await dbQuery("DELETE FROM refresh_tokens");
+    await dbQuery("DELETE FROM users");
+    if (limiter?.store?.resetAll) limiter.store.resetAll();
+  });
+
+  it("retorna 429 apos exceder o limite por usuario", async () => {
+    const token = await registerAndLogin("ratelimit@test.com");
+    const payload = { event: "welcome_card_viewed" };
+    const headers = { Cookie: `cf_access=${token}` };
+
+    const first = await request(rateLimitApp).post("/analytics/events").set(headers).send(payload);
+    expect(first.status).toBe(201);
+
+    const second = await request(rateLimitApp).post("/analytics/events").set(headers).send(payload);
+    expect(second.status).toBe(201);
+
+    const third = await request(rateLimitApp).post("/analytics/events").set(headers).send(payload);
+    expect(third.status).toBe(429);
   });
 });

@@ -4,6 +4,8 @@ const DEFAULT_IMPORT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_IMPORT_RATE_LIMIT_MAX_REQUESTS = 10;
 const DEFAULT_WRITE_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_WRITE_RATE_LIMIT_MAX_REQUESTS = 60;
+const DEFAULT_ANALYTICS_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const DEFAULT_ANALYTICS_RATE_LIMIT_MAX_REQUESTS = 30; // analytics events are low-frequency by nature
 const WRITE_RATE_LIMIT_ERROR_MESSAGE = "Muitas requisicoes. Tente novamente em instantes.";
 
 const parsePositiveInteger = (value, fallbackValue) => {
@@ -38,6 +40,18 @@ const getWriteRateLimitMaxRequests = () =>
   parsePositiveInteger(
     process.env.WRITE_RATE_LIMIT_MAX,
     DEFAULT_WRITE_RATE_LIMIT_MAX_REQUESTS,
+  );
+
+const getAnalyticsRateLimitWindowMs = () =>
+  parsePositiveInteger(
+    process.env.ANALYTICS_RATE_LIMIT_WINDOW_MS,
+    DEFAULT_ANALYTICS_RATE_LIMIT_WINDOW_MS,
+  );
+
+const getAnalyticsRateLimitMaxRequests = () =>
+  parsePositiveInteger(
+    process.env.ANALYTICS_RATE_LIMIT_MAX,
+    DEFAULT_ANALYTICS_RATE_LIMIT_MAX_REQUESTS,
   );
 
 const createError = (status, message) => {
@@ -88,7 +102,14 @@ export const categoriesWriteRateLimiter = createUserWriteRateLimiter("categories
 export const budgetsWriteRateLimiter = createUserWriteRateLimiter("budgets-write");
 export const billsWriteRateLimiter = createUserWriteRateLimiter("bills-write");
 export const incomeSourcesWriteRateLimiter = createUserWriteRateLimiter("income-sources-write");
-export const analyticsWriteRateLimiter = createUserWriteRateLimiter("analytics-write");
+export const analyticsWriteRateLimiter = rateLimit({
+  windowMs: getAnalyticsRateLimitWindowMs(),
+  max: getAnalyticsRateLimitMaxRequests(),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (request) => resolveRateLimitKey(request, "analytics-write"),
+  handler: createRateLimitExceededHandler(),
+});
 
 export const resetImportRateLimiterState = () => {
   if (importRateLimiter?.store?.resetAll) {
