@@ -183,15 +183,6 @@ export const withDbClient = async (callback) => {
   }
 };
 
-export const closePool = async () => {
-  if (!poolInstance) {
-    return;
-  }
-
-  await poolInstance.end();
-  poolInstance = undefined;
-};
-
 export const getDatabaseConnectionDiagnostics = () => {
   const connectionString = process.env.DATABASE_URL;
   const parsedDiagnostics = parseConnectionStringDiagnostics(connectionString);
