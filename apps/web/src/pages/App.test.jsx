@@ -492,13 +492,13 @@ describe("App", () => {
       }),
     );
     transactionsService.getMonthlySummaryCompare.mockRejectedValueOnce({
-      response: { data: { message: "Comparacao mensal indisponivel." } },
+      response: { data: { message: "Comparação mensal indisponível." } },
     });
 
     render(<App />);
 
     expect(await screen.findByText("R$ 700,00")).toBeInTheDocument();
-    expect(await screen.findByText("Comparacao mensal indisponivel.")).toBeInTheDocument();
+    expect(await screen.findByText("Comparação mensal indisponível.")).toBeInTheDocument();
     expect(screen.getByTestId("mom-income")).toHaveTextContent("MoM: —");
     expect(screen.getByTestId("mom-balance")).toHaveTextContent("MoM: —");
     expect(screen.getByTestId("mom-expense")).toHaveTextContent("MoM: —");

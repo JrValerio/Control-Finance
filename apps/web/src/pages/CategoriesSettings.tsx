@@ -15,7 +15,7 @@ const resolveCategoryMutationErrorMessage = (error: unknown, fallbackMessage: st
   const status = getApiErrorStatus(error);
 
   if (status === 409) {
-    return "Categoria ja existe.";
+    return "Categoria já existe.";
   }
 
   if (status === 404) {

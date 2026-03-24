@@ -97,7 +97,7 @@ const BillingSettings = ({
       const status = getApiErrorStatus(error);
       if (status === 422) {
         setActionError(
-          "Portal de gerenciamento indisponivel. Entre em contato com o suporte.",
+          "Portal de gerenciamento indisponível. Entre em contato com o suporte.",
         );
       } else {
         setActionError(
@@ -180,7 +180,7 @@ const BillingSettings = ({
             <div className="mt-4 space-y-4">
               {showCheckoutPendingNotice ? (
                 <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-                  Pagamento recebido. Confirmando liberacao do plano Pro. Em metodos como boleto, a confirmacao pode levar alguns minutos.
+                  Pagamento recebido. Confirmando liberação do plano Pro. Em métodos como boleto, a confirmação pode levar alguns minutos.
                 </div>
               ) : null}
 

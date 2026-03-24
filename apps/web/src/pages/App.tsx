@@ -167,7 +167,7 @@ const MONTH_VALUE_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 const MOM_TONE_CLASSNAMES: Record<MonthOverMonthTone, string> = {
   good: "text-green-200",
   bad: "text-red-200",
-  neutral: "text-gray-200",
+  neutral: "text-ui-200",
 };
 const DEFAULT_MONTHLY_BUDGETS: MonthlyBudget[] = [];
 const TREND_MONTHS = 6;
@@ -808,7 +808,7 @@ const App = ({
     } else {
       setMonthlySummaryCompare(DEFAULT_MONTHLY_SUMMARY_COMPARE);
       setMomError(
-        getApiErrorMessage(compareSummaryResult.reason, "Comparacao mensal indisponivel."),
+        getApiErrorMessage(compareSummaryResult.reason, "Comparação mensal indisponível."),
       );
     }
 
@@ -1690,7 +1690,7 @@ const App = ({
                         onClick={handleOpenSecuritySettings}
                         className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                       >
-                        Seguranca
+                        Segurança
                       </button>
                     ) : null}
                     <button
@@ -1825,7 +1825,7 @@ const App = ({
                             onClick={() => { setContaMenuOpen(false); onOpenSecuritySettings(); }}
                             className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                           >
-                            Seguranca
+                            Segurança
                           </button>
                         ) : null}
                         {onLogout ? (

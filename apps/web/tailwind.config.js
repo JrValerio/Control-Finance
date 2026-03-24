@@ -19,9 +19,6 @@ export default {
         medium: '500',
         regular: '400',
       },
-      fontSize: {
-        '5xl': '20px',
-      },
       colors: {
         'cf-bg-page':        'var(--cf-bg-page)',
         'cf-header-bg':      'var(--cf-header-bg)',
@@ -36,7 +33,7 @@ export default {
           2: '#4C3299',
           3: '#F0ECFB',
         },
-        gray: {
+        ui: {
           100: '#212529',
           200: '#495057',
           300: '#ADB5BD',

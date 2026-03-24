@@ -166,7 +166,7 @@ const ImportHistoryModal = ({ isOpen, onClose }) => {
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
-            className="text-gray-200 transition-colors hover:text-gray-100"
+            className="text-ui-200 transition-colors hover:text-ui-100"
             aria-label="Fechar modal de histórico de imports"
           >
             X
