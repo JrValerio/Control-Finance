@@ -16,6 +16,27 @@ describe("pdf OCR fallback", () => {
     expect(shouldRun).toBe(true);
   });
 
+  it("nao carrega o worker de OCR quando o texto direto ja resolve", async () => {
+    const fakeParser = {
+      getText: vi.fn().mockResolvedValue({
+        text: "05/02/2026 PGTO INSS 01776829899 2.812,99 06/02/2026 PIX QRS UBER DO BRA -15,98",
+      }),
+      getScreenshot: vi.fn(),
+      destroy: vi.fn().mockResolvedValue(undefined),
+    };
+    const PDFParseCtor = vi.fn(() => fakeParser);
+    const loadCreateWorkerFn = vi.fn();
+
+    const text = await extractTextFromPdfWithOcr(Buffer.from("fake-pdf"), {
+      PDFParseCtor,
+      loadCreateWorkerFn,
+    });
+
+    expect(text).toContain("PGTO INSS");
+    expect(fakeParser.getScreenshot).not.toHaveBeenCalled();
+    expect(loadCreateWorkerFn).not.toHaveBeenCalled();
+  });
+
   it("usa OCR como fallback quando texto direto nao e suficiente", async () => {
     const fakeParser = {
       getText: vi.fn().mockResolvedValue({ text: "abc 123" }),

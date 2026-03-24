@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applySmartClassification,
+  createClassificationIndex,
   suggestCategoryNameForImportedRow,
 } from "./transaction-classifier.js";
 
@@ -52,6 +53,23 @@ describe("transaction classifier", () => {
     );
 
     expect(category).toBe("Alimentacao");
+  });
+
+  it("pre-computa indice uma vez e reutiliza nas sugestoes", () => {
+    const classificationIndex = createClassificationIndex(categories);
+
+    const category = suggestCategoryNameForImportedRow(
+      {
+        type: "Entrada",
+        description: "PGTO INSS 01776829899",
+        notes: "Credito mensal",
+        category: "",
+      },
+      classificationIndex,
+    );
+
+    expect(category).toBe("Beneficios");
+    expect(classificationIndex.keywordMapsByType.get("Entrada")).toBeInstanceOf(Map);
   });
 
   it("aplica sugestao no shape das linhas importadas", () => {

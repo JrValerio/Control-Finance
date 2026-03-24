@@ -1,7 +1,11 @@
 import { PDFParse } from "pdf-parse";
-import { createWorker } from "tesseract.js";
 
 const OCR_LANGUAGES = "por+eng";
+
+const loadCreateWorker = async () => {
+  const tesseractModule = await import("tesseract.js");
+  return tesseractModule.createWorker;
+};
 
 export const shouldRunPdfOcrFallback = (text) => {
   const normalizedText = String(text || "").replace(/\s+/g, " ").trim();
@@ -23,10 +27,10 @@ export const extractTextFromPdfWithOcr = async (
   buffer,
   dependencies = {
     PDFParseCtor: PDFParse,
-    createWorkerFn: createWorker,
+    loadCreateWorkerFn: loadCreateWorker,
   },
 ) => {
-  const { PDFParseCtor, createWorkerFn } = dependencies;
+  const { PDFParseCtor, createWorkerFn, loadCreateWorkerFn } = dependencies;
   const parser = new PDFParseCtor({ data: buffer });
 
   try {
@@ -49,7 +53,11 @@ export const extractTextFromPdfWithOcr = async (
       return directText;
     }
 
-    const worker = await createWorkerFn(OCR_LANGUAGES);
+    const resolvedCreateWorkerFn =
+      typeof createWorkerFn === "function"
+        ? createWorkerFn
+        : await loadCreateWorkerFn();
+    const worker = await resolvedCreateWorkerFn(OCR_LANGUAGES);
 
     try {
       const ocrTexts = [];

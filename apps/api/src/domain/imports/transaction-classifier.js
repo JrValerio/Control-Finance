@@ -8,6 +8,10 @@ const normalizeText = (value) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const DIRECT_CATEGORY_SCORE = 2;
+const GROUP_MATCH_BONUS = 3;
+const GROUP_KEYWORD_SCORE = 1;
+
 const CATEGORY_GROUPS = [
   {
     aliases: ["transporte", "mobilidade", "combustivel", "locomocao"],
@@ -61,33 +65,36 @@ const CATEGORY_GROUPS = [
   },
 ];
 
-const scoreCategoryAgainstGroup = (categoryKey, group, description, type) => {
-  if (Array.isArray(group.types) && !group.types.includes(type)) {
-    return 0;
+const addCategoryToIndex = (index, keyword, categoryName) => {
+  const normalizedKeyword = normalizeText(keyword);
+
+  if (!normalizedKeyword || !categoryName) {
+    return;
   }
 
-  const aliasMatched = group.aliases.some((alias) => categoryKey === normalizeCategoryNameKey(alias));
-  if (!aliasMatched) {
-    return 0;
+  const existingBucket = index.get(normalizedKeyword);
+
+  if (!existingBucket) {
+    index.set(normalizedKeyword, [categoryName]);
+    return;
   }
 
-  const keywordMatches = group.keywords.filter((keyword) => description.includes(keyword)).length;
-  return keywordMatches > 0 ? 3 + keywordMatches : 0;
+  if (!existingBucket.includes(categoryName)) {
+    existingBucket.push(categoryName);
+  }
 };
 
-export const suggestCategoryNameForImportedRow = (rawRow, categories = []) => {
-  if (!rawRow || rawRow.category) {
-    return rawRow?.category || "";
-  }
+const findCategoryGroup = (categoryKey) =>
+  CATEGORY_GROUPS.find((group) =>
+    group.aliases.some((alias) => categoryKey === normalizeCategoryNameKey(alias))
+  ) || null;
 
-  const description = normalizeText(`${rawRow.description || ""} ${rawRow.notes || ""}`);
-  const type = String(rawRow.type || "").trim();
-
-  if (!description || !type) {
-    return "";
-  }
-
-  let bestCandidate = null;
+export const createClassificationIndex = (categories = []) => {
+  const directCategoryMap = new Map();
+  const keywordMapsByType = new Map([
+    ["Entrada", new Map()],
+    ["Saida", new Map()],
+  ]);
 
   categories.forEach((category) => {
     const categoryName = String(category?.name || "").trim();
@@ -97,26 +104,49 @@ export const suggestCategoryNameForImportedRow = (rawRow, categories = []) => {
       return;
     }
 
-    let score = 0;
-
-    if (categoryKey.length >= 4 && description.includes(categoryKey)) {
-      score += 2;
+    if (categoryKey.length >= 4) {
+      addCategoryToIndex(directCategoryMap, categoryKey, categoryName);
     }
 
-    CATEGORY_GROUPS.forEach((group) => {
-      score += scoreCategoryAgainstGroup(categoryKey, group, description, type);
+    const matchingGroup = findCategoryGroup(categoryKey);
+
+    if (!matchingGroup) {
+      return;
+    }
+
+    (matchingGroup.types || []).forEach((type) => {
+      const typeKeywordMap = keywordMapsByType.get(type);
+
+      if (!typeKeywordMap) {
+        return;
+      }
+
+      matchingGroup.keywords.forEach((keyword) => {
+        addCategoryToIndex(typeKeywordMap, keyword, categoryName);
+      });
     });
+  });
 
-    if (score <= 0) {
-      return;
-    }
+  return {
+    directCategoryMap,
+    keywordMapsByType,
+  };
+};
 
+const addScore = (scoreMap, categoryName, amount) => {
+  scoreMap.set(categoryName, (scoreMap.get(categoryName) || 0) + amount);
+};
+
+const findBestCandidate = (scoreMap) => {
+  let bestCandidate = null;
+
+  scoreMap.forEach((score, name) => {
     if (!bestCandidate || score > bestCandidate.score) {
-      bestCandidate = { name: categoryName, score, tied: false };
+      bestCandidate = { name, score, tied: false };
       return;
     }
 
-    if (bestCandidate && score === bestCandidate.score && bestCandidate.name !== categoryName) {
+    if (bestCandidate && score === bestCandidate.score && bestCandidate.name !== name) {
       bestCandidate.tied = true;
     }
   });
@@ -128,9 +158,64 @@ export const suggestCategoryNameForImportedRow = (rawRow, categories = []) => {
   return bestCandidate.name;
 };
 
-export const applySmartClassification = (rows = [], categories = []) =>
-  rows.map((row) => {
-    const suggestedCategoryName = suggestCategoryNameForImportedRow(row.raw, categories);
+export const suggestCategoryNameForImportedRow = (rawRow, categoriesOrIndex = []) => {
+  if (!rawRow || rawRow.category) {
+    return rawRow?.category || "";
+  }
+
+  const description = normalizeText(`${rawRow.description || ""} ${rawRow.notes || ""}`);
+  const type = String(rawRow.type || "").trim();
+
+  if (!description || !type) {
+    return "";
+  }
+
+  const classificationIndex = Array.isArray(categoriesOrIndex)
+    ? createClassificationIndex(categoriesOrIndex)
+    : categoriesOrIndex;
+  const scoreMap = new Map();
+
+  classificationIndex.directCategoryMap.forEach((categoryNames, keyword) => {
+    if (!description.includes(keyword)) {
+      return;
+    }
+
+    categoryNames.forEach((categoryName) => {
+      addScore(scoreMap, categoryName, DIRECT_CATEGORY_SCORE);
+    });
+  });
+
+  const keywordMap = classificationIndex.keywordMapsByType.get(type) || new Map();
+  const categoriesWithKeywordHits = new Set();
+
+  keywordMap.forEach((categoryNames, keyword) => {
+    if (!description.includes(keyword)) {
+      return;
+    }
+
+    categoryNames.forEach((categoryName) => {
+      addScore(scoreMap, categoryName, GROUP_KEYWORD_SCORE);
+      categoriesWithKeywordHits.add(categoryName);
+    });
+  });
+
+  categoriesWithKeywordHits.forEach((categoryName) => {
+    addScore(scoreMap, categoryName, GROUP_MATCH_BONUS);
+  });
+
+  return findBestCandidate(scoreMap);
+};
+
+export const applySmartClassification = (rows = [], categories = []) => {
+  const classificationIndex = Array.isArray(categories)
+    ? createClassificationIndex(categories)
+    : categories;
+
+  return rows.map((row) => {
+    const suggestedCategoryName = suggestCategoryNameForImportedRow(
+      row.raw,
+      classificationIndex,
+    );
 
     if (!suggestedCategoryName) {
       return row;
@@ -144,3 +229,4 @@ export const applySmartClassification = (rows = [], categories = []) =>
       },
     };
   });
+};
