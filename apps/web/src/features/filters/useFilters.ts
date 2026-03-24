@@ -88,10 +88,10 @@ export const isSelectedPeriod = (value: string | null): value is SelectedPeriod 
   value === "Últimos 30 dias" ||
   value === "Personalizado";
 
-export const isCompactFiltersPanelMode = (): boolean =>
+const isCompactFiltersPanelMode = (): boolean =>
   typeof window !== "undefined" && window.innerWidth < MOBILE_FILTERS_BREAKPOINT;
 
-export const hasInitialActiveFilters = (filters: FilterState): boolean =>
+const hasInitialActiveFilters = (filters: FilterState): boolean =>
   filters.selectedCategory !== CATEGORY_ALL ||
   filters.selectedPeriod !== PERIOD_ALL ||
   Boolean(filters.selectedTransactionCategoryId) ||

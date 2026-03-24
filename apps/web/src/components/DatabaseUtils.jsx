@@ -147,23 +147,6 @@ export const calculateBalance = (transactions) => {
   }, 0);
 };
 
-export const getTotalsByType = (transactions) => {
-  return transactions.reduce(
-    (totals, transaction) => {
-      if (transaction.type === CATEGORY_ENTRY) {
-        totals.entry += transaction.value;
-      }
-
-      if (transaction.type === CATEGORY_EXIT) {
-        totals.exit += transaction.value;
-      }
-
-      return totals;
-    },
-    { entry: 0, exit: 0 },
-  );
-};
-
 export const parseCurrencyInput = (rawValue) => {
   if (typeof rawValue !== "string") {
     return Number.NaN;
