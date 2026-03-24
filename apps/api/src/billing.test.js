@@ -79,6 +79,40 @@ describe("billing", () => {
     });
   });
 
+  it("GET /billing/subscription retorna entitlementSource=trial para usuario em trial ativo", async () => {
+    const token = await registerAndLogin("billing-sub-trial@controlfinance.dev");
+
+    const response = await request(app)
+      .get("/billing/subscription")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.plan).toBe("free");
+    expect(response.body.entitlementSource).toBe("trial");
+    expect(typeof response.body.trialEndsAt).toBe("string");
+    expect(response.body.subscription).toBeNull();
+  });
+
+  it("GET /billing/subscription retorna entitlementSource=free com trialExpired=true para trial vencido", async () => {
+    const email = "billing-sub-trial-expired@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    const userId = await getUserIdByEmail(email);
+
+    await dbQuery(
+      `UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/billing/subscription")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.entitlementSource).toBe("free");
+    expect(response.body.trialExpired).toBe(true);
+    expect(response.body.subscription).toBeNull();
+  });
+
   it("GET /billing/entitlement retorna source=trial para usuario novo", async () => {
     const email = "billing-entitlement-trial@controlfinance.dev";
     const token = await registerAndLogin(email);

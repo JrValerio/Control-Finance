@@ -21,22 +21,59 @@ const resolveCheckoutStatus = (): string => {
   return params.get("checkout")?.trim().toLowerCase() || "";
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  active: "Ativo",
-  prepaid_active: "Ativo (pre-pago)",
-  trialing: "Em teste",
-  past_due: "Pagamento pendente",
-  canceled: "Cancelado",
-  unpaid: "Não pago",
+const daysRemaining = (isoDate: string | null | undefined): number => {
+  if (!isoDate) return 0;
+  const ms = new Date(isoDate).getTime() - Date.now();
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 };
 
-const STATUS_CLASSES: Record<string, string> = {
-  active: "border-green-200 bg-green-50 text-green-700",
-  prepaid_active: "border-green-200 bg-green-50 text-green-700",
-  trialing: "border-blue-200 bg-blue-50 text-blue-700",
-  past_due: "border-amber-200 bg-amber-50 text-amber-700",
-  canceled: "border-gray-200 bg-gray-50 text-gray-600",
-  unpaid: "border-red-200 bg-red-50 text-red-700",
+type PlanBadge = { label: string; className: string };
+
+const resolvePlanBadge = (summary: import("../services/billing.service").SubscriptionSummary): PlanBadge => {
+  const source = summary.entitlementSource;
+
+  if (source === "trial") {
+    const days = daysRemaining(summary.trialEndsAt);
+    return {
+      label: `Trial — ${days} dia${days !== 1 ? "s" : ""} restante${days !== 1 ? "s" : ""}`,
+      className: "border-blue-200 bg-blue-50 text-blue-700",
+    };
+  }
+
+  if (source === "subscription") {
+    const canceling = Boolean(summary.subscription?.cancelAtPeriodEnd);
+    const date = formatDate(summary.subscription?.currentPeriodEnd);
+    return canceling
+      ? { label: `Pro ativo — acesso até ${date}`, className: "border-amber-200 bg-amber-50 text-amber-700" }
+      : { label: `Pro ativo — renova em ${date}`, className: "border-green-200 bg-green-50 text-green-700" };
+  }
+
+  if (source === "subscription_grace") {
+    return {
+      label: `Pagamento pendente — acesso até ${formatDate(summary.graceEndsAt)}`,
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+
+  if (source === "prepaid") {
+    return {
+      label: `Pro prepago — válido até ${formatDate(summary.proExpiresAt)}`,
+      className: "border-green-200 bg-green-50 text-green-700",
+    };
+  }
+
+  // source === "free"
+  if (summary.trialExpired) {
+    return {
+      label: "Trial encerrado",
+      className: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+
+  return {
+    label: "Gratuito",
+    className: "border-cf-border bg-cf-bg-subtle text-cf-text-secondary",
+  };
 };
 
 interface BillingSettingsProps {
@@ -108,13 +145,9 @@ const BillingSettings = ({
     }
   };
 
-  const isPro = Boolean(summary?.subscription);
-  const statusKey = summary?.subscription?.status ?? "";
-  const statusLabel = STATUS_LABELS[statusKey] ?? "";
-  const statusClass = STATUS_CLASSES[statusKey] ?? "";
-  const isPrepaid = statusKey === "prepaid_active";
-  const periodEnd = summary?.subscription?.currentPeriodEnd;
-  const cancelAtPeriodEnd = summary?.subscription?.cancelAtPeriodEnd;
+  const source = summary?.entitlementSource ?? "free";
+  const isPro = source === "subscription" || source === "subscription_grace" || source === "prepaid";
+  const planBadge = summary ? resolvePlanBadge(summary) : null;
   const checkoutStatus = resolveCheckoutStatus();
   const showCheckoutPendingNotice =
     checkoutStatus === "success" && !isLoading && !loadError && !isPro;
@@ -200,30 +233,16 @@ const BillingSettings = ({
                     <p className="mt-0.5 text-lg font-bold text-cf-text-primary">
                       {summary.displayName}
                     </p>
-                    {isPro && statusLabel ? (
+                    {planBadge ? (
                       <span
-                        className={`mt-1 inline-block rounded border px-2 py-0.5 text-xs font-semibold ${statusClass}`}
+                        className={`mt-1 inline-block rounded border px-2 py-0.5 text-xs font-semibold ${planBadge.className}`}
                       >
-                        {statusLabel}
-                      </span>
-                    ) : null}
-                    {!isPro ? (
-                      <span className="mt-1 inline-block rounded border border-cf-border px-2 py-0.5 text-xs font-semibold text-cf-text-secondary">
-                        Gratuito
+                        {planBadge.label}
                       </span>
                     ) : null}
                   </div>
 
-                  {!isPro ? (
-                    <button
-                      type="button"
-                      onClick={handleSubscribe}
-                      disabled={isActionLoading}
-                      className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isActionLoading ? "Aguarde..." : "Assinar PRO"}
-                    </button>
-                  ) : (
+                  {isPro ? (
                     <button
                       type="button"
                       onClick={handleManage}
@@ -232,18 +251,24 @@ const BillingSettings = ({
                     >
                       {isActionLoading ? "Aguarde..." : "Gerenciar assinatura"}
                     </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleSubscribe}
+                      disabled={isActionLoading}
+                      className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isActionLoading
+                        ? "Aguarde..."
+                        : source === "trial"
+                        ? "Assinar PRO agora"
+                        : source === "free" && summary?.trialExpired
+                        ? "Reativar acesso Pro"
+                        : "Assinar PRO"}
+                    </button>
                   )}
                 </div>
 
-                {isPro && periodEnd ? (
-                  <p className="mt-3 text-xs text-cf-text-secondary">
-                    {isPrepaid
-                      ? `Expira em: ${formatDate(periodEnd)}`
-                      : cancelAtPeriodEnd
-                      ? `Cancela em: ${formatDate(periodEnd)}`
-                      : `Renovacao em: ${formatDate(periodEnd)}`}
-                  </p>
-                ) : null}
               </div>
 
               {actionError ? (

@@ -176,6 +176,7 @@ export const resolveEntitlement = async (userId) => {
       trialEndsAt: null,
       proExpiresAt: null,
       graceEndsAt: null,
+      trialExpired: false,
       subscription: activeSubscription,
     };
   }
@@ -193,6 +194,7 @@ export const resolveEntitlement = async (userId) => {
         trialEndsAt: null,
         proExpiresAt: null,
         graceEndsAt,
+        trialExpired: false,
         subscription: activeSubscription,
       };
     }
@@ -212,6 +214,7 @@ export const resolveEntitlement = async (userId) => {
       trialEndsAt: null,
       proExpiresAt,
       graceEndsAt: pastDueContext?.graceEndsAt ?? null,
+      trialExpired: false,
       subscription: pastDueContext?.subscription ?? null,
     };
   }
@@ -224,6 +227,7 @@ export const resolveEntitlement = async (userId) => {
       trialEndsAt,
       proExpiresAt: null,
       graceEndsAt: pastDueContext?.graceEndsAt ?? null,
+      trialExpired: false,
       subscription: pastDueContext?.subscription ?? null,
     };
   }
@@ -235,6 +239,7 @@ export const resolveEntitlement = async (userId) => {
     trialEndsAt: null,
     proExpiresAt: null,
     graceEndsAt: pastDueContext?.graceEndsAt ?? null,
+    trialExpired: trialEndsAt !== null,
     subscription: pastDueContext?.subscription ?? null,
   };
 };
@@ -335,13 +340,24 @@ export const getSubscriptionSummaryForUser = async (userId) => {
 
   const freePlan = await getFreePlan();
 
+  if (entitlement.plan === "trial") {
+    return {
+      plan: freePlan.name,
+      displayName: freePlan.displayName,
+      features: freePlan.features,
+      subscription: null,
+      entitlementSource: "trial",
+      trialEndsAt: toIsoOrNull(entitlement.trialEndsAt),
+    };
+  }
+
   return {
     plan: freePlan.name,
     displayName: freePlan.displayName,
     features: freePlan.features,
     subscription: null,
     entitlementSource: "free",
-    proExpiresAt: null,
+    trialExpired: entitlement.trialExpired ?? false,
   };
 };
 
