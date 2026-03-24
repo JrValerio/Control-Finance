@@ -45,7 +45,6 @@ const buildDeduction = (overrides: Partial<IncomeDeduction> = {}): IncomeDeducti
   amount: 300,
   isVariable: false,
   isActive: true,
-  sortOrder: 0,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   ...overrides,
