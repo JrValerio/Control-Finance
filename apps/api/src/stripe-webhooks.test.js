@@ -65,6 +65,7 @@ describe("stripe webhooks", () => {
     await dbQuery("DELETE FROM subscriptions");
     await dbQuery("DELETE FROM transactions");
     await dbQuery("DELETE FROM users");
+    await dbQuery("DELETE FROM stripe_events");
   });
 
   it("retorna 400 sem header Stripe-Signature", async () => {
@@ -292,6 +293,42 @@ describe("stripe webhooks", () => {
       [userId],
     );
     expect(Number(count.rows[0].count)).toBe(1);
+  });
+
+  it("processStripeEvent ignora evento duplicado pelo stripe_event_id", async () => {
+    await registerAndLogin("webhook-event-dedup@controlfinance.dev");
+    const userId = await getUserIdByEmail("webhook-event-dedup@controlfinance.dev");
+
+    const event = {
+      id: "evt_dedup_001",
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          customer: "cus_dedup_001",
+          subscription: "sub_dedup_001",
+          metadata: { userId: String(userId) },
+        },
+      },
+    };
+
+    const first = await stripePost(event);
+    const second = await stripePost(event);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+
+    // Only one subscription row despite two identical events
+    const count = await dbQuery(
+      `SELECT COUNT(*) FROM subscriptions WHERE user_id = $1`,
+      [userId],
+    );
+    expect(Number(count.rows[0].count)).toBe(1);
+
+    // Event recorded exactly once in idempotency registry
+    const evtCount = await dbQuery(
+      `SELECT COUNT(*) FROM stripe_events WHERE stripe_event_id = 'evt_dedup_001'`,
+    );
+    expect(Number(evtCount.rows[0].count)).toBe(1);
   });
 
   it("customer.subscription.deleted marca status como canceled", async () => {

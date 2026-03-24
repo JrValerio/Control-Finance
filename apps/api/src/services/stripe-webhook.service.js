@@ -398,7 +398,30 @@ export const handleInvoicePaymentFailed = async (invoice) => {
   );
 };
 
+const markStripeEventProcessed = async (stripeEventId, eventType) => {
+  if (!stripeEventId) return false;
+
+  const existing = await dbQuery(
+    `SELECT id FROM stripe_events WHERE stripe_event_id = $1 LIMIT 1`,
+    [stripeEventId],
+  );
+  if (existing.rows.length > 0) return true;
+
+  const inserted = await dbQuery(
+    `INSERT INTO stripe_events (stripe_event_id, event_type)
+     VALUES ($1, $2)
+     ON CONFLICT (stripe_event_id) DO NOTHING
+     RETURNING id`,
+    [stripeEventId, eventType ?? "unknown"],
+  );
+  // Empty RETURNING means a concurrent request won the race — treat as duplicate
+  return inserted.rows.length === 0;
+};
+
 export const processStripeEvent = async (event) => {
+  const alreadyProcessed = await markStripeEventProcessed(event?.id, event?.type);
+  if (alreadyProcessed) return;
+
   switch (event?.type) {
     case "checkout.session.completed":
       return handleCheckoutSessionCompleted(event.data?.object);
