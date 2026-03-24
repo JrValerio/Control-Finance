@@ -113,6 +113,60 @@ describe("ImportCsvModal", () => {
     });
   });
 
+  it("exibe badge Revisar para linha valida sem categoria", async () => {
+    const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+    transactionsService.dryRunImportCsv.mockResolvedValueOnce(
+      buildDryRunResponse({
+        rows: [
+          {
+            line: 2,
+            status: "valid",
+            raw: {
+              date: "2026-02-21",
+              type: "Entrada",
+              value: "100",
+              description: "PIX SEM CATEGORIA",
+              notes: "",
+              category: "",
+            },
+            normalized: {
+              date: "2026-02-21",
+              type: "Entrada",
+              value: 100,
+              description: "PIX SEM CATEGORIA",
+              notes: "",
+              categoryId: null,
+            },
+            errors: [],
+          },
+        ],
+      }),
+    );
+
+    render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Revisar")).toBeInTheDocument();
+    });
+  });
+
+  it("nao exibe badge Revisar quando linha valida ja tem categoria", async () => {
+    const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+    transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildDryRunResponse());
+
+    render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Trabalho")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText("Revisar")).not.toBeInTheDocument();
+  });
+
   it("shows expired session message on commit error", async () => {
     const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
 
