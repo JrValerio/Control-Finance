@@ -1,3 +1,4 @@
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { parse as parseCsv } from "csv-parse/sync";
 import { dbQuery, withDbTransaction } from "../db/index.js";
@@ -5,6 +6,10 @@ import {
   TRANSACTION_TYPE_ENTRY,
   TRANSACTION_TYPE_EXIT,
 } from "../constants/transaction-types.js";
+import {
+  parseStatementCsvRows,
+  parseStatementPdfRows,
+} from "../domain/imports/statement-import.js";
 import { normalizeCategoryNameKey } from "./categories-normalization.js";
 
 const CATEGORY_ENTRY = TRANSACTION_TYPE_ENTRY;
@@ -20,6 +25,8 @@ const OPTIONAL_HEADERS = ["notes", "category"];
 const ALLOWED_HEADERS = new Set([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]);
 const HEADER_ERROR_MESSAGE =
   "CSV invalido. Cabecalho esperado: date,type,value,description,notes,category";
+const IMPORT_FORMAT_ERROR_MESSAGE =
+  "Arquivo nao reconhecido. Envie um CSV manual com cabecalho date,type,value,description,notes,category ou um CSV/PDF de extrato.";
 
 const createError = (status, message) => {
   const error = new Error(message);
@@ -214,6 +221,43 @@ const parseCsvFileRows = (fileBuffer) => {
       raw: buildRawRow(rowObject),
     };
   });
+};
+
+const parseImportFileRows = async (importFile) => {
+  const fileBuffer = importFile?.buffer;
+  const extension = path.extname(String(importFile?.originalname || "")).toLowerCase();
+
+  if (!Buffer.isBuffer(fileBuffer) || fileBuffer.length === 0) {
+    throw createError(400, "Arquivo do extrato (file) e obrigatorio.");
+  }
+
+  if (extension === ".pdf") {
+    try {
+      return await parseStatementPdfRows(fileBuffer);
+    } catch (error) {
+      throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no PDF.");
+    }
+  }
+
+  try {
+    return parseCsvFileRows(fileBuffer);
+  } catch (error) {
+    if (error?.message !== HEADER_ERROR_MESSAGE) {
+      throw error;
+    }
+  }
+
+  try {
+    return parseStatementCsvRows(fileBuffer);
+  } catch (error) {
+    if (
+      error?.message === `Arquivo excede o limite de ${getImportCsvMaxRows()} linhas.`
+    ) {
+      throw createError(400, error.message);
+    }
+
+    throw createError(400, IMPORT_FORMAT_ERROR_MESSAGE);
+  }
 };
 
 const normalizeDate = (value) => {
@@ -495,8 +539,8 @@ const assertSessionReadyForCommit = (session, userId) => {
   }
 };
 
-export const dryRunTransactionsImportForUser = async (userId, csvFileBuffer) => {
-  const parsedRows = parseCsvFileRows(csvFileBuffer);
+export const dryRunTransactionsImportForUser = async (userId, importFile) => {
+  const parsedRows = await parseImportFileRows(importFile);
   const categoryMap = await loadCategoryMapForUser(userId);
   const rows = parsedRows.map((row) => {
     const normalizedRow = normalizeCsvRow(row.raw, categoryMap);

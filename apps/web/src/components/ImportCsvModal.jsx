@@ -55,7 +55,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
 
   const handleDryRun = async () => {
     if (!selectedFile) {
-      setErrorMessage("Selecione um arquivo CSV.");
+      setErrorMessage("Selecione um arquivo CSV ou PDF.");
       setSuccessMessage("");
       return;
     }
@@ -69,7 +69,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
       setDryRunResult(result);
     } catch (error) {
       setDryRunResult(null);
-      setErrorMessage(getApiErrorMessage(error, "Não foi possível processar o arquivo CSV."));
+      setErrorMessage(getApiErrorMessage(error, "Não foi possível processar o arquivo do extrato."));
     } finally {
       setIsDryRunning(false);
     }
@@ -135,31 +135,34 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id="import-csv-modal-title" className="text-lg font-semibold text-cf-text-primary">
-            Importar CSV
+            Importar extrato
           </h2>
           <button
             type="button"
             onClick={onClose}
             className="text-ui-200 transition-colors hover:text-ui-100"
-            aria-label="Fechar modal de importação CSV"
+            aria-label="Fechar modal de importação de extrato"
           >
             X
           </button>
         </div>
 
         <p className="mb-4 text-sm text-cf-text-secondary">
-          Envie um CSV para pré-visualizar as linhas válidas e confirmar a importação.
+          Envie um CSV ou PDF de extrato para pré-visualizar as transações válidas antes de importar.
         </p>
 
         <div className="rounded border border-cf-border bg-cf-surface p-3">
-          <label htmlFor="csv-file-input" className="mb-1 block text-sm font-medium text-cf-text-primary">
-            Arquivo CSV
+          <label
+            htmlFor="csv-file-input"
+            className="mb-1 block text-sm font-medium text-cf-text-primary"
+          >
+            Arquivo do extrato
           </label>
           <input
             ref={fileInputRef}
             id="csv-file-input"
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.pdf,text/csv,application/pdf"
             onChange={(event) => {
               const nextFile = event.target.files?.[0] || null;
               setSelectedFile(nextFile);
@@ -169,6 +172,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
             }}
             className="block w-full text-sm text-cf-text-primary file:mr-3 file:rounded file:border file:border-cf-border file:bg-cf-bg-subtle file:px-3 file:py-1 file:text-sm file:font-semibold file:text-cf-text-primary hover:file:bg-cf-border"
           />
+          <p className="mt-2 text-xs text-cf-text-secondary">
+            Suporta CSV manual, CSV exportado por banco e PDF com texto selecionável.
+          </p>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -62,7 +62,7 @@ describe("ImportCsvModal", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
-    expect(screen.getByText("Selecione um arquivo CSV.")).toBeInTheDocument();
+    expect(screen.getByText("Selecione um arquivo CSV ou PDF.")).toBeInTheDocument();
     expect(transactionsService.dryRunImportCsv).not.toHaveBeenCalled();
   });
 
@@ -72,7 +72,7 @@ describe("ImportCsvModal", () => {
 
     render(<ImportCsvModal isOpen onClose={vi.fn()} />);
 
-    await userEvent.upload(screen.getByLabelText("Arquivo CSV"), file);
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
     await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     await waitFor(() => {
@@ -98,7 +98,7 @@ describe("ImportCsvModal", () => {
 
     render(<ImportCsvModal isOpen onClose={vi.fn()} onImported={onImported} />);
 
-    await userEvent.upload(screen.getByLabelText("Arquivo CSV"), file);
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
     await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     await waitFor(() => {
@@ -123,7 +123,7 @@ describe("ImportCsvModal", () => {
 
     render(<ImportCsvModal isOpen onClose={vi.fn()} />);
 
-    await userEvent.upload(screen.getByLabelText("Arquivo CSV"), file);
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
     await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     await waitFor(() => {

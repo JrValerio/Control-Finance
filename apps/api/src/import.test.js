@@ -302,10 +302,10 @@ describe("transaction imports", () => {
       .post("/transactions/import/dry-run")
       .set("Authorization", `Bearer ${token}`);
 
-    expectErrorResponseWithRequestId(response, 400, "Arquivo CSV (file) e obrigatorio.");
+    expectErrorResponseWithRequestId(response, 400, "Arquivo do extrato (file) e obrigatorio.");
   });
 
-  it("POST /transactions/import/dry-run retorna 400 para arquivo sem formato CSV", async () => {
+  it("POST /transactions/import/dry-run retorna 400 para arquivo sem formato suportado", async () => {
     const token = await registerAndLogin("import-arquivo-invalido@controlfinance.dev");
     await makeProUser("import-arquivo-invalido@controlfinance.dev");
     const invalidFile = csvFile("conteudo sem cabecalho", "import.txt");
@@ -318,7 +318,7 @@ describe("transaction imports", () => {
         contentType: "text/plain",
       });
 
-    expectErrorResponseWithRequestId(response, 400, "Arquivo invalido. Envie um CSV.");
+    expectErrorResponseWithRequestId(response, 400, "Arquivo invalido. Envie um CSV ou PDF de extrato.");
   });
 
   it("POST /transactions/import/dry-run retorna 413 quando arquivo excede limite", async () => {
@@ -392,7 +392,7 @@ describe("transaction imports", () => {
     );
   });
 
-  it("POST /transactions/import/dry-run retorna 400 para cabecalho invalido", async () => {
+  it("POST /transactions/import/dry-run retorna 400 para arquivo nao reconhecido", async () => {
     const token = await registerAndLogin("import-cabecalho@controlfinance.dev");
     await makeProUser("import-cabecalho@controlfinance.dev");
     const invalidHeaderCsv = csvFile("tipo,valor,descricao\nSaida,100,Mercado");
@@ -408,8 +408,83 @@ describe("transaction imports", () => {
     expectErrorResponseWithRequestId(
       response,
       400,
-      "CSV invalido. Cabecalho esperado: date,type,value,description,notes,category",
+      "Arquivo nao reconhecido. Envie um CSV manual com cabecalho date,type,value,description,notes,category ou um CSV/PDF de extrato.",
     );
+  });
+
+  it("POST /transactions/import/dry-run aceita CSV de extrato bancario com colunas flexiveis", async () => {
+    const token = await registerAndLogin("import-bank-csv@controlfinance.dev");
+    await makeProUser("import-bank-csv@controlfinance.dev");
+    const statementCsv = csvFile(
+      [
+        "Data;Historico;Valor",
+        "05/02/2026;PGTO INSS 01776829899;2812,99",
+        "05/02/2026;SALDO DO DIA;2411,37",
+        "06/02/2026;PIX QRS UBER DO BRA;-15,98",
+      ].join("\n"),
+      "itau-extrato.csv",
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", statementCsv.buffer, {
+        filename: statementCsv.fileName,
+        contentType: "text/csv",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary).toEqual({
+      totalRows: 2,
+      validRows: 2,
+      invalidRows: 0,
+      income: 2812.99,
+      expense: 15.98,
+    });
+    expect(response.body.rows).toEqual([
+      {
+        line: 2,
+        status: "valid",
+        raw: {
+          date: "2026-02-05",
+          type: "Entrada",
+          value: "2812.99",
+          description: "PGTO INSS 01776829899",
+          notes: "",
+          category: "",
+        },
+        normalized: {
+          date: "2026-02-05",
+          type: "Entrada",
+          value: 2812.99,
+          description: "PGTO INSS 01776829899",
+          notes: "",
+          categoryId: null,
+        },
+        errors: [],
+      },
+      {
+        line: 4,
+        status: "valid",
+        raw: {
+          date: "2026-02-06",
+          type: "Saida",
+          value: "15.98",
+          description: "PIX QRS UBER DO BRA",
+          notes: "",
+          category: "",
+        },
+        normalized: {
+          date: "2026-02-06",
+          type: "Saida",
+          value: 15.98,
+          description: "PIX QRS UBER DO BRA",
+          notes: "",
+          categoryId: null,
+        },
+        errors: [],
+      },
+    ]);
   });
 
   it("POST /transactions/import/dry-run valida linhas e persiste sessao", async () => {
