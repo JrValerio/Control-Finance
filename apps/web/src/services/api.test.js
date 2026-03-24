@@ -167,6 +167,56 @@ describe("api service", () => {
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
 
+  // ─── Concurrent 401 / refresh queue ─────────────────────────────────────────
+
+  it("dois requests 401 simultaneos disparam apenas um refresh e ambos retentam", async () => {
+    api.post.mockResolvedValueOnce({}); // refresh succeeds
+    api.request
+      .mockResolvedValueOnce({ data: "response-1" })
+      .mockResolvedValueOnce({ data: "response-2" });
+
+    const [r1, r2] = await Promise.all([
+      responseErrorInterceptor({
+        response: { status: 401 },
+        config: { url: "/summary", headers: {} },
+      }),
+      responseErrorInterceptor({
+        response: { status: 401 },
+        config: { url: "/forecast", headers: {} },
+      }),
+    ]);
+
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(api.post).toHaveBeenCalledWith("/auth/refresh");
+    expect(api.request).toHaveBeenCalledTimes(2);
+    expect(r1).toEqual({ data: "response-1" });
+    expect(r2).toEqual({ data: "response-2" });
+  });
+
+  it("rejeita requests na fila quando refresh falha durante concorrencia", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+
+    api.post.mockRejectedValueOnce(new Error("refresh failed"));
+
+    const results = await Promise.allSettled([
+      responseErrorInterceptor({
+        response: { status: 401 },
+        config: { url: "/summary", headers: {} },
+      }),
+      responseErrorInterceptor({
+        response: { status: 401 },
+        config: { url: "/forecast", headers: {} },
+      }),
+    ]);
+
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(results[0].status).toBe("rejected");
+    expect(results[1].status).toBe("rejected");
+    // unauthorizedHandler fired once — from the first request's catch block only
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
   // ─── 402 handler ─────────────────────────────────────────────────────────────
 
   it("chama paymentRequiredHandler com a mensagem quando status e 402", async () => {
