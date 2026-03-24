@@ -54,6 +54,7 @@ import { formatCurrency } from "../utils/formatCurrency";
 
 const TransactionChart = lazy(() => import("../components/TransactionChart"));
 const TrendChart = lazy(() => import("../components/TrendChart"));
+const CategoryTreemap = lazy(() => import("../components/CategoryTreemap"));
 
 type SummaryMetricKey = "income" | "expense" | "balance";
 type MonthOverMonthDirection = "up" | "down" | "flat";
@@ -2280,26 +2281,17 @@ const App = ({
                 Sem dados para o mês selecionado.
               </div>
             ) : null}
-            {!isLoadingSummary &&
-            !summaryError &&
-            summaryByCategoryExpenses.length > 0 ? (
-              <div className="mt-3 rounded border border-cf-border bg-cf-surface p-3">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
-                  Despesas por categoria
-                </h4>
-                <ul className="mt-2 space-y-1.5">
-                  {summaryByCategoryExpenses.map((categoryItem) => (
-                    <li
-                      key={`${categoryItem.categoryId ?? "uncategorized"}-${categoryItem.categoryName}`}
-                      className="flex items-center justify-between gap-3 text-sm text-cf-text-primary"
-                    >
-                      <span className="break-words">{categoryItem.categoryName}</span>
-                      <span className="whitespace-nowrap font-semibold">
-                        {formatCurrency(categoryItem.expense)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+            {!isLoadingSummary && !summaryError ? (
+              <div className="mt-3">
+                <Suspense
+                  fallback={
+                    <div className="rounded border border-cf-border bg-cf-surface p-4 text-sm text-cf-text-secondary">
+                      Carregando categorias...
+                    </div>
+                  }
+                >
+                  <CategoryTreemap data={summaryByCategoryExpenses} />
+                </Suspense>
               </div>
             ) : null}
             {!isLoadingSummary && !summaryError && !momError ? (
