@@ -18,6 +18,10 @@ vi.mock("../components/UpgradeModal", () => ({
   default: () => null,
 }));
 
+vi.mock("../components/HealthOverview", () => ({
+  default: () => null,
+}));
+
 vi.mock("../components/TransactionChart", () => ({
   default: () => <div data-testid="transaction-chart" />,
 }));
