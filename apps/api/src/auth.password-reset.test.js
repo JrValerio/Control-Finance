@@ -1,6 +1,15 @@
 import request from "supertest";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import app from "./app.js";
+
+const sendPasswordResetEmailMock = vi.hoisted(() =>
+  vi.fn().mockResolvedValue(undefined),
+);
+
+vi.mock("./services/email.service.js", () => ({
+  sendPasswordResetEmail: sendPasswordResetEmailMock,
+  isSmtpConfigured: vi.fn().mockReturnValue(true),
+}));
 import { clearDbClientForTests, dbQuery } from "./db/index.js";
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import { resetWriteRateLimiterState } from "./middlewares/rate-limit.middleware.js";
@@ -16,8 +25,10 @@ describe("auth — password reset", () => {
   });
 
   beforeEach(async () => {
+    sendPasswordResetEmailMock.mockResolvedValue(undefined);
     resetLoginProtectionState();
     resetWriteRateLimiterState();
+    await dbQuery("DELETE FROM email_notifications");
     await dbQuery("DELETE FROM password_reset_tokens");
     await dbQuery("DELETE FROM refresh_tokens");
     await dbQuery("DELETE FROM users");
@@ -75,6 +86,41 @@ describe("auth — password reset", () => {
     expect(row.token_hash).toHaveLength(64); // SHA-256 hex
     expect(row.used_at).toBeNull();
     expect(new Date(row.expires_at) > new Date()).toBe(true);
+  });
+
+  it("retorna 500 quando sendPasswordResetEmail falha (SMTP error)", async () => {
+    await registerUser();
+    sendPasswordResetEmailMock.mockRejectedValueOnce(new Error("SMTP connection refused"));
+
+    const res = await requestReset("user@test.dev");
+    expect(res.status).toBe(500);
+  });
+
+  it("cancela o token quando envio de email falha", async () => {
+    await registerUser();
+    sendPasswordResetEmailMock.mockRejectedValueOnce(new Error("SMTP timeout"));
+
+    await requestReset("user@test.dev");
+
+    const result = await dbQuery(
+      "SELECT used_at FROM password_reset_tokens ORDER BY created_at DESC LIMIT 1",
+    );
+    expect(result.rows.length).toBe(1);
+    expect(result.rows[0].used_at).not.toBeNull();
+  });
+
+  it("registra notificacao com status=failed quando envio de email falha", async () => {
+    await registerUser();
+    sendPasswordResetEmailMock.mockRejectedValueOnce(new Error("SMTP timeout"));
+
+    await requestReset("user@test.dev");
+
+    const result = await dbQuery(
+      "SELECT type, status FROM email_notifications ORDER BY sent_at DESC LIMIT 1",
+    );
+    expect(result.rows.length).toBe(1);
+    expect(result.rows[0].type).toBe("password_reset");
+    expect(result.rows[0].status).toBe("failed");
   });
 
   it("nova solicitacao invalida token ativo anterior", async () => {

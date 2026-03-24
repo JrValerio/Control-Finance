@@ -322,7 +322,15 @@ export const requestPasswordReset = async ({ email } = {}) => {
     [userId, tokenHash, expiresAt.toISOString()],
   );
 
-  return { rawToken, email: normalizedEmail };
+  return { rawToken, email: normalizedEmail, userId };
+};
+
+export const cancelPasswordResetToken = async (rawToken) => {
+  const tokenHash = hashToken(rawToken);
+  await dbQuery(
+    `UPDATE password_reset_tokens SET used_at = NOW() WHERE token_hash = $1`,
+    [tokenHash],
+  );
 };
 
 export const resetPassword = async ({ token, newPassword } = {}) => {
