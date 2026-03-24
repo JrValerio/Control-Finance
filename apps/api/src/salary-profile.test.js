@@ -339,6 +339,49 @@ describe("salary-profile", () => {
     expect(res.body.calculation.taxAnnual).toBeNull();
   });
 
+  it("free user beneficiario mantem consignacoes e limites mensais visiveis", async () => {
+    const email = "sal-paywall-beneficiary-free@test.dev";
+    const token = await registerAndLogin(email);
+
+    await dbQuery(
+      "UPDATE users SET trial_ends_at = '2020-01-01T00:00:00Z' WHERE email = $1",
+      [email],
+    );
+
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Emprestimo", amount: 500, consignacao_type: "loan" });
+
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Cartao", amount: 100, consignacao_type: "card" });
+
+    const res = await request(app)
+      .get("/salary/profile")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.calculation).toMatchObject({
+      netAnnual: null,
+      taxAnnual: null,
+      consignacoesMonthly: 600,
+      loanTotal: 500,
+      cardTotal: 100,
+      loanLimitAmount: 1400,
+      cardLimitAmount: 200,
+      isOverLoanLimit: false,
+      isOverCardLimit: false,
+    });
+    expect(res.body.consignacoes).toHaveLength(2);
+  });
+
   it("usuario pro recebe netAnnual e taxAnnual numericos", async () => {
     const email = "sal-paywall-pro@test.dev";
     const token = await registerAndLogin(email);
@@ -363,5 +406,272 @@ describe("salary-profile", () => {
     expect(typeof res.body.calculation.netAnnual).toBe("number");
     expect(typeof res.body.calculation.taxAnnual).toBe("number");
     expect(res.body.calculation.netAnnual).toBeGreaterThan(0);
+  });
+
+  // ─── profile_type ─────────────────────────────────────────────────────────
+
+  it("PUT sem profile_type padrão é clt", async () => {
+    const token = await registerAndLogin("sal-type-default@test.dev");
+    const res = await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 5000 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.profileType).toBe("clt");
+  });
+
+  it("PUT profile_type inss_beneficiary persiste e usa calculadora de benefício", async () => {
+    const token = await registerAndLogin("sal-type-inss@test.dev");
+    const res = await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4958.67, profile_type: "inss_beneficiary", birth_year: 1955 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.profileType).toBe("inss_beneficiary");
+    expect(res.body.birthYear).toBe(1955);
+    // beneficiário tem inssMonthly = 0
+    expect(res.body.calculation.inssMonthly).toBe(0);
+    // líquido mensal reflete o valor recebido, sem descontar IRRF estimado
+    expect(res.body.calculation.netMonthly).toBeCloseTo(4958.67, 2);
+    // consignações incluídas como array vazio
+    expect(res.body.consignacoes).toEqual([]);
+  });
+
+  it("PUT profile_type inválido retorna 422", async () => {
+    const token = await registerAndLogin("sal-type-invalid@test.dev");
+    const res = await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 5000, profile_type: "autonomo" });
+
+    expect(res.status).toBe(422);
+  });
+
+  // ─── Consignações — POST ──────────────────────────────────────────────────
+
+  it("POST /salary/consignacoes bloqueia sem token", async () => {
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .send({ description: "Test", amount: 100, consignacao_type: "loan" });
+    expect(res.status).toBe(401);
+  });
+
+  it("POST /salary/consignacoes retorna 404 se não tem perfil", async () => {
+    const token = await registerAndLogin("sal-consig-noprofile@test.dev");
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "BMG", amount: 300, consignacao_type: "loan" });
+    expectErrorResponseWithRequestId(res, 404, "Perfil salarial não encontrado.");
+  });
+
+  it("POST /salary/consignacoes rejeita perfil clt", async () => {
+    const token = await registerAndLogin("sal-consig-clt@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "clt" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "BMG", amount: 300, consignacao_type: "loan" });
+
+    expectErrorResponseWithRequestId(
+      res,
+      422,
+      "Consignações só podem ser usadas com profile_type 'inss_beneficiary'.",
+    );
+  });
+
+  it("POST /salary/consignacoes cria consignação e retorna shape correto", async () => {
+    const token = await registerAndLogin("sal-consig-create@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "BMG Empréstimo", amount: 456.78, consignacao_type: "loan" });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      description:     "BMG Empréstimo",
+      amount:          456.78,
+      consignacaoType: "loan",
+    });
+    expect(typeof res.body.id).toBe("number");
+  });
+
+  it("GET /salary/profile inclui consignações no cálculo", async () => {
+    const token = await registerAndLogin("sal-consig-calc@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Empréstimo", amount: 500, consignacao_type: "loan" });
+
+    const res = await request(app)
+      .get("/salary/profile")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.consignacoes).toHaveLength(1);
+    expect(res.body.calculation.consignacoesMonthly).toBe(500);
+    expect(res.body.calculation.loanTotal).toBe(500);
+  });
+
+  it("POST /salary/consignacoes valida description vazia", async () => {
+    const token = await registerAndLogin("sal-consig-valdesc@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "", amount: 100, consignacao_type: "loan" });
+
+    expect(res.status).toBe(422);
+  });
+
+  it("POST /salary/consignacoes valida description longa", async () => {
+    const token = await registerAndLogin("sal-consig-vallong@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        description: "A".repeat(101),
+        amount: 100,
+        consignacao_type: "loan",
+      });
+
+    expectErrorResponseWithRequestId(
+      res,
+      422,
+      "description deve ter no máximo 100 caracteres.",
+    );
+  });
+
+  it("POST /salary/consignacoes valida amount negativo", async () => {
+    const token = await registerAndLogin("sal-consig-valamt@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Test", amount: -50, consignacao_type: "loan" });
+
+    expect(res.status).toBe(422);
+  });
+
+  it("POST /salary/consignacoes valida tipo inválido", async () => {
+    const token = await registerAndLogin("sal-consig-valtype@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Test", amount: 100, consignacao_type: "rubrica_invalida" });
+
+    expect(res.status).toBe(422);
+  });
+
+  // ─── Consignações — DELETE ────────────────────────────────────────────────
+
+  it("DELETE /salary/consignacoes/:id bloqueia sem token", async () => {
+    const res = await request(app).delete("/salary/consignacoes/1");
+    expect(res.status).toBe(401);
+  });
+
+  it("DELETE /salary/consignacoes/:id remove consignação existente", async () => {
+    const token = await registerAndLogin("sal-consig-delete@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const created = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Teste", amount: 200, consignacao_type: "card" });
+
+    const consigId = created.body.id;
+
+    const res = await request(app)
+      .delete(`/salary/consignacoes/${consigId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(204);
+
+    // Confirm removed from GET profile
+    const profile = await request(app)
+      .get("/salary/profile")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(profile.body.consignacoes).toHaveLength(0);
+  });
+
+  it("DELETE /salary/consignacoes/:id retorna 404 para id inexistente", async () => {
+    const token = await registerAndLogin("sal-consig-del404@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .delete("/salary/consignacoes/99999")
+      .set("Authorization", `Bearer ${token}`);
+
+    expectErrorResponseWithRequestId(res, 404, "Consignação não encontrada.");
+  });
+
+  it("DELETE não permite remover consignação de outro usuário", async () => {
+    const tokenA = await registerAndLogin("sal-consig-own-a@test.dev");
+    const tokenB = await registerAndLogin("sal-consig-own-b@test.dev");
+
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const created = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .send({ description: "Empréstimo A", amount: 300, consignacao_type: "loan" });
+
+    const consigId = created.body.id;
+
+    // User B tries to delete User A's consignação (B has no profile → 404)
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${tokenB}`)
+      .send({ gross_salary: 5000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .delete(`/salary/consignacoes/${consigId}`)
+      .set("Authorization", `Bearer ${tokenB}`);
+
+    expect(res.status).toBe(404);
   });
 });
