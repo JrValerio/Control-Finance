@@ -6,6 +6,7 @@ import {
   setUserPassword,
   linkGoogleIdentity,
   requestPasswordReset,
+  cancelPasswordResetToken,
   resetPassword,
   issueAuthToken,
   issueRefreshToken,
@@ -14,6 +15,8 @@ import {
   randomUUID,
 } from "../services/auth.service.js";
 import { sendPasswordResetEmail } from "../services/email.service.js";
+import { logError } from "../observability/logger.js";
+import { dbQuery } from "../db/index.js";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import {
   bruteForceLoginGuard,
@@ -158,14 +161,31 @@ router.post("/forgot-password", loginRateLimiter, async (req, res, next) => {
     if (result) {
       const appUrl = (process.env.APP_URL || "http://localhost:5173").replace(/\/$/, "");
       const resetUrl = `${appUrl}/reset-password?token=${result.rawToken}`;
-      // Fire-and-forget — email failure must not reveal whether the email exists
-      void sendPasswordResetEmail({ email: result.email, resetUrl }).catch((err) => {
-        console.error("[email] password_reset send error:", err?.message);
-      });
+      try {
+        await sendPasswordResetEmail({ email: result.email, resetUrl });
+      } catch (emailErr) {
+        await cancelPasswordResetToken(result.rawToken);
+        logError({
+          event: "password_reset_email_failed",
+          userId: result.userId,
+          email: result.email,
+          error: emailErr?.message,
+        });
+        await dbQuery(
+          `INSERT INTO email_notifications (user_id, type, status, metadata)
+           VALUES ($1, 'password_reset', 'failed', $2)`,
+          [result.userId, JSON.stringify({ error: emailErr?.message })],
+        );
+        return res
+          .status(500)
+          .json({ message: "Falha ao enviar email de recuperacao. Tente novamente." });
+      }
     }
 
     // Always neutral — never reveal whether the email is registered
-    res.status(200).json({ message: "Se o email estiver cadastrado, enviaremos as instrucoes." });
+    return res
+      .status(200)
+      .json({ message: "Se o email estiver cadastrado, enviaremos as instrucoes." });
   } catch (error) {
     next(error);
   }
