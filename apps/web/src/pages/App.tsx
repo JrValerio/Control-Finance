@@ -167,7 +167,7 @@ const MONTH_VALUE_REGEX = /^\d{4}-(0[1-9]|1[0-2])$/;
 const MOM_TONE_CLASSNAMES: Record<MonthOverMonthTone, string> = {
   good: "text-green-200",
   bad: "text-red-200",
-  neutral: "text-gray-200",
+  neutral: "text-ui-200",
 };
 const DEFAULT_MONTHLY_BUDGETS: MonthlyBudget[] = [];
 const TREND_MONTHS = 6;
