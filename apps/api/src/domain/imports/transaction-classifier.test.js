@@ -72,6 +72,22 @@ describe("transaction classifier", () => {
     expect(classificationIndex.keywordMapsByType.get("Entrada")).toBeInstanceOf(Map);
   });
 
+  it("retorna string vazia quando lista de categorias e vazia", () => {
+    const category = suggestCategoryNameForImportedRow(
+      { type: "Saida", description: "PIX QRS UBER DO BRA", notes: "", category: "" },
+      [],
+    );
+    expect(category).toBe("");
+  });
+
+  it("retorna string vazia quando descricao nao casa com nenhuma categoria", () => {
+    const category = suggestCategoryNameForImportedRow(
+      { type: "Saida", description: "LANCAMENTO CONTABIL ZZZ", notes: "", category: "" },
+      categories,
+    );
+    expect(category).toBe("");
+  });
+
   it("aplica sugestao no shape das linhas importadas", () => {
     const rows = applySmartClassification(
       [
@@ -91,5 +107,10 @@ describe("transaction classifier", () => {
     );
 
     expect(rows[0].raw.category).toBe("Transporte");
+  });
+
+  it("retorna array vazio sem crash quando rows e vazio", () => {
+    const rows = applySmartClassification([], categories);
+    expect(rows).toEqual([]);
   });
 });
