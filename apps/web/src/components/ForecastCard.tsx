@@ -178,7 +178,7 @@ const ForecastCard = ({
               <p className="mt-1 text-xs text-cf-text-secondary">
                 {txCountSinceFreeze}{" "}
                 {txCountSinceFreeze === 1 ? "transação registrada" : "transações registradas"} desde
-                entao.
+                então.
               </p>
             ) : null}
           </div>

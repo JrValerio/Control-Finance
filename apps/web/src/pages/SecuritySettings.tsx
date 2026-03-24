@@ -120,9 +120,9 @@ const SecuritySettings = ({
         <section className="rounded border border-cf-border bg-cf-surface p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold text-cf-text-primary">Settings - Seguranca</h1>
+              <h1 className="text-xl font-semibold text-cf-text-primary">Settings - Segurança</h1>
               <p className="mt-1 text-sm text-cf-text-secondary">
-                Gerencie sua senha e metodos de acesso vinculados.
+                Gerencie sua senha e métodos de acesso vinculados.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">

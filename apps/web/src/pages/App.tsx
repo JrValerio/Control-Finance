@@ -808,7 +808,7 @@ const App = ({
     } else {
       setMonthlySummaryCompare(DEFAULT_MONTHLY_SUMMARY_COMPARE);
       setMomError(
-        getApiErrorMessage(compareSummaryResult.reason, "Comparacao mensal indisponivel."),
+        getApiErrorMessage(compareSummaryResult.reason, "Comparação mensal indisponível."),
       );
     }
 
@@ -1690,7 +1690,7 @@ const App = ({
                         onClick={handleOpenSecuritySettings}
                         className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                       >
-                        Seguranca
+                        Segurança
                       </button>
                     ) : null}
                     <button
