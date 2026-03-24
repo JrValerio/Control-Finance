@@ -55,7 +55,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
 
   const handleDryRun = async () => {
     if (!selectedFile) {
-      setErrorMessage("Selecione um arquivo CSV ou PDF.");
+      setErrorMessage("Selecione um arquivo CSV, OFX ou PDF.");
       setSuccessMessage("");
       return;
     }
@@ -148,7 +148,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
         </div>
 
         <p className="mb-4 text-sm text-cf-text-secondary">
-          Envie um CSV ou PDF de extrato para pré-visualizar as transações válidas antes de importar.
+          Envie um CSV, OFX ou PDF de extrato para pré-visualizar as transações válidas antes de importar.
         </p>
 
         <div className="rounded border border-cf-border bg-cf-surface p-3">
@@ -162,7 +162,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
             ref={fileInputRef}
             id="csv-file-input"
             type="file"
-            accept=".csv,.pdf,text/csv,application/pdf"
+            accept=".csv,.ofx,.pdf,text/csv,application/ofx,application/pdf"
             onChange={(event) => {
               const nextFile = event.target.files?.[0] || null;
               setSelectedFile(nextFile);
@@ -173,7 +173,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
             className="block w-full text-sm text-cf-text-primary file:mr-3 file:rounded file:border file:border-cf-border file:bg-cf-bg-subtle file:px-3 file:py-1 file:text-sm file:font-semibold file:text-cf-text-primary hover:file:bg-cf-border"
           />
           <p className="mt-2 text-xs text-cf-text-secondary">
-            Suporta CSV manual, CSV exportado por banco e PDF com texto selecionável.
+            OFX é o formato preferencial quando o banco oferecer. CSV manual, CSV exportado por banco e PDF com OCR assistido entram como alternativas.
+          </p>
+          <p className="mt-1 text-xs text-cf-text-secondary">
+            Quando possível, a plataforma sugere automaticamente categorias com base nas descrições e nas categorias já cadastradas.
           </p>
         </div>
 

@@ -2117,7 +2117,7 @@ describe("App", () => {
       },
     );
     transactionsService.dryRunImportCsv.mockRejectedValueOnce({
-      response: { data: { message: "Arquivo invalido. Envie um CSV ou PDF de extrato." } },
+      response: { data: { message: "Arquivo invalido. Envie um CSV, OFX ou PDF de extrato." } },
     });
 
     render(<App />);
@@ -2126,7 +2126,7 @@ describe("App", () => {
     await user.upload(screen.getByLabelText("Arquivo do extrato"), csvFile);
     await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
-    expect(await screen.findByText("Arquivo invalido. Envie um CSV ou PDF de extrato.")).toBeInTheDocument();
+    expect(await screen.findByText("Arquivo invalido. Envie um CSV, OFX ou PDF de extrato.")).toBeInTheDocument();
   });
 
   it("exibe orientacao para sessao expirada durante commit", async () => {

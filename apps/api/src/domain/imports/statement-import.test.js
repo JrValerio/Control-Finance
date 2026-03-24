@@ -89,6 +89,66 @@ describe("statement import parser", () => {
     ]);
   });
 
+  it("entende extrato mensal com data curta e sinal negativo no fim", () => {
+    const text = [
+      "extrato mensal ag 3380 cc 59974-0 dez 2022",
+      "06/12 Sispag Salários 960.903,71-",
+      "Sispag Diversos TED 13.624,52-",
+      "Sispag 2250JUCEMG 664.659,76",
+      "Sispag 2250JUCEMG 314.143,10",
+      "Saldo em C/C 0,00",
+    ].join("\n");
+
+    const rows = parseGenericBankStatementPdfText(text);
+
+    expect(rows).toEqual([
+      {
+        line: 2,
+        raw: {
+          date: "2022-12-06",
+          type: "Saida",
+          value: "960903.71",
+          description: "Sispag Salários",
+          notes: "",
+          category: "",
+        },
+      },
+      {
+        line: 3,
+        raw: {
+          date: "2022-12-06",
+          type: "Saida",
+          value: "13624.52",
+          description: "Sispag Diversos TED",
+          notes: "",
+          category: "",
+        },
+      },
+      {
+        line: 4,
+        raw: {
+          date: "2022-12-06",
+          type: "Entrada",
+          value: "664659.76",
+          description: "Sispag 2250JUCEMG",
+          notes: "",
+          category: "",
+        },
+      },
+      {
+        line: 5,
+        raw: {
+          date: "2022-12-06",
+          type: "Entrada",
+          value: "314143.10",
+          description: "Sispag 2250JUCEMG",
+          notes: "",
+          category: "",
+        },
+      },
+    ]);
+  });
+
   it("extrai creditos do INSS com liquido e resumo de consignacoes nas notas", () => {
     const text = [
       "INSS - INSTITUTO NACIONAL DO SEGURO SOCIAL",

@@ -62,7 +62,7 @@ describe("ImportCsvModal", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
-    expect(screen.getByText("Selecione um arquivo CSV ou PDF.")).toBeInTheDocument();
+    expect(screen.getByText("Selecione um arquivo CSV, OFX ou PDF.")).toBeInTheDocument();
     expect(transactionsService.dryRunImportCsv).not.toHaveBeenCalled();
   });
 

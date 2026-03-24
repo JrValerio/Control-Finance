@@ -318,7 +318,11 @@ describe("transaction imports", () => {
         contentType: "text/plain",
       });
 
-    expectErrorResponseWithRequestId(response, 400, "Arquivo invalido. Envie um CSV ou PDF de extrato.");
+    expectErrorResponseWithRequestId(
+      response,
+      400,
+      "Arquivo invalido. Envie um CSV, OFX ou PDF de extrato.",
+    );
   });
 
   it("POST /transactions/import/dry-run retorna 413 quando arquivo excede limite", async () => {
@@ -408,8 +412,55 @@ describe("transaction imports", () => {
     expectErrorResponseWithRequestId(
       response,
       400,
-      "Arquivo nao reconhecido. Envie um CSV manual com cabecalho date,type,value,description,notes,category ou um CSV/PDF de extrato.",
+      "Arquivo nao reconhecido. Envie um CSV manual com cabecalho date,type,value,description,notes,category ou um CSV, OFX ou PDF de extrato.",
     );
+  });
+
+  it("POST /transactions/import/dry-run aceita OFX como formato preferencial de extrato", async () => {
+    const token = await registerAndLogin("import-bank-ofx@controlfinance.dev");
+    await makeProUser("import-bank-ofx@controlfinance.dev");
+    const ofxFile = csvFile(
+      [
+        "OFXHEADER:100",
+        "DATA:OFXSGML",
+        "<OFX>",
+        "<BANKTRANLIST>",
+        "<STMTTRN>",
+        "<TRNTYPE>CREDIT",
+        "<DTPOSTED>20260205000000[-3:BRT]",
+        "<TRNAMT>2812.99",
+        "<FITID>ABC123",
+        "<MEMO>PGTO INSS 01776829899",
+        "</STMTTRN>",
+        "<STMTTRN>",
+        "<TRNTYPE>DEBIT",
+        "<DTPOSTED>20260206000000[-3:BRT]",
+        "<TRNAMT>-15.98",
+        "<FITID>XYZ456",
+        "<NAME>PIX QRS UBER DO BRA",
+        "</STMTTRN>",
+      ].join("\n"),
+      "itau-extrato.ofx",
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", ofxFile.buffer, {
+        filename: ofxFile.fileName,
+        contentType: "application/ofx",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary).toEqual({
+      totalRows: 2,
+      validRows: 2,
+      invalidRows: 0,
+      income: 2812.99,
+      expense: 15.98,
+    });
+    expect(response.body.rows[0].raw.description).toBe("PGTO INSS 01776829899");
+    expect(response.body.rows[1].raw.description).toBe("PIX QRS UBER DO BRA");
   });
 
   it("POST /transactions/import/dry-run aceita CSV de extrato bancario com colunas flexiveis", async () => {
@@ -485,6 +536,44 @@ describe("transaction imports", () => {
         errors: [],
       },
     ]);
+  });
+
+  it("POST /transactions/import/dry-run auto-classifica extrato usando categorias existentes", async () => {
+    const token = await registerAndLogin("import-bank-smart-category@controlfinance.dev");
+    await makeProUser("import-bank-smart-category@controlfinance.dev");
+
+    const benefitsCategory = await request(app)
+      .post("/categories")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Beneficios" });
+
+    const transportCategory = await request(app)
+      .post("/categories")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Transporte" });
+
+    const statementCsv = csvFile(
+      [
+        "Data;Historico;Valor",
+        "05/02/2026;PGTO INSS 01776829899;2812,99",
+        "06/02/2026;PIX QRS UBER DO BRA;-15,98",
+      ].join("\n"),
+      "itau-extrato.csv",
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", statementCsv.buffer, {
+        filename: statementCsv.fileName,
+        contentType: "text/csv",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.rows[0].raw.category).toBe("Beneficios");
+    expect(response.body.rows[0].normalized.categoryId).toBe(benefitsCategory.body.id);
+    expect(response.body.rows[1].raw.category).toBe("Transporte");
+    expect(response.body.rows[1].normalized.categoryId).toBe(transportCategory.body.id);
   });
 
   it("POST /transactions/import/dry-run valida linhas e persiste sessao", async () => {

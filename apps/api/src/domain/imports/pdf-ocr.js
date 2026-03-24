@@ -1,0 +1,70 @@
+import { PDFParse } from "pdf-parse";
+import { createWorker } from "tesseract.js";
+
+const OCR_LANGUAGES = "por+eng";
+
+export const shouldRunPdfOcrFallback = (text) => {
+  const normalizedText = String(text || "").replace(/\s+/g, " ").trim();
+
+  if (!normalizedText || normalizedText.length < 60) {
+    return true;
+  }
+
+  const signalCount =
+    (normalizedText.match(/\d{2}\/\d{2}\/\d{4}/g) || []).length +
+    (normalizedText.match(/\d{2}\/\d{4}/g) || []).length +
+    (normalizedText.match(/R\$\s*[\d.,]+/g) || []).length +
+    (normalizedText.match(/\b\d[\d.]*,\d{2}\b/g) || []).length;
+
+  return signalCount < 3;
+};
+
+export const extractTextFromPdfWithOcr = async (
+  buffer,
+  dependencies = {
+    PDFParseCtor: PDFParse,
+    createWorkerFn: createWorker,
+  },
+) => {
+  const { PDFParseCtor, createWorkerFn } = dependencies;
+  const parser = new PDFParseCtor({ data: buffer });
+
+  try {
+    const textResult = await parser.getText();
+    const directText = String(textResult?.text || "");
+
+    if (!shouldRunPdfOcrFallback(directText)) {
+      return directText;
+    }
+
+    const screenshots = await parser.getScreenshot({
+      first: 3,
+      scale: 2,
+      imageDataUrl: false,
+      imageBuffer: true,
+    });
+    const pages = Array.isArray(screenshots?.pages) ? screenshots.pages : [];
+
+    if (pages.length === 0) {
+      return directText;
+    }
+
+    const worker = await createWorkerFn(OCR_LANGUAGES);
+
+    try {
+      const ocrTexts = [];
+
+      for (const page of pages) {
+        const result = await worker.recognize(page.data);
+        ocrTexts.push(String(result?.data?.text || ""));
+      }
+
+      const combinedOcrText = ocrTexts.join("\n").trim();
+      return combinedOcrText || directText;
+    } finally {
+      await worker.terminate();
+    }
+  } finally {
+    await parser.destroy();
+  }
+};

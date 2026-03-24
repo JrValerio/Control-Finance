@@ -63,15 +63,26 @@ const ensureValidImportFile = (file) => {
   const mimeType = String(file.mimetype || "").toLowerCase();
   const hasCsvExtension = extension === ".csv";
   const hasPdfExtension = extension === ".pdf";
+  const hasOfxExtension = extension === ".ofx";
   const hasCsvMimeType = ["text/csv", "application/csv", "application/vnd.ms-excel"].includes(mimeType);
   const hasPdfMimeType = ["application/pdf"].includes(mimeType);
+  const hasOfxMimeType = ["application/ofx", "application/x-ofx", "application/octet-stream"].includes(
+    mimeType,
+  );
 
   if (
-    (!hasCsvExtension && !hasCsvMimeType && !hasPdfExtension && !hasPdfMimeType) ||
+    (
+      !hasCsvExtension &&
+      !hasCsvMimeType &&
+      !hasPdfExtension &&
+      !hasPdfMimeType &&
+      !hasOfxExtension &&
+      !hasOfxMimeType
+    ) ||
     !file.buffer ||
     file.buffer.length === 0
   ) {
-    throw createError(400, "Arquivo invalido. Envie um CSV ou PDF de extrato.");
+    throw createError(400, "Arquivo invalido. Envie um CSV, OFX ou PDF de extrato.");
   }
 };
 

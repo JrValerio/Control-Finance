@@ -7,9 +7,13 @@ import {
   TRANSACTION_TYPE_EXIT,
 } from "../constants/transaction-types.js";
 import {
+  parseOfxRows,
+} from "../domain/imports/ofx-import.js";
+import {
   parseStatementCsvRows,
   parseStatementPdfRows,
 } from "../domain/imports/statement-import.js";
+import { applySmartClassification } from "../domain/imports/transaction-classifier.js";
 import { normalizeCategoryNameKey } from "./categories-normalization.js";
 
 const CATEGORY_ENTRY = TRANSACTION_TYPE_ENTRY;
@@ -26,7 +30,7 @@ const ALLOWED_HEADERS = new Set([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]);
 const HEADER_ERROR_MESSAGE =
   "CSV invalido. Cabecalho esperado: date,type,value,description,notes,category";
 const IMPORT_FORMAT_ERROR_MESSAGE =
-  "Arquivo nao reconhecido. Envie um CSV manual com cabecalho date,type,value,description,notes,category ou um CSV/PDF de extrato.";
+  "Arquivo nao reconhecido. Envie um CSV manual com cabecalho date,type,value,description,notes,category ou um CSV, OFX ou PDF de extrato.";
 
 const createError = (status, message) => {
   const error = new Error(message);
@@ -239,6 +243,14 @@ const parseImportFileRows = async (importFile) => {
     }
   }
 
+  if (extension === ".ofx") {
+    try {
+      return parseOfxRows(fileBuffer);
+    } catch (error) {
+      throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no OFX.");
+    }
+  }
+
   try {
     return parseCsvFileRows(fileBuffer);
   } catch (error) {
@@ -361,7 +373,7 @@ const resolveCategoryId = (value, categoryMap) => {
 const loadCategoryMapForUser = async (userId) => {
   const result = await dbQuery(
     `
-      SELECT id, normalized_name
+      SELECT id, name, normalized_name
       FROM categories
       WHERE user_id = $1
         AND deleted_at IS NULL
@@ -373,6 +385,24 @@ const loadCategoryMapForUser = async (userId) => {
     categoryMap.set(normalizeCategoryNameKey(row.normalized_name), Number(row.id));
     return categoryMap;
   }, new Map());
+};
+
+const loadCategoriesForUser = async (userId) => {
+  const result = await dbQuery(
+    `
+      SELECT id, name, normalized_name
+      FROM categories
+      WHERE user_id = $1
+        AND deleted_at IS NULL
+    `,
+    [userId],
+  );
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    name: row.name,
+    normalizedName: row.normalized_name,
+  }));
 };
 
 const normalizeCsvRow = (rawRow, categoryMap) => {
@@ -541,8 +571,12 @@ const assertSessionReadyForCommit = (session, userId) => {
 
 export const dryRunTransactionsImportForUser = async (userId, importFile) => {
   const parsedRows = await parseImportFileRows(importFile);
-  const categoryMap = await loadCategoryMapForUser(userId);
-  const rows = parsedRows.map((row) => {
+  const [categoryMap, categories] = await Promise.all([
+    loadCategoryMapForUser(userId),
+    loadCategoriesForUser(userId),
+  ]);
+  const classifiedRows = applySmartClassification(parsedRows, categories);
+  const rows = classifiedRows.map((row) => {
     const normalizedRow = normalizeCsvRow(row.raw, categoryMap);
 
     return {

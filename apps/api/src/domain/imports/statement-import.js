@@ -1,5 +1,5 @@
 import { parse as parseCsv } from "csv-parse/sync";
-import { PDFParse } from "pdf-parse";
+import { extractTextFromPdfWithOcr } from "./pdf-ocr.js";
 
 const STATEMENT_ROW_MAX = 2000;
 const BALANCE_TERMS = [
@@ -10,6 +10,8 @@ const BALANCE_TERMS = [
   "saldo final",
   "saldo",
 ];
+const MONTH_NAME_REGEX =
+  /\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-z]*\s+(\d{4})\b/i;
 
 const HEADER_ALIASES = {
   date: [
@@ -90,6 +92,9 @@ const parseSignedAmount = (value) => {
   } else if (/c$/i.test(numericValue)) {
     signal = 1;
     numericValue = numericValue.slice(0, -1);
+  } else if (numericValue.endsWith("-")) {
+    signal = -1;
+    numericValue = numericValue.slice(0, -1);
   }
 
   if (numericValue.startsWith("-")) {
@@ -124,7 +129,18 @@ const parseSignedAmount = (value) => {
   return Number((parsedValue * signal).toFixed(2));
 };
 
-const toIsoDateString = (value) => {
+const detectStatementYear = (text) => {
+  const monthHeaderMatch = String(text || "").match(MONTH_NAME_REGEX);
+
+  if (monthHeaderMatch) {
+    return monthHeaderMatch[2];
+  }
+
+  const fullDateMatch = String(text || "").match(/\b\d{2}\/\d{2}\/(\d{4})\b/);
+  return fullDateMatch ? fullDateMatch[1] : "";
+};
+
+const toIsoDateString = (value, fallbackYear = "") => {
   const normalizedValue = collapseWhitespace(value);
 
   if (!normalizedValue) {
@@ -136,13 +152,18 @@ const toIsoDateString = (value) => {
   }
 
   const brDateMatch = normalizedValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-
-  if (!brDateMatch) {
-    return normalizedValue;
+  if (brDateMatch) {
+    const [, dayPart, monthPart, yearPart] = brDateMatch;
+    return `${yearPart}-${monthPart}-${dayPart}`;
   }
 
-  const [, dayPart, monthPart, yearPart] = brDateMatch;
-  return `${yearPart}-${monthPart}-${dayPart}`;
+  const shortDateMatch = normalizedValue.match(/^(\d{2})\/(\d{2})$/);
+  if (shortDateMatch && fallbackYear) {
+    const [, dayPart, monthPart] = shortDateMatch;
+    return `${fallbackYear}-${monthPart}-${dayPart}`;
+  }
+
+  return normalizedValue;
 };
 
 const toNormalizedType = (value) => {
@@ -308,15 +329,26 @@ export const parseGenericBankStatementPdfText = (text) => {
     .filter(Boolean);
 
   const rows = [];
+  const statementYear = detectStatementYear(text);
+  let currentDate = "";
 
   lines.forEach((line, index) => {
-    const match = line.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+(-?\d[\d.]*,\d{2})$/);
+    const datedMatch = line.match(/^(\d{2}\/\d{2}(?:\/\d{4})?)\s+(.+?)\s+(-?\d[\d.]*,\d{2}-?)$/);
+    const continuedMatch = !datedMatch ? line.match(/^(.+?)\s+(-?\d[\d.]*,\d{2}-?)$/) : null;
+    let datePart = "";
+    let descriptionPart = "";
+    let amountPart = "";
 
-    if (!match) {
+    if (datedMatch) {
+      [, datePart, descriptionPart, amountPart] = datedMatch;
+      currentDate = datePart;
+    } else if (continuedMatch && currentDate) {
+      [, descriptionPart, amountPart] = continuedMatch;
+      datePart = currentDate;
+    } else {
       return;
     }
 
-    const [, datePart, descriptionPart, amountPart] = match;
     const description = collapseWhitespace(descriptionPart);
 
     if (!description || isBalanceDescription(description)) {
@@ -331,7 +363,7 @@ export const parseGenericBankStatementPdfText = (text) => {
     rows.push({
       line: index + 1,
       raw: buildRawRow({
-        date: toIsoDateString(datePart),
+        date: toIsoDateString(datePart, statementYear),
         type: parsedAmount < 0 ? "Saida" : "Entrada",
         value: formatValue(Math.abs(parsedAmount)),
         description,
@@ -389,7 +421,10 @@ export const parseInssCreditHistoryPdfText = (text) => {
     }
 
     const blockText = blockLines.join(" ");
-    const paymentDates = blockText.match(/\d{2}\/\d{2}\/\d{4}/g) || [];
+    const paymentDates = blockLines
+      .slice(0, 4)
+      .join(" ")
+      .match(/\d{2}\/\d{2}\/\d{4}/g) || [];
     const paymentDate = paymentDates[paymentDates.length - 1] || "";
     const grossMatch = blockText.match(/101 VALOR TOTAL DE MR DO PERIODO R\$\s*([\d.,]+)/i);
     const grossAmount = grossMatch ? parseSignedAmount(grossMatch[1]) : null;
@@ -425,16 +460,7 @@ export const parseInssCreditHistoryPdfText = (text) => {
   return finalizeStatementRows(rows);
 };
 
-export const extractTextFromPdfBuffer = async (buffer) => {
-  const parser = new PDFParse({ data: buffer });
-
-  try {
-    const result = await parser.getText();
-    return String(result?.text || "");
-  } finally {
-    await parser.destroy();
-  }
-};
+export const extractTextFromPdfBuffer = async (buffer) => extractTextFromPdfWithOcr(buffer);
 
 export const parseStatementPdfRows = async (buffer) => {
   const text = await extractTextFromPdfBuffer(buffer);
