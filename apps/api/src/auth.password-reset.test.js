@@ -4,7 +4,7 @@ import app from "./app.js";
 import { clearDbClientForTests, dbQuery } from "./db/index.js";
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import { resetWriteRateLimiterState } from "./middlewares/rate-limit.middleware.js";
-import { setupTestDb, extractAccessToken } from "./test-helpers.js";
+import { setupTestDb } from "./test-helpers.js";
 
 describe("auth — password reset", () => {
   beforeAll(async () => {
@@ -208,21 +208,15 @@ describe("auth — password reset", () => {
   });
 
   it("revoga todos os refresh tokens ativos apos reset", async () => {
-    // Register and login to get a refresh token in the DB
-    const loginRes = await request(app)
-      .post("/auth/login")
-      .send({ email: "user@test.dev", password: "Senha123" });
-
-    // Register first, then login
     await request(app)
       .post("/auth/register")
       .send({ email: "user@test.dev", password: "Senha123" });
 
-    const loginRes2 = await request(app)
+    const loginRes = await request(app)
       .post("/auth/login")
       .send({ email: "user@test.dev", password: "Senha123" });
 
-    expect(loginRes2.status).toBe(200);
+    expect(loginRes.status).toBe(200);
 
     // Verify a refresh token exists and is active
     const beforeReset = await dbQuery(
