@@ -4,6 +4,7 @@ import { calculateNetSalary } from "../domain/salary/salary.calculator.js";
 
 const PAYMENT_DAY_MIN = 1;
 const PAYMENT_DAY_MAX = 31;
+const CONSIGNACAO_DESCRIPTION_MAX_LENGTH = 100;
 
 const createError = (status, message) => {
   const err = new Error(message);
@@ -63,6 +64,12 @@ const validateConsignacaoInput = ({ description, amount, consignacaoType }) => {
   if (!description || !String(description).trim()) {
     throw createError(422, "description é obrigatório.");
   }
+  if (String(description).trim().length > CONSIGNACAO_DESCRIPTION_MAX_LENGTH) {
+    throw createError(
+      422,
+      `description deve ter no máximo ${CONSIGNACAO_DESCRIPTION_MAX_LENGTH} caracteres.`,
+    );
+  }
   const amt = Number(amount);
   if (!Number.isFinite(amt) || amt <= 0) {
     throw createError(422, "amount deve ser um número positivo.");
@@ -94,6 +101,15 @@ const toConsignacao = (row) => ({
   consignacaoType:  row.consignacao_type,
   createdAt:        row.created_at,
 });
+
+const assertBeneficiaryProfile = (profile) => {
+  if (profile.profileType !== "inss_beneficiary") {
+    throw createError(
+      422,
+      "Consignações só podem ser usadas com profile_type 'inss_beneficiary'.",
+    );
+  }
+};
 
 const withCalculation = (profile, consignacoes = []) => {
   let calculation;
@@ -219,7 +235,9 @@ export const addConsignacaoForUser = async (userId, body = {}) => {
   if (!profileResult.rows[0]) {
     throw createError(404, "Perfil salarial não encontrado.");
   }
-  const profileId = Number(profileResult.rows[0].id);
+  const profile = toProfile(profileResult.rows[0]);
+  assertBeneficiaryProfile(profile);
+  const profileId = profile.id;
 
   const result = await dbQuery(INSERT_CONSIGNACAO_SQL, [
     profileId,

@@ -12,7 +12,8 @@ const router = Router();
 
 router.use(authMiddleware);
 
-// Returns the profile with annual fields nulled out for free users.
+// Only the annual projection is paywalled; monthly breakdown and
+// beneficiary consignacao details remain visible on the free plan.
 const applyAnnualGate = (profile, hasAnnualAccess) => {
   if (hasAnnualAccess) return profile;
   return {

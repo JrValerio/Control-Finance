@@ -25,6 +25,7 @@ interface BenefitFormState {
 
 const EMPTY_CLT: CltFormState = { grossSalary: "", dependents: "0", paymentDay: "5" };
 const EMPTY_BENEFIT: BenefitFormState = { grossBenefit: "", birthYear: "", dependents: "0", paymentDay: "5" };
+const CONSIGNACAO_DESCRIPTION_MAX_LENGTH = 100;
 
 const profileToCltForm = (p: SalaryProfile): CltFormState => ({
   grossSalary: String(p.grossSalary),
@@ -347,6 +348,10 @@ function BenefitProfileView({
       setConsigError("Informe a descrição.");
       return;
     }
+    if (consigForm.description.trim().length > CONSIGNACAO_DESCRIPTION_MAX_LENGTH) {
+      setConsigError(`Descrição deve ter no máximo ${CONSIGNACAO_DESCRIPTION_MAX_LENGTH} caracteres.`);
+      return;
+    }
     if (!amt || amt <= 0) {
       setConsigError("Informe um valor positivo.");
       return;
@@ -409,10 +414,10 @@ function BenefitProfileView({
       {/* Breakdown */}
       <div className="space-y-1.5">
         <BreakdownRow label="Benefício bruto"       value={calculation.grossMonthly}                           highlight />
-        <BreakdownRow label="(-) IRRF"              value={calculation.irrfMonthly}                            negative />
         <BreakdownRow label="(-) Consignações"      value={calculation.consignacoesMonthly ?? 0}               negative />
         <div className="my-1.5 border-t border-cf-border" />
         <BreakdownRow label="= Líquido mensal"      value={calculation.netMonthly}                             highlight />
+        <BreakdownRow label="IRRF estimado"         value={calculation.irrfMonthly} />
       </div>
 
       {/* Margin alerts */}
@@ -510,6 +515,7 @@ function BenefitProfileView({
                 <input
                   id="consig-desc"
                   type="text"
+                  maxLength={CONSIGNACAO_DESCRIPTION_MAX_LENGTH}
                   value={consigForm.description}
                   onChange={(e) => setConsigForm((f) => ({ ...f, description: e.target.value }))}
                   placeholder="Ex: BMG Empréstimo"

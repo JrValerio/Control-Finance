@@ -55,8 +55,8 @@ const buildBenefitProfile = (overrides: Partial<SalaryProfile> = {}): SalaryProf
     consignacoesMonthly: 0,
     loanTotal:           0,
     cardTotal:           0,
-    netMonthly:          4951.09,
-    netAnnual:           59413.08,
+    netMonthly:          4958.67,
+    netAnnual:           59504.04,
     taxAnnual:           90.96,
     loanLimitAmount:     1735.53,
     cardLimitAmount:     247.93,
@@ -368,12 +368,12 @@ describe("SalaryWidget — perfil beneficiário INSS", () => {
     });
   });
 
-  it("exibe breakdown: Benefício bruto, IRRF, Consignações", async () => {
+  it("exibe breakdown: Benefício bruto, IRRF estimado e Consignações", async () => {
     renderWidget();
     await waitFor(() => {
       expect(screen.getByText("Benefício bruto")).toBeInTheDocument();
     });
-    expect(screen.getByText("(-) IRRF")).toBeInTheDocument();
+    expect(screen.getByText("IRRF estimado")).toBeInTheDocument();
     expect(screen.getByText("(-) Consignações")).toBeInTheDocument();
   });
 
@@ -413,6 +413,7 @@ describe("SalaryWidget — beneficiário com consignações", () => {
       consignacoesMonthly: 556.78,
       loanTotal:           456.78,
       cardTotal:           100.00,
+      netMonthly:          4401.89,
       isOverLoanLimit:     false,
       isOverCardLimit:     false,
     },
@@ -498,6 +499,7 @@ describe("SalaryWidget — adicionar consignação", () => {
     await user.click(screen.getByTestId("add-consignacao-btn"));
 
     expect(screen.getByLabelText("Descrição")).toBeInTheDocument();
+    expect(screen.getByLabelText("Descrição")).toHaveAttribute("maxLength", "100");
     expect(screen.getByLabelText("Valor (R$)")).toBeInTheDocument();
     expect(screen.getByLabelText("Tipo")).toBeInTheDocument();
   });

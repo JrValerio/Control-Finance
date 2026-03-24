@@ -339,6 +339,49 @@ describe("salary-profile", () => {
     expect(res.body.calculation.taxAnnual).toBeNull();
   });
 
+  it("free user beneficiario mantem consignacoes e limites mensais visiveis", async () => {
+    const email = "sal-paywall-beneficiary-free@test.dev";
+    const token = await registerAndLogin(email);
+
+    await dbQuery(
+      "UPDATE users SET trial_ends_at = '2020-01-01T00:00:00Z' WHERE email = $1",
+      [email],
+    );
+
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Emprestimo", amount: 500, consignacao_type: "loan" });
+
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Cartao", amount: 100, consignacao_type: "card" });
+
+    const res = await request(app)
+      .get("/salary/profile")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.calculation).toMatchObject({
+      netAnnual: null,
+      taxAnnual: null,
+      consignacoesMonthly: 600,
+      loanTotal: 500,
+      cardTotal: 100,
+      loanLimitAmount: 1400,
+      cardLimitAmount: 200,
+      isOverLoanLimit: false,
+      isOverCardLimit: false,
+    });
+    expect(res.body.consignacoes).toHaveLength(2);
+  });
+
   it("usuario pro recebe netAnnual e taxAnnual numericos", async () => {
     const email = "sal-paywall-pro@test.dev";
     const token = await registerAndLogin(email);
@@ -390,6 +433,8 @@ describe("salary-profile", () => {
     expect(res.body.birthYear).toBe(1955);
     // beneficiário tem inssMonthly = 0
     expect(res.body.calculation.inssMonthly).toBe(0);
+    // líquido mensal reflete o valor recebido, sem descontar IRRF estimado
+    expect(res.body.calculation.netMonthly).toBeCloseTo(4958.67, 2);
     // consignações incluídas como array vazio
     expect(res.body.consignacoes).toEqual([]);
   });
@@ -420,6 +465,25 @@ describe("salary-profile", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ description: "BMG", amount: 300, consignacao_type: "loan" });
     expectErrorResponseWithRequestId(res, 404, "Perfil salarial não encontrado.");
+  });
+
+  it("POST /salary/consignacoes rejeita perfil clt", async () => {
+    const token = await registerAndLogin("sal-consig-clt@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "clt" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "BMG", amount: 300, consignacao_type: "loan" });
+
+    expectErrorResponseWithRequestId(
+      res,
+      422,
+      "Consignações só podem ser usadas com profile_type 'inss_beneficiary'.",
+    );
   });
 
   it("POST /salary/consignacoes cria consignação e retorna shape correto", async () => {
@@ -478,6 +542,29 @@ describe("salary-profile", () => {
       .send({ description: "", amount: 100, consignacao_type: "loan" });
 
     expect(res.status).toBe(422);
+  });
+
+  it("POST /salary/consignacoes valida description longa", async () => {
+    const token = await registerAndLogin("sal-consig-vallong@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        description: "A".repeat(101),
+        amount: 100,
+        consignacao_type: "loan",
+      });
+
+    expectErrorResponseWithRequestId(
+      res,
+      422,
+      "description deve ter no máximo 100 caracteres.",
+    );
   });
 
   it("POST /salary/consignacoes valida amount negativo", async () => {

@@ -33,6 +33,8 @@ function round2(v) {
  *  - No INSS contribution (beneficiários não contribuem ao INSS)
  *  - Partial IRRF exemption for age >= 65: the first IRRF bracket upper
  *    limit (R$2.428,80 for 2026) is deducted from the base before lookup
+ *  - irrfMonthly is an estimate for planning. The monthly cash received
+ *    follows the extrato and only desconta consignações from the gross benefit
  *  - Consignações tracked with legal limits:
  *      35% of gross for loans (rubrica 216/217)
  *       5% of gross for card  (rubrica 268)
@@ -108,7 +110,7 @@ export function calculateNetBenefit({
   const loanLimitAmount = round2(grossBenefit * LOAN_LIMIT_RATE);
   const cardLimitAmount = round2(grossBenefit * CARD_LIMIT_RATE);
 
-  const netMonthly = round2(grossBenefit - irrfMonthly - consignacoesMonthly);
+  const netMonthly = round2(grossBenefit - consignacoesMonthly);
   const netAnnual  = round2(netMonthly * 12);
   const taxAnnual  = round2(irrfMonthly * 12);
 

@@ -59,9 +59,12 @@ describe("calculateNetBenefit — shape do retorno", () => {
     expect(result.grossMonthly).toBe(4958.67);
   });
 
-  it("netMonthly == gross - IRRF - consignacoes", () => {
-    const result = calculateNetBenefit({ grossBenefit: 5000 });
-    const expected = Math.round((5000 - result.irrfMonthly - result.consignacoesMonthly) * 100) / 100;
+  it("netMonthly reflete valor recebido: gross - consignacoes", () => {
+    const result = calculateNetBenefit({
+      grossBenefit: 5000,
+      consignacoes: [{ consignacao_type: "loan", amount: 300 }],
+    });
+    const expected = Math.round((5000 - result.consignacoesMonthly) * 100) / 100;
     expect(result.netMonthly).toBe(expected);
   });
 
@@ -199,27 +202,33 @@ describe("calculateNetBenefit — consignações e limites", () => {
       ],
     });
     expect(result.consignacoesMonthly).toBe(650);
-    expect(result.netMonthly).toBe(
-      Math.round((5000 - result.irrfMonthly - 650) * 100) / 100,
-    );
+    expect(result.netMonthly).toBe(Math.round((5000 - 650) * 100) / 100);
   });
 
-  it("caso real: benefício R$4.958,67 com consignações excessivas", () => {
-    // Extrato INSS real: gross 4958.67, consig ~1908.10, net ~2812.99
+  it("caso real do extrato fecha líquido recebido sem descontar IRRF estimado", () => {
     const consignacoes = [
-      { consignacao_type: "loan", amount: 456.78 },
-      { consignacao_type: "loan", amount: 350.00 },
-      { consignacao_type: "loan", amount: 300.00 },
-      { consignacao_type: "loan", amount: 801.32 },
+      { consignacao_type: "loan", amount: 542.60 },
+      { consignacao_type: "loan", amount: 198.71 },
+      { consignacao_type: "loan", amount: 177.88 },
+      { consignacao_type: "loan", amount: 177.88 },
+      { consignacao_type: "loan", amount: 177.88 },
+      { consignacao_type: "loan", amount: 177.88 },
+      { consignacao_type: "loan", amount: 177.88 },
+      { consignacao_type: "loan", amount: 276.51 },
+      { consignacao_type: "card", amount: 238.46 },
     ];
     const result = calculateNetBenefit({
       grossBenefit: 4958.67,
       birthYear: 1955,
       consignacoes,
     });
-    expect(result.loanTotal).toBe(1908.10);
-    expect(result.isOverLoanLimit).toBe(true); // 1908.10 > 35% de 4958.67 = 1735.53
-    expect(result.netMonthly).toBeGreaterThan(0);
+    expect(result.irrfMonthly).toBeCloseTo(7.58, 1);
+    expect(result.loanTotal).toBe(1907.22);
+    expect(result.cardTotal).toBe(238.46);
+    expect(result.consignacoesMonthly).toBe(2145.68);
+    expect(result.isOverLoanLimit).toBe(true); // 1907.22 > 35% de 4958.67 = 1735.53
+    expect(result.isOverCardLimit).toBe(false); // 238.46 < 5% de 4958.67 = 247.93
+    expect(result.netMonthly).toBe(2812.99);
   });
 });
 
