@@ -7,6 +7,7 @@ import ImportCsvModal from "../components/ImportCsvModal";
 import ImportHistoryModal from "../components/ImportHistoryModal";
 import UpgradeModal from "../components/UpgradeModal";
 import ForecastCard from "../components/ForecastCard";
+import FinancialAlertBanner from "../components/FinancialAlertBanner";
 import BillsSummaryWidget from "../components/BillsSummaryWidget";
 import SalaryWidget from "../components/SalaryWidget";
 import TransactionList from "../components/TransactionList";
@@ -1883,6 +1884,8 @@ const App = ({
             </button>
           </div>
         )}
+
+        <FinancialAlertBanner />
 
         <section ref={filtersPanelRef}>
           <div className="space-y-4 rounded border border-cf-border bg-cf-surface p-4">
