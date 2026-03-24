@@ -6,11 +6,23 @@ export interface SubscriptionDetail {
   cancelAtPeriodEnd: boolean;
 }
 
+export type EntitlementSource =
+  | "free"
+  | "trial"
+  | "subscription"
+  | "subscription_grace"
+  | "prepaid";
+
 export interface SubscriptionSummary {
   plan: string;
   displayName: string;
   features: Record<string, unknown>;
   subscription: SubscriptionDetail | null;
+  entitlementSource: EntitlementSource;
+  trialEndsAt?: string | null;
+  trialExpired?: boolean;
+  proExpiresAt?: string | null;
+  graceEndsAt?: string | null;
 }
 
 export const billingService = {
