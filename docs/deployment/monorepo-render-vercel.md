@@ -42,6 +42,7 @@ Se o service estiver com Root Directory no root do monorepo:
 - `JWT_EXPIRES_IN` (ex.: `24h`)
 - `CORS_ORIGIN` (ex.: `http://localhost:5173,https://<seu-vercel>.vercel.app`)
 - `TRUST_PROXY=1`
+- `IMPORT_OCR_ENABLED=false` por padrao; habilite apenas se o host da API tiver pelo menos 1GB de RAM disponivel
 - `APP_VERSION` (opcional para override; por padrao, `/health.version` usa `apps/api/package.json`)
 - `APP_COMMIT` (opcional; `RENDER_GIT_COMMIT` continua prioridade no `/health.commit`)
 

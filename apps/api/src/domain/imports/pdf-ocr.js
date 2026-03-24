@@ -7,6 +7,9 @@ const loadCreateWorker = async () => {
   return tesseractModule.createWorker;
 };
 
+export const isImportOcrEnabled = (value = process.env.IMPORT_OCR_ENABLED) =>
+  String(value || "").trim().toLowerCase() === "true";
+
 export const shouldRunPdfOcrFallback = (text) => {
   const normalizedText = String(text || "").replace(/\s+/g, " ").trim();
 
@@ -28,16 +31,22 @@ export const extractTextFromPdfWithOcr = async (
   dependencies = {
     PDFParseCtor: PDFParse,
     loadCreateWorkerFn: loadCreateWorker,
+    ocrEnabled: isImportOcrEnabled(),
   },
 ) => {
-  const { PDFParseCtor, createWorkerFn, loadCreateWorkerFn } = dependencies;
+  const {
+    PDFParseCtor,
+    createWorkerFn,
+    loadCreateWorkerFn,
+    ocrEnabled = isImportOcrEnabled(),
+  } = dependencies;
   const parser = new PDFParseCtor({ data: buffer });
 
   try {
     const textResult = await parser.getText();
     const directText = String(textResult?.text || "");
 
-    if (!shouldRunPdfOcrFallback(directText)) {
+    if (!shouldRunPdfOcrFallback(directText) || !ocrEnabled) {
       return directText;
     }
 
