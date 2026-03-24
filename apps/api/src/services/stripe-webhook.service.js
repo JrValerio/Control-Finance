@@ -1,4 +1,5 @@
 import { dbQuery } from "../db/index.js";
+import { logWarn } from "../observability/logger.js";
 
 const PREPAID_PRO_ENTITLEMENT_KEYS = new Set(["pro_12_months", "pro_6_months"]);
 const LEGACY_PREPAID_ENTITLEMENT_KEY = "pro_6_months";
@@ -415,7 +416,12 @@ export const processStripeEvent = async (event) => {
     case "invoice.payment_failed":
       return handleInvoicePaymentFailed(event.data?.object);
     default:
-      // Unknown event type — silently ignored
+      logWarn({
+        event: "stripe.webhook.unhandled_event",
+        message: "Received a Stripe event with no registered handler.",
+        stripeEventType: event?.type ?? "unknown",
+        stripeEventId: event?.id ?? "unknown",
+      });
       break;
   }
 };

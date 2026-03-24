@@ -1,4 +1,5 @@
 import { dbQuery } from "../db/index.js";
+import { logError } from "../observability/logger.js";
 
 const DEFAULT_IMPORT_SESSION_CLEANUP_INTERVAL_MINUTES = 30;
 const DEFAULT_IMPORT_SESSION_KEEP_COMMITTED_DAYS = 7;
@@ -52,8 +53,12 @@ export const startImportSessionsCleanupJob = () => {
   const runCleanup = async () => {
     try {
       await cleanupImportSessions();
-    } catch {
-      // no-op: cleanup failures should not crash API runtime
+    } catch (err) {
+      logError({
+        event: "import_sessions.cleanup.failed",
+        message: "Import sessions cleanup job encountered an error.",
+        errorMessage: err?.message ?? "Unexpected error.",
+      });
     }
   };
 
