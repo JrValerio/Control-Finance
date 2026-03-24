@@ -1,5 +1,9 @@
 import { parse as parseCsv } from "csv-parse/sync";
-import { extractTextFromPdfWithOcr } from "./pdf-ocr.js";
+import {
+  extractTextFromPdfWithOcr,
+  isImportOcrEnabled,
+  shouldRunPdfOcrFallback,
+} from "./pdf-ocr.js";
 
 const STATEMENT_ROW_MAX = 2000;
 const BALANCE_TERMS = [
@@ -39,6 +43,7 @@ const HEADER_ALIASES = {
   credit: ["credit", "credito", "entrada", "entradas", "valorentrada"],
   notes: ["notes", "nota", "notas", "observacao", "observacoes", "obs"],
 };
+const PDF_WITHOUT_TEXT_GUIDANCE_MESSAGE = "PDF sem texto reconhecivel. Tente OFX ou CSV.";
 
 const collapseWhitespace = (value) => String(value || "").replace(/\s+/g, " ").trim();
 
@@ -218,6 +223,18 @@ const finalizeStatementRows = (rows) => {
   }
 
   return rows;
+};
+
+export const getPdfImportGuidanceError = (text, ocrEnabled = isImportOcrEnabled()) => {
+  if (ocrEnabled) {
+    return "";
+  }
+
+  if (shouldRunPdfOcrFallback(text)) {
+    return PDF_WITHOUT_TEXT_GUIDANCE_MESSAGE;
+  }
+
+  return "";
 };
 
 export const parseStatementCsvRows = (buffer) => {
@@ -464,6 +481,12 @@ export const extractTextFromPdfBuffer = async (buffer) => extractTextFromPdfWith
 
 export const parseStatementPdfRows = async (buffer) => {
   const text = await extractTextFromPdfBuffer(buffer);
+  const pdfImportGuidanceError = getPdfImportGuidanceError(text);
+
+  if (pdfImportGuidanceError) {
+    throw new Error(pdfImportGuidanceError);
+  }
+
   const normalizedText = collapseWhitespace(text)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")

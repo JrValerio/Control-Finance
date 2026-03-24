@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  getPdfImportGuidanceError,
   parseGenericBankStatementPdfText,
   parseInssCreditHistoryPdfText,
   parseStatementCsvRows,
@@ -40,6 +41,12 @@ describe("statement import parser", () => {
         },
       },
     ]);
+  });
+
+  it("orienta OFX ou CSV quando o PDF nao tem texto util e OCR esta desligado", () => {
+    expect(getPdfImportGuidanceError("abc 123", false)).toBe(
+      "PDF sem texto reconhecivel. Tente OFX ou CSV.",
+    );
   });
 
   it("extrai linhas de PDF de extrato bancario e ignora saldo do dia", () => {
