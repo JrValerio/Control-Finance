@@ -69,7 +69,7 @@ describe("TrendChart", () => {
     );
 
     expect(
-      screen.getByText("Sem dados suficientes para exibir a evolução histórica."),
+      screen.getByText("Adicione transações para acompanhar sua evolução financeira mês a mês."),
     ).toBeInTheDocument();
   });
 

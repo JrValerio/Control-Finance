@@ -179,7 +179,11 @@ describe("api service", () => {
       }),
     ).rejects.toBeTruthy();
 
-    expect(onPaymentRequired).toHaveBeenCalledWith("Periodo de teste encerrado.");
+    expect(onPaymentRequired).toHaveBeenCalledWith({
+      reason: "Periodo de teste encerrado.",
+      feature: "unknown",
+      context: "trial_expired",
+    });
   });
 
   it("nao falha se paymentRequiredHandler nao estiver definido (status 402)", async () => {
