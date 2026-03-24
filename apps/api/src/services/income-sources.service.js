@@ -170,7 +170,6 @@ const mapDeductionRow = (row) => ({
   amount: toMoney(row.amount),
   isVariable: Boolean(row.is_variable),
   isActive: Boolean(row.is_active),
-  sortOrder: Number(row.sort_order),
   createdAt: toISODateTime(row.created_at),
   updatedAt: toISODateTime(row.updated_at),
 });
@@ -342,14 +341,13 @@ export const createDeductionForSource = async (userId, sourceId, payload) => {
   const label = normalizeDeductionLabel(payload.label);
   const amount = normalizeDeductionAmount(payload.amount);
   const isVariable = Boolean(payload.isVariable);
-  const sortOrder = payload.sortOrder != null ? Number(payload.sortOrder) : 0;
 
   const { rows } = await dbQuery(
     `INSERT INTO income_deductions
-       (income_source_id, label, amount, is_variable, sort_order)
-     VALUES ($1, $2, $3, $4, $5)
+       (income_source_id, label, amount, is_variable)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [sid, label, amount, isVariable, sortOrder],
+    [sid, label, amount, isVariable],
   );
   return mapDeductionRow(rows[0]);
 };
@@ -379,11 +377,6 @@ export const updateDeductionForSource = async (userId, deductionId, payload) => 
     params.push(Boolean(payload.isActive));
     setClauses.push(`is_active = $${params.length}`);
   }
-  if (payload.sortOrder !== undefined) {
-    params.push(Number(payload.sortOrder));
-    setClauses.push(`sort_order = $${params.length}`);
-  }
-
   if (setClauses.length === 0) {
     const { rows } = await dbQuery(`SELECT * FROM income_deductions WHERE id = $1`, [did]);
     return mapDeductionRow(rows[0]);

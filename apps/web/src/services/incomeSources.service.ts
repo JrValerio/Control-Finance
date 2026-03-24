@@ -20,7 +20,6 @@ export interface IncomeDeduction {
   amount: number;
   isVariable: boolean;
   isActive: boolean;
-  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -111,7 +110,6 @@ interface RawDeduction {
   amount?: unknown;
   isVariable?: unknown;
   isActive?: unknown;
-  sortOrder?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -171,7 +169,6 @@ const normalizeDeduction = (raw: RawDeduction): IncomeDeduction => ({
   amount: Number(raw.amount) || 0,
   isVariable: Boolean(raw.isVariable),
   isActive: raw.isActive !== false,
-  sortOrder: Number(raw.sortOrder) || 0,
   createdAt: normalizeISOString(raw.createdAt),
   updatedAt: normalizeISOString(raw.updatedAt),
 });
