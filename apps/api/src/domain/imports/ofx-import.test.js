@@ -71,4 +71,43 @@ describe("ofx import parser", () => {
     expect(rows[0].raw.type).toBe("Saida");
     expect(rows[0].raw.value).toBe("99.90");
   });
+
+  it("lanca erro em buffer vazio — sem bloco STMTTRN", () => {
+    expect(() => parseOfxRows(Buffer.from("", "utf8"))).toThrow(
+      "Nenhuma transacao reconhecida no OFX.",
+    );
+  });
+
+  it("lanca erro em conteudo OFX sem transacoes validas", () => {
+    const garbage = "OFXHEADER:100\nDATA:OFXSGML\n<OFX>\n<BANKMSGSRSV1>\n</BANKMSGSRSV1>\n</OFX>";
+    expect(() => parseOfxRows(Buffer.from(garbage, "utf8"))).toThrow(
+      "Nenhuma transacao reconhecida no OFX.",
+    );
+  });
+
+  it("lanca erro quando TRNAMT esta ausente ou invalido", () => {
+    const content = [
+      "<STMTTRN>",
+      "<TRNTYPE>CREDIT",
+      "<DTPOSTED>20260205000000",
+      "<TRNAMT>abc",
+      "<MEMO>PGTO INVALIDO",
+      "</STMTTRN>",
+    ].join("\n");
+
+    expect(() => parseOfxRows(Buffer.from(content, "utf8"))).toThrow(
+      "Transacao OFX com valor invalido.",
+    );
+  });
+
+  it("lanca erro quando arquivo excede 2000 transacoes", () => {
+    const blocks = Array.from(
+      { length: 2001 },
+      (_, i) => `<STMTTRN>\n<TRNTYPE>CREDIT\n<TRNAMT>1.00\n<FITID>ID${i}\n</STMTTRN>`,
+    ).join("\n");
+
+    expect(() => parseOfxRows(Buffer.from(blocks, "utf8"))).toThrow(
+      "Arquivo excede o limite de 2000 linhas.",
+    );
+  });
 });

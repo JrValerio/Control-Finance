@@ -67,6 +67,64 @@ describe("pdf OCR fallback", () => {
     expect(loadCreateWorkerFn).not.toHaveBeenCalled();
   });
 
+  it("propaga erro quando getText lanca e ainda destroi o parser", async () => {
+    const fakeParser = {
+      getText: vi.fn().mockRejectedValue(new Error("PDF corrompido")),
+      getScreenshot: vi.fn(),
+      destroy: vi.fn().mockResolvedValue(undefined),
+    };
+    const PDFParseCtor = vi.fn(() => fakeParser);
+
+    await expect(
+      extractTextFromPdfWithOcr(Buffer.from("fake-pdf"), { PDFParseCtor }),
+    ).rejects.toThrow("PDF corrompido");
+
+    expect(fakeParser.destroy).toHaveBeenCalled();
+    expect(fakeParser.getScreenshot).not.toHaveBeenCalled();
+  });
+
+  it("retorna texto direto quando getScreenshot retorna pages vazias", async () => {
+    const fakeParser = {
+      getText: vi.fn().mockResolvedValue({ text: "abc 123" }),
+      getScreenshot: vi.fn().mockResolvedValue({ pages: [] }),
+      destroy: vi.fn().mockResolvedValue(undefined),
+    };
+    const PDFParseCtor = vi.fn(() => fakeParser);
+
+    const text = await extractTextFromPdfWithOcr(Buffer.from("fake-pdf"), {
+      PDFParseCtor,
+      ocrEnabled: true,
+    });
+
+    expect(text).toBe("abc 123");
+    expect(fakeParser.getScreenshot).toHaveBeenCalled();
+  });
+
+  it("usa texto direto como fallback quando OCR retorna texto vazio", async () => {
+    const fakeParser = {
+      getText: vi.fn().mockResolvedValue({ text: "abc 123" }),
+      getScreenshot: vi.fn().mockResolvedValue({
+        pages: [{ data: Buffer.from("fake-page") }],
+      }),
+      destroy: vi.fn().mockResolvedValue(undefined),
+    };
+    const fakeWorker = {
+      recognize: vi.fn().mockResolvedValue({ data: { text: "" } }),
+      terminate: vi.fn().mockResolvedValue(undefined),
+    };
+    const PDFParseCtor = vi.fn(() => fakeParser);
+    const createWorkerFn = vi.fn().mockResolvedValue(fakeWorker);
+
+    const text = await extractTextFromPdfWithOcr(Buffer.from("fake-pdf"), {
+      PDFParseCtor,
+      createWorkerFn,
+      ocrEnabled: true,
+    });
+
+    expect(text).toBe("abc 123");
+    expect(fakeWorker.terminate).toHaveBeenCalled();
+  });
+
   it("usa OCR como fallback quando texto direto nao e suficiente", async () => {
     const fakeParser = {
       getText: vi.fn().mockResolvedValue({ text: "abc 123" }),

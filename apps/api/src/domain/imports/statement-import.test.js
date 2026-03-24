@@ -43,6 +43,18 @@ describe("statement import parser", () => {
     ]);
   });
 
+  it("lanca erro em CSV com header mas sem linhas de dados", () => {
+    const csvContent = "Data;Historico;Valor\n";
+    expect(() => parseStatementCsvRows(Buffer.from(csvContent, "utf8"))).toThrow("CSV vazio.");
+  });
+
+  it("lanca erro quando colunas do CSV nao sao reconheciveis", () => {
+    const csvContent = "Coluna1;Coluna2;Coluna3\nA;B;C\n";
+    expect(() => parseStatementCsvRows(Buffer.from(csvContent, "utf8"))).toThrow(
+      "Nao foi possivel reconhecer as colunas do extrato.",
+    );
+  });
+
   it("orienta OFX ou CSV quando o PDF nao tem texto util e OCR esta desligado", () => {
     expect(getPdfImportGuidanceError("abc 123", false)).toBe(
       "PDF sem texto reconhecivel. Tente OFX ou CSV.",
