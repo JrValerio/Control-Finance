@@ -53,6 +53,10 @@ describe("health and observability", () => {
     expect(typeof response.body.requestId).toBe("string");
     expect(response.body.requestId.length).toBeGreaterThan(0);
     expect(response.body.requestId).toBe(response.headers["x-request-id"]);
+    expect(typeof response.body.migrations).toBe("object");
+    expect(typeof response.body.migrations.applied).toBe("number");
+    expect(response.body.migrations.applied).toBeGreaterThan(0);
+    expect(typeof response.body.migrations.latest).toBe("string");
   });
 
   it("GET /health retorna ok=false e status 503 quando DB falha", async () => {
@@ -73,6 +77,7 @@ describe("health and observability", () => {
       expect(typeof response.body.requestId).toBe("string");
       expect(response.body.requestId.length).toBeGreaterThan(0);
       expect(response.body.requestId).toBe(response.headers["x-request-id"]);
+      expect(response.body.migrations).toEqual({ applied: 0, latest: null });
     } finally {
       setDbClientForTests(testDbPool);
     }
