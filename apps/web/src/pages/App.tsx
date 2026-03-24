@@ -55,6 +55,7 @@ import { formatCurrency } from "../utils/formatCurrency";
 const TransactionChart = lazy(() => import("../components/TransactionChart"));
 const TrendChart = lazy(() => import("../components/TrendChart"));
 const CategoryTreemap = lazy(() => import("../components/CategoryTreemap"));
+const HealthOverview = lazy(() => import("../components/HealthOverview"));
 
 type SummaryMetricKey = "income" | "expense" | "balance";
 type MonthOverMonthDirection = "up" | "down" | "flat";
@@ -2341,6 +2342,10 @@ const App = ({
             ) : null}
           </section>
         <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+
+        <Suspense fallback={null}>
+          <HealthOverview />
+        </Suspense>
 
         <BillsSummaryWidget onOpenBills={handleOpenBills} />
 
