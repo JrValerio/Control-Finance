@@ -1650,7 +1650,7 @@ const App = ({
                       onClick={handleOpenImportModal}
                       className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                     >
-                      Importar CSV
+                      Importar extrato
                     </button>
                     <button
                       type="button"
@@ -1740,7 +1740,7 @@ const App = ({
                   onClick={handleOpenImportModal}
                   className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                 >
-                  Importar CSV
+                  Importar extrato
                 </button>
                 <button
                   type="button"

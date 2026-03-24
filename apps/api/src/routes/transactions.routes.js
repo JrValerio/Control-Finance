@@ -32,13 +32,15 @@ import {
 } from "../services/transactions-import.service.js";
 
 const router = Router();
-const CSV_MAX_FILE_SIZE_BYTES = Number(process.env.IMPORT_CSV_MAX_FILE_SIZE_BYTES || 2 * 1024 * 1024);
+const IMPORT_MAX_FILE_SIZE_BYTES = Number(
+  process.env.IMPORT_CSV_MAX_FILE_SIZE_BYTES || 2 * 1024 * 1024,
+);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize:
-      Number.isInteger(CSV_MAX_FILE_SIZE_BYTES) && CSV_MAX_FILE_SIZE_BYTES > 0
-        ? CSV_MAX_FILE_SIZE_BYTES
+      Number.isInteger(IMPORT_MAX_FILE_SIZE_BYTES) && IMPORT_MAX_FILE_SIZE_BYTES > 0
+        ? IMPORT_MAX_FILE_SIZE_BYTES
         : 2 * 1024 * 1024,
   },
 });
@@ -51,21 +53,36 @@ const createError = (status, message) => {
   return error;
 };
 
-const ensureValidCsvFile = (file) => {
+const ensureValidImportFile = (file) => {
   if (!file) {
-    throw createError(400, "Arquivo CSV (file) e obrigatorio.");
+    throw createError(400, "Arquivo do extrato (file) e obrigatorio.");
   }
 
   const originalName = String(file.originalname || "");
   const extension = path.extname(originalName).toLowerCase();
   const mimeType = String(file.mimetype || "").toLowerCase();
   const hasCsvExtension = extension === ".csv";
-  const hasCsvMimeType = ["text/csv", "application/csv", "application/vnd.ms-excel"].includes(
+  const hasPdfExtension = extension === ".pdf";
+  const hasOfxExtension = extension === ".ofx";
+  const hasCsvMimeType = ["text/csv", "application/csv", "application/vnd.ms-excel"].includes(mimeType);
+  const hasPdfMimeType = ["application/pdf"].includes(mimeType);
+  const hasOfxMimeType = ["application/ofx", "application/x-ofx", "application/octet-stream"].includes(
     mimeType,
   );
 
-  if ((!hasCsvExtension && !hasCsvMimeType) || !file.buffer || file.buffer.length === 0) {
-    throw createError(400, "Arquivo invalido. Envie um CSV.");
+  if (
+    (
+      !hasCsvExtension &&
+      !hasCsvMimeType &&
+      !hasPdfExtension &&
+      !hasPdfMimeType &&
+      !hasOfxExtension &&
+      !hasOfxMimeType
+    ) ||
+    !file.buffer ||
+    file.buffer.length === 0
+  ) {
+    throw createError(400, "Arquivo invalido. Envie um CSV, OFX ou PDF de extrato.");
   }
 };
 
@@ -295,8 +312,8 @@ router.post("/import/dry-run", importRateLimiter, requireFeature("csv_import"), 
     }
 
     try {
-      ensureValidCsvFile(req.file);
-      const dryRunResult = await dryRunTransactionsImportForUser(req.user.id, req.file.buffer);
+      ensureValidImportFile(req.file);
+      const dryRunResult = await dryRunTransactionsImportForUser(req.user.id, req.file);
       const rowsTotal = Number(dryRunResult.summary?.totalRows) || 0;
       const validRows = Number(dryRunResult.summary?.validRows) || 0;
       const invalidRows = Number(dryRunResult.summary?.invalidRows) || 0;

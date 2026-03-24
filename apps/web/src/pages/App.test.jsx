@@ -2023,7 +2023,7 @@ describe("App", () => {
     }
   });
 
-  it("abre importacao CSV, processa dry-run e exibe preview", async () => {
+  it("abre importacao de extrato, processa dry-run e exibe preview", async () => {
     const user = userEvent.setup();
     const csvFile = new File(
       ["date,type,value,description\n2026-03-01,Entrada,100,Salario"],
@@ -2035,8 +2035,8 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Importar CSV" }));
-    await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
+    await user.click(screen.getByRole("button", { name: "Importar extrato" }));
+    await user.upload(screen.getByLabelText("Arquivo do extrato"), csvFile);
     await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     expect(transactionsService.dryRunImportCsv).toHaveBeenCalledTimes(1);
@@ -2069,14 +2069,14 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Importar CSV" }));
-    await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
+    await user.click(screen.getByRole("button", { name: "Importar extrato" }));
+    await user.upload(screen.getByLabelText("Arquivo do extrato"), csvFile);
     await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
     expect(await screen.findByText("Cafe")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Importar" })).toBeDisabled();
   });
 
-  it("confirma importacao CSV e recarrega listagem e resumo", async () => {
+  it("confirma importacao de extrato e recarrega listagem e resumo", async () => {
     const user = userEvent.setup();
     const csvFile = new File(
       ["date,type,value,description\n2026-03-01,Entrada,100,Salario"],
@@ -2089,8 +2089,8 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Importar CSV" }));
-    await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
+    await user.click(screen.getByRole("button", { name: "Importar extrato" }));
+    await user.upload(screen.getByLabelText("Arquivo do extrato"), csvFile);
     await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
     await screen.findByText("Salario");
     await user.click(screen.getByRole("button", { name: "Importar" }));
@@ -2104,7 +2104,7 @@ describe("App", () => {
       expect(transactionsService.getMonthlySummaryCompare).toHaveBeenCalledTimes(2);
     });
 
-    expect(screen.queryByLabelText("Arquivo CSV")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Arquivo do extrato")).not.toBeInTheDocument();
   });
 
   it("exibe mensagem de erro quando dry-run falha", async () => {
@@ -2117,16 +2117,16 @@ describe("App", () => {
       },
     );
     transactionsService.dryRunImportCsv.mockRejectedValueOnce({
-      response: { data: { message: "Arquivo invalido. Envie um CSV." } },
+      response: { data: { message: "Arquivo invalido. Envie um CSV, OFX ou PDF de extrato." } },
     });
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Importar CSV" }));
-    await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
+    await user.click(screen.getByRole("button", { name: "Importar extrato" }));
+    await user.upload(screen.getByLabelText("Arquivo do extrato"), csvFile);
     await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
-    expect(await screen.findByText("Arquivo invalido. Envie um CSV.")).toBeInTheDocument();
+    expect(await screen.findByText("Arquivo invalido. Envie um CSV, OFX ou PDF de extrato.")).toBeInTheDocument();
   });
 
   it("exibe orientacao para sessao expirada durante commit", async () => {
@@ -2145,8 +2145,8 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Importar CSV" }));
-    await user.upload(screen.getByLabelText("Arquivo CSV"), csvFile);
+    await user.click(screen.getByRole("button", { name: "Importar extrato" }));
+    await user.upload(screen.getByLabelText("Arquivo do extrato"), csvFile);
     await user.click(screen.getByRole("button", { name: "Pré-visualizar" }));
     await screen.findByText("Salario");
     await user.click(screen.getByRole("button", { name: "Importar" }));
