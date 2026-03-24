@@ -22,6 +22,13 @@ vi.mock("../components/HealthOverview", () => ({
   default: () => null,
 }));
 
+vi.mock("../components/CategoryTreemap", () => ({
+  default: ({ data }) =>
+    Array.isArray(data) && data.length > 0 ? (
+      <div data-testid="category-treemap" />
+    ) : null,
+}));
+
 vi.mock("../components/TransactionChart", () => ({
   default: () => <div data-testid="transaction-chart" />,
 }));

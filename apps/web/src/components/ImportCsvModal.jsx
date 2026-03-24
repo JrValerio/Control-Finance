@@ -292,7 +292,18 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                         </td>
                         <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">{row.raw.date || "-"}</td>
                         <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
-                          {row.raw.category || "Sem categoria"}
+                          {row.raw.category ? (
+                            row.raw.category
+                          ) : row.status === "valid" ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                                Revisar
+                              </span>
+                              <span className="text-cf-text-secondary">Sem categoria</span>
+                            </span>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
                           {row.errors.length > 0
