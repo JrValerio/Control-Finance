@@ -177,11 +177,12 @@ describe("ProfileSettings — Assinatura", () => {
     expect(screen.queryByRole("button", { name: "Fazer upgrade" })).not.toBeInTheDocument();
   });
 
-  it("shows Plano Pro when no trial info", async () => {
+  it("shows Acesso ativo when no trial info (plan details unknown)", async () => {
     vi.mocked(profileService.getMe).mockResolvedValue(
       buildMe({ trialEndsAt: null, trialExpired: false }),
     );
     renderPage();
-    await waitFor(() => expect(screen.getByText("Plano Pro")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Acesso ativo")).toBeInTheDocument());
+    expect(screen.getByText(/Detalhes do plano disponíveis em Faturamento/)).toBeInTheDocument();
   });
 });

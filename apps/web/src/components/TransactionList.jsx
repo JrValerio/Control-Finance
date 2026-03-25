@@ -1,6 +1,5 @@
 import PropTypes from "prop-types";
 import { CATEGORY_ENTRY } from "./DatabaseUtils";
-import { formatCurrency } from "../utils/formatCurrency";
 import { useMaskedCurrency } from "../context/DiscreetModeContext";
 
 const formatDate = (value) => {

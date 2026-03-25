@@ -73,7 +73,7 @@ const ProfileSettings = ({
   onLogout = undefined,
   onOpenBilling = undefined,
 }: ProfileSettingsProps): JSX.Element => {
-  const { isDiscreet, toggle: toggleDiscreet } = useDiscreetMode();
+  const { isDiscreetMode, toggleDiscreetMode } = useDiscreetMode();
 
   // Account fields
   const [email, setEmail] = useState("");
@@ -398,19 +398,19 @@ const ProfileSettings = ({
                 <button
                   type="button"
                   role="switch"
-                  aria-checked={isDiscreet}
-                  onClick={toggleDiscreet}
+                  aria-checked={isDiscreetMode}
+                  onClick={toggleDiscreetMode}
                   className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-1 focus:ring-offset-2 ${
-                    isDiscreet ? "bg-brand-1" : "bg-cf-border"
+                    isDiscreetMode ? "bg-brand-1" : "bg-cf-border"
                   }`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                      isDiscreet ? "translate-x-6" : "translate-x-1"
+                      isDiscreetMode ? "translate-x-6" : "translate-x-1"
                     }`}
                   />
                   <span className="sr-only">
-                    {isDiscreet ? "Desativar modo discreto" : "Ativar modo discreto"}
+                    {isDiscreetMode ? "Desativar modo discreto" : "Ativar modo discreto"}
                   </span>
                 </button>
               </div>
@@ -463,14 +463,20 @@ const ProfileSettings = ({
               ) : (
                 <div className="flex items-center justify-between gap-4 rounded border border-cf-border bg-cf-bg-subtle px-4 py-3">
                   <div>
-                    <p className="text-sm font-semibold text-cf-text-primary">Plano Pro</p>
+                    <p className="text-sm font-semibold text-cf-text-primary">Acesso ativo</p>
                     <p className="mt-0.5 text-xs text-cf-text-secondary">
-                      Acesso completo a todas as funcionalidades.
+                      Detalhes do plano disponíveis em Faturamento.
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-brand-1/10 px-2.5 py-0.5 text-xs font-semibold text-brand-1">
-                    Ativo
-                  </span>
+                  {onOpenBilling ? (
+                    <button
+                      type="button"
+                      onClick={onOpenBilling}
+                      className="shrink-0 rounded border border-cf-border px-3 py-1 text-xs font-semibold text-cf-text-secondary hover:bg-cf-bg-subtle"
+                    >
+                      Ver plano
+                    </button>
+                  ) : null}
                 </div>
               )}
             </section>

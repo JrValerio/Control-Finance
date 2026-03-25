@@ -17,40 +17,40 @@ describe("useDiscreetMode", () => {
 
   it("defaults to false when localStorage is empty", () => {
     const { result } = renderHook(() => useDiscreetMode(), { wrapper });
-    expect(result.current.isDiscreet).toBe(false);
+    expect(result.current.isDiscreetMode).toBe(false);
   });
 
   it("reads initial state from localStorage", () => {
     localStorage.setItem(STORAGE_KEY, "1");
     const { result } = renderHook(() => useDiscreetMode(), { wrapper });
-    expect(result.current.isDiscreet).toBe(true);
+    expect(result.current.isDiscreetMode).toBe(true);
   });
 
   it("toggle flips isDiscreet from false to true", async () => {
     const { result } = renderHook(() => useDiscreetMode(), { wrapper });
-    act(() => result.current.toggle());
-    expect(result.current.isDiscreet).toBe(true);
+    act(() => result.current.toggleDiscreetMode());
+    expect(result.current.isDiscreetMode).toBe(true);
   });
 
   it("toggle persists true to localStorage", () => {
     const { result } = renderHook(() => useDiscreetMode(), { wrapper });
-    act(() => result.current.toggle());
+    act(() => result.current.toggleDiscreetMode());
     expect(localStorage.getItem(STORAGE_KEY)).toBe("1");
   });
 
   it("toggle removes localStorage key when turning off", () => {
     localStorage.setItem(STORAGE_KEY, "1");
     const { result } = renderHook(() => useDiscreetMode(), { wrapper });
-    act(() => result.current.toggle());
+    act(() => result.current.toggleDiscreetMode());
     expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
-    expect(result.current.isDiscreet).toBe(false);
+    expect(result.current.isDiscreetMode).toBe(false);
   });
 
   it("toggle is stable across re-renders", () => {
     const { result, rerender } = renderHook(() => useDiscreetMode(), { wrapper });
-    const firstToggle = result.current.toggle;
+    const firstToggle = result.current.toggleDiscreetMode;
     rerender();
-    expect(result.current.toggle).toBe(firstToggle);
+    expect(result.current.toggleDiscreetMode).toBe(firstToggle);
   });
 });
 
@@ -76,7 +76,7 @@ describe("useMaskedCurrency", () => {
       { wrapper },
     );
     expect(result.current.money(100)).not.toBe("R$ ••••");
-    act(() => result.current.mode.toggle());
+    act(() => result.current.mode.toggleDiscreetMode());
     expect(result.current.money(100)).toBe("R$ ••••");
   });
 
@@ -91,7 +91,7 @@ describe("Modo Discreto toggle UI", () => {
     localStorage.clear();
   });
 
-  it("switch reflects and updates isDiscreet state", async () => {
+  it("switch reflects and updates isDiscreetMode state", async () => {
     const user = userEvent.setup();
     render(
       <DiscreetModeProvider>
@@ -107,13 +107,13 @@ describe("Modo Discreto toggle UI", () => {
 
 // Minimal switch component that wires directly to context
 const SwitchUnderTest = () => {
-  const { isDiscreet, toggle } = useDiscreetMode();
+  const { isDiscreetMode, toggleDiscreetMode } = useDiscreetMode();
   return (
     <button
       type="button"
       role="switch"
-      aria-checked={isDiscreet}
-      onClick={toggle}
+      aria-checked={isDiscreetMode}
+      onClick={toggleDiscreetMode}
     >
       toggle
     </button>

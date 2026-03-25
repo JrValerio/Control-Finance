@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useCallback, useContext } from "react";
 import { useState } from "react";
 import type { ReactNode } from "react";
@@ -7,17 +8,17 @@ const STORAGE_KEY = "cf.discreet_mode";
 const MASK = "R$ ••••";
 
 interface DiscreetModeContextValue {
-  isDiscreet: boolean;
-  toggle: () => void;
+  isDiscreetMode: boolean;
+  toggleDiscreetMode: () => void;
 }
 
 const DiscreetModeContext = createContext<DiscreetModeContextValue>({
-  isDiscreet: false,
-  toggle: () => {},
+  isDiscreetMode: false,
+  toggleDiscreetMode: () => {},
 });
 
 export const DiscreetModeProvider = ({ children }: { children: ReactNode }) => {
-  const [isDiscreet, setIsDiscreet] = useState(() => {
+  const [isDiscreetMode, setIsDiscreetMode] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY) === "1";
     } catch {
@@ -25,8 +26,8 @@ export const DiscreetModeProvider = ({ children }: { children: ReactNode }) => {
     }
   });
 
-  const toggle = useCallback(() => {
-    setIsDiscreet((prev) => {
+  const toggleDiscreetMode = useCallback(() => {
+    setIsDiscreetMode((prev) => {
       const next = !prev;
       try {
         if (next) localStorage.setItem(STORAGE_KEY, "1");
@@ -39,7 +40,7 @@ export const DiscreetModeProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <DiscreetModeContext.Provider value={{ isDiscreet, toggle }}>
+    <DiscreetModeContext.Provider value={{ isDiscreetMode, toggleDiscreetMode }}>
       {children}
     </DiscreetModeContext.Provider>
   );
@@ -52,9 +53,9 @@ export const useDiscreetMode = () => useContext(DiscreetModeContext);
  * Usage: const money = useMaskedCurrency(); ... {money(value)}
  */
 export const useMaskedCurrency = () => {
-  const { isDiscreet } = useDiscreetMode();
+  const { isDiscreetMode } = useDiscreetMode();
   return useCallback(
-    (value: unknown) => (isDiscreet ? MASK : formatCurrency(value)),
-    [isDiscreet],
+    (value: unknown) => (isDiscreetMode ? MASK : formatCurrency(value)),
+    [isDiscreetMode],
   );
 };
