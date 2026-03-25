@@ -80,16 +80,14 @@ describe("categories", () => {
 
     expect(listResponse.status).toBe(200);
     expect(Array.isArray(listResponse.body)).toBe(true);
-    expect(listResponse.body).toHaveLength(2);
-    expect(listResponse.body.map((category) => category.name)).toEqual([
-      "Alimentacao",
-      "Transporte",
-    ]);
-    expect(listResponse.body.map((category) => category.normalizedName)).toEqual([
-      "alimentacao",
-      "transporte",
-    ]);
-    expect(listResponse.body.every((category) => category.deletedAt === null)).toBe(true);
+    // System categories are also returned; filter to check only user-created ones
+    const userCategories = listResponse.body.filter((c) => !c.system);
+    expect(userCategories).toHaveLength(2);
+    expect(userCategories.map((c) => c.name)).toEqual(["Alimentacao", "Transporte"]);
+    expect(userCategories.map((c) => c.normalizedName)).toEqual(["alimentacao", "transporte"]);
+    expect(userCategories.every((c) => c.deletedAt === null)).toBe(true);
+    // System categories are present and have system=true
+    expect(listResponse.body.some((c) => c.system === true)).toBe(true);
   });
 
   it("POST /categories bloqueia nome vazio", async () => {
@@ -174,12 +172,14 @@ describe("categories", () => {
       .set("Authorization", `Bearer ${tokenUserB}`);
 
     expect(listUserAResponse.status).toBe(200);
-    expect(listUserAResponse.body).toHaveLength(1);
-    expect(listUserAResponse.body[0].name).toBe("Lazer");
+    const userAOwn = listUserAResponse.body.filter((c) => !c.system);
+    expect(userAOwn).toHaveLength(1);
+    expect(userAOwn[0].name).toBe("Lazer");
 
     expect(listUserBResponse.status).toBe(200);
-    expect(listUserBResponse.body).toHaveLength(1);
-    expect(listUserBResponse.body[0].name).toBe("Transporte");
+    const userBOwn = listUserBResponse.body.filter((c) => !c.system);
+    expect(userBOwn).toHaveLength(1);
+    expect(userBOwn[0].name).toBe("Transporte");
   });
 
   it("PATCH /categories/:id renomeia categoria ativa", async () => {
@@ -244,7 +244,8 @@ describe("categories", () => {
     expect(deleteResponse.status).toBe(200);
     expect(deleteResponse.body.deletedAt).toBeTruthy();
     expect(listActiveResponse.status).toBe(200);
-    expect(listActiveResponse.body).toEqual([]);
+    // After soft-delete, user's own categories are empty (system categories still present)
+    expect(listActiveResponse.body.filter((c) => !c.system)).toEqual([]);
 
     expect(recreateResponse.status).toBe(201);
     expect(recreateResponse.body.name).toBe("Mercado");
@@ -252,11 +253,12 @@ describe("categories", () => {
     expect(recreateResponse.body.id).not.toBe(createResponse.body.id);
 
     expect(listWithDeletedResponse.status).toBe(200);
-    expect(listWithDeletedResponse.body).toHaveLength(2);
-    expect(listWithDeletedResponse.body[0].id).toBe(recreateResponse.body.id);
-    expect(listWithDeletedResponse.body[0].deletedAt).toBeNull();
-    expect(listWithDeletedResponse.body[1].id).toBe(createResponse.body.id);
-    expect(listWithDeletedResponse.body[1].deletedAt).toBeTruthy();
+    const userRows = listWithDeletedResponse.body.filter((c) => !c.system);
+    expect(userRows).toHaveLength(2);
+    expect(userRows[0].id).toBe(recreateResponse.body.id);
+    expect(userRows[0].deletedAt).toBeNull();
+    expect(userRows[1].id).toBe(createResponse.body.id);
+    expect(userRows[1].deletedAt).toBeTruthy();
   });
 
   it("POST /categories/:id/restore restaura categoria sem conflito", async () => {
