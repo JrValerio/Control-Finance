@@ -3,467 +3,341 @@
 [![CI](https://github.com/JrValerio/Control-Finance-React-TailWind/actions/workflows/ci.yml/badge.svg)](https://github.com/JrValerio/Control-Finance-React-TailWind/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Aplicacao web para controle financeiro pessoal com entradas/saidas, filtros por categoria e periodo, grafico de receita x despesa, exportacao CSV e autenticacao JWT.
+Cockpit financeiro pessoal com IA. Registre transações, acompanhe a saúde do mês em tempo real, defina metas de poupança e receba orientação do Especialista IA — do extrato de hoje até os objetivos de amanhã.
 
-## Documentation Index
+## Índice
 
 - [Links](#links)
+- [Funcionalidades](#funcionalidades)
 - [Deploy](#deploy-render--vercel)
-- [Operational Model](#operational-model)
-- [Architecture (Monorepo Foundation)](#monorepo-v130-foundation)
-- [Web Features](#funcionalidades-atuais-web)
-- [Monthly Summary](#monthly-summary)
-- [Monthly Budgets](#monthly-budgets)
-- [CSV Import (Dry-run + Commit)](#csv-import-dry-run--commit)
-- [Import History](#import-history)
-- [Pagination](#pagination)
-- [Export CSV (Architecture Doc)](docs/architecture/v1.5.0-export-csv.md)
-- [API (apps/api)](#api-appsapi)
-- [Auth (Architecture Doc)](docs/architecture/v1.3.0-auth.md)
-- [Runbook](docs/runbooks/release-production-checklist.md)
-- [Release Automation](#release-automation)
+- [Modelo Operacional](#modelo-operacional)
+- [Arquitetura](#arquitetura-monorepo)
+- [API Reference](#api-reference)
+- [Como rodar localmente](#como-rodar-localmente)
+- [Variáveis de ambiente](#variáveis-de-ambiente)
+- [Scripts](#scripts)
+- [Qualidade](#qualidade)
+- [Maturidade Operacional](#maturidade-operacional)
 - [Roadmap](#roadmap)
 
 ## Links
 
-- Producao (Vercel): [control-finance-react-tail-wind.vercel.app](https://control-finance-react-tail-wind.vercel.app/)
-- CI: [GitHub Actions - CI](https://github.com/JrValerio/Control-Finance-React-TailWind/actions/workflows/ci.yml)
+- Produção (Vercel): [control-finance-react-tail-wind.vercel.app](https://control-finance-react-tail-wind.vercel.app/)
+- CI: [GitHub Actions](https://github.com/JrValerio/Control-Finance-React-TailWind/actions/workflows/ci.yml)
 - Releases: [GitHub Releases](https://github.com/JrValerio/Control-Finance-React-TailWind/releases)
+
+## Funcionalidades
+
+### Transações e Categorias
+
+- Cadastro de transações com tipo (`Entrada` / `Saída`), data, descrição, notas e categoria
+- Filtros por tipo, período (`Hoje`, `7 dias`, `30 dias`, `Personalizado`) e busca por texto
+- Edição e exclusão com confirmação + desfazer (undo real via soft delete)
+- Categorias com unicidade case/acento-insensitive, soft delete e restauração
+- Resumo mensal: `income`, `expense`, `balance`, `byCategory`
+
+### Importação e Exportação
+
+- **Importação CSV** em duas etapas: dry-run com pré-visualização linha a linha + commit das linhas válidas
+  - Badge `Revisar` para linhas válidas sem categoria classificada
+  - Sessão de dry-run com TTL de 30 minutos; commit idempotente (409 se já confirmado)
+- **Importação OFX/PDF** com parser nativo e OCR de fallback
+- **Exportação CSV** com filtros ativos e totais consolidados
+- Histórico de importações com status `Committed / Expired / Pending`
+
+### Dashboard Visual
+
+- **Gráfico de receita × despesa** (Recharts, lazy-loaded)
+- **Treemap de despesas por categoria** — mapa de calor proporcional ao gasto
+- **HealthOverview** — dois painéis lado a lado:
+  - *Trajetória mensal*: AreaChart com projeção de saldo dia a dia até o fim do mês
+  - *Gauge de dinheiro livre*: arco SVG colorido (verde / âmbar / vermelho) pelo saldo ajustado como % da renda
+- **FinancialAlertBanner** — alerta proativo vermelho quando o saldo projetado for negativo; descartável por sessão
+
+### Forecast Engine
+
+- `POST /forecasts/recompute`: `saldo_projetado = renda_ajustada − (media_diaria × dias_restantes)`
+- Detecção de flip (`pos_to_neg` / `neg_to_pos`) com notificação por email (cooldown de 24 h)
+- Lembrete de payday (janela de 5–7 dias, uma vez por mês)
+
+### Metas de Poupança
+
+- CRUD completo de metas (`/goals`) com auth, entitlement gate e rate-limit
+- `calcMonthlyNeeded`: quanto poupar por mês para bater o prazo
+- Barra de progresso com cores semânticas (cinza → âmbar → roxo → verde)
+- **Badge `⚠ risco`** — aparece quando `monthlyNeeded > adjustedProjectedBalance` (cruzamento forecast × meta)
+- **`+ Registrar poupança`** — mini-form inline que faz `PATCH` sem abrir o modal completo
+- Ícones emoji selecionáveis (🎯 ✈️ 🏠 🚗 🎓 ❤️ ⭐ 🎁 💼 ☂️)
+
+### Especialista IA
+
+- `GET /ai/insight` — gera um insight acionável de até 180 caracteres via Claude Haiku
+- Contexto enviado ao modelo: saldo projetado, burn rate, dias restantes, top 3 categorias de despesa, metas ativas (necessidade mensal + progresso %)
+- **Prioridade de alerta**: se alguma meta tiver `monthly_needed > balance`, o Especialista aponta o conflito antes de qualquer elogio
+- Falha do LLM é silenciosa — nunca bloqueia o dashboard
+- Rate limit: 10 chamadas / 10 min por usuário (env `AI_RATE_LIMIT_MAX` / `AI_RATE_LIMIT_WINDOW_MS`)
+
+### Salário e Benefícios
+
+- Calculadora CLT de salário líquido: INSS + IRRF 2026 com tabelas progressivas
+- `GET /salary/profile`, `PUT /salary/profile`
+- Deduções de dependentes, vale-refeição, vale-transporte
+- Visão anual gated por plano Pro (`salary_annual` feature flag)
+
+### Contas a Pagar e Fontes de Renda
+
+- CRUD de contas recorrentes (`/bills`) com vencimento, valor estimado e categoria
+- CRUD de fontes de renda (`/income-sources`) com frequência e próximo pagamento
+- Widgets auto-suficientes no dashboard
+
+### Autenticação e Sessão
+
+- Registro, login e Google OAuth
+- **httpOnly cookies**: `cf_access` (JWT, 15 min) + `cf_refresh` (opaque, 30 dias)
+- Rotação de refresh token a cada uso; revogação de família em replay de token revogado (detecção de roubo)
+- Fluxo completo de recuperação de senha por e-mail (token único, TTL 1 h, invalidação em falha de SMTP)
+- Rate limiting de login por IP + bloqueio temporário por brute force
+
+### Billing e Trial
+
+- Trial inteligente: 14 dias, extensível até o próximo payday
+- Planos via Stripe; webhook de ciclo de vida de assinatura
+- Paywall 402 com `code: "TRIAL_EXPIRED"` ou `"FEATURE_GATED"`; modal contextual no frontend
+- `past_due` grace period
+
+### Onboarding e Ativação
+
+- **WelcomeCard** (4 passos): transação → perfil → metas de poupança → Especialista IA
+- Funil instrumentado: `welcome_card_viewed → welcome_cta_clicked → transaction_modal_opened → first_transaction_created`
+- Banner de ativação após primeira transação (descartável)
 
 ## Deploy (Render + Vercel)
 
 - Guia monorepo: `docs/deployment/monorepo-render-vercel.md`
 - Production release checklist: `docs/runbooks/release-production-checklist.md`
 
-## Operational Model
+## Modelo Operacional
 
-- Deploy trigger: merge na `main` (Render Auto Deploy) ou manual via **Deploy latest commit**.
-- Health endpoint: `/health` retorna `{ ok, version, commit, buildTimestamp, uptimeSeconds, db, requestId }`.
-  - `version`: usa a versao de `apps/api/package.json`; fallback para `APP_VERSION` e depois `sha-<short>`.
-  - `commit`: resolvido via `RENDER_GIT_COMMIT` (ou fallback) e representa exatamente o codigo em runtime.
-- Metrics endpoint: `/metrics` em formato Prometheus (`text/plain`).
-  - Em `production`, exige `Authorization: Bearer <METRICS_AUTH_TOKEN>`.
-- CI gates (web): `lint`, `typecheck`, `typecheck:auth`, `test`, `build`.
-- Git tag/release: `vX.Y.Z`.
-- Render `APP_VERSION`: opcional (`X.Y.Z`, sem `v`) para override/fallback.
-- Runbook: `docs/runbooks/release-production-checklist.md`.
+- Deploy trigger: merge na `main` (Render Auto Deploy) ou manual via **Deploy latest commit**
+- Migrations SQL aplicadas automaticamente no boot via `runMigrations()` com advisory lock (`pg_try_advisory_lock`)
+- Health endpoint: `GET /health` — `{ ok, version, commit, buildTimestamp, uptimeSeconds, db, migrations, requestId }`
+  - `migrations.applied`: número de migrations aplicadas; `migrations.latest`: nome da última
+  - `db.status`: `"ok" | "error"` com `latencyMs`; retorna `503` em falha
+- Metrics endpoint: `GET /metrics` — formato Prometheus; requer bearer token em produção (`METRICS_AUTH_TOKEN`)
+- CI gates: `lint`, `typecheck`, `test`, `build`
 
-## Preview
-
-![Tela principal](docs/images/home.png)
-![Modal de cadastro](docs/images/modal.png)
-
-## Monorepo (v1.3.0 Foundation)
+## Arquitetura (Monorepo)
 
 ```text
 apps/
-  web/ -> Frontend React + Vite
-  api/ -> Backend Express (healthcheck + base para auth/transactions)
+  web/  → React + Vite + TypeScript + Tailwind
+  api/  → Express + pg (Postgres) + Vitest
 ```
 
-Detalhes tecnicos:
+Sessão e autenticação: `apps/api/src/middlewares/auth.middleware.js` — lê `cf_access` cookie primeiro, fallback para `Authorization: Bearer`.
 
-- Foundation: `docs/architecture/v1.3.0.md`
-- Auth: `docs/architecture/v1.3.0-auth.md`
-- Transactions API: `docs/architecture/v1.3.1-transactions.md`
-- Postgres Persistence: `docs/architecture/v1.4.0-postgres.md`
-- Auth Hardening: `docs/architecture/v1.4.2-auth-hardening.md`
-- Transactions CRUD+: `docs/architecture/v1.4.3-transactions-crud-plus.md`
-- Export CSV: `docs/architecture/v1.5.0-export-csv.md`
-- Web Pagination: `docs/architecture/v1.6.2-web-pagination.md`
-- Pagination UI Polish: `docs/architecture/v1.6.3-pagination-polish.md`
-- Health Build Identity: `docs/architecture/v1.6.4-health-build-identity.md`
-- Health Version Fallback: `docs/architecture/v1.6.10-health-version-fallback.md`
-- Web TypeScript Thin Slice: `docs/architecture/v1.6.5-web-typescript-thin-slice.md`
-- Web TypeScript Services + Routes: `docs/architecture/v1.6.6-web-typescript-services-and-routes.md`
+DB helper: `dbQuery()`, `withDbTransaction()`, `withDbClient()` em `apps/api/src/db/index.js`.
 
-## Funcionalidades atuais (web)
+Tokens de cor semânticos: `bg-cf-surface`, `cf-text-primary`, `cf-border`, `brand-1` (`#6741D9`) etc.
 
-- Cadastro de transacoes com tipo (`Entrada` e `Saida`) e data
-- Filtro por categoria: `Todos`, `Entrada`, `Saida`
-- Filtro por periodo: `Todo periodo`, `Hoje`, `Ultimos 7 dias`, `Ultimos 30 dias`, `Personalizado`
-- Saldo e totais por tipo em tempo real
-- Grafico de receita x despesa (Recharts, lazy-loaded)
-- Transacoes carregadas e persistidas pela API (por usuario autenticado)
-- Modal com fechamento por `ESC` e clique no backdrop
-- Remocao de transacoes
-- Login e criacao de conta com JWT
-- Sessao JWT com token em `localStorage` (chave namespaced)
-- Logout e rota protegida para `/app`
-- Protecao de login com rate limiting e bloqueio temporario por `IP+email`
-- Edicao de transacao com descricao e observacoes
-- Exclusao com confirmacao e desfazer (undo real)
-- Exportacao CSV com filtros ativos (categoria + periodo) e totais consolidados
-- Listagem paginada com `Anterior/Proxima` e indicador de pagina
-- Faixa de pagina (`Mostrando X-Y de N`) e seletor de itens por pagina
-- Base TypeScript inicial no `apps/web` com service de transacoes tipado
-- Camada `api` e entrypoints de rotas/web migrados para TypeScript
+## API Reference
 
-### Monthly Summary
+### Auth
 
-- Endpoint: `GET /transactions/summary?month=YYYY-MM`
-- Retorna `income`, `expense`, `balance` e `byCategory`
-- Dashboard usa o summary da API para os cards mensais
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| POST | `/auth/register` | Cria usuário |
+| POST | `/auth/login` | Login — seta cookies `cf_access` + `cf_refresh` |
+| POST | `/auth/refresh` | Rotaciona refresh token |
+| DELETE | `/auth/logout` | Revoga refresh token e limpa cookies |
+| POST | `/auth/google` | Login/registro via Google OAuth |
+| POST | `/auth/password-reset/request` | Envia e-mail de recuperação de senha |
+| POST | `/auth/password-reset/confirm` | Aplica nova senha com token de e-mail |
 
-## Monthly Budgets
+### Transações
 
-- `POST /budgets` cria ou atualiza meta por `categoryId + month`
-- `GET /budgets?month=YYYY-MM` retorna `budget`, `actual`, `remaining`, `percentage` e `status`
-- `DELETE /budgets/:id` remove meta do usuario autenticado
-- Regras de status:
-  - `ok` quando `percentage < 80`
-  - `near_limit` quando `percentage >= 80` e `<= 100`
-  - `exceeded` quando `percentage > 100`
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/transactions` | Lista paginada com filtros (`type`, `from`, `to`, `q`, `limit`, `offset`) |
+| POST | `/transactions` | Cria transação |
+| PATCH | `/transactions/:id` | Atualiza |
+| DELETE | `/transactions/:id` | Soft delete |
+| POST | `/transactions/:id/restore` | Restaura |
+| GET | `/transactions/summary` | Resumo mensal (`?month=YYYY-MM`) |
+| GET | `/transactions/export.csv` | Exporta CSV com filtros |
+| POST | `/transactions/import/dry-run` | Valida CSV e cria sessão |
+| POST | `/transactions/import/commit` | Confirma sessão |
+| GET | `/transactions/imports` | Histórico de importações |
 
-## CSV Import (Dry-run + Commit)
+### Outros endpoints
 
-### CSV import flow
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET/POST/PATCH/DELETE | `/categories` | CRUD de categorias |
+| GET/POST/PATCH/DELETE | `/budgets` | Metas mensais por categoria |
+| GET/POST/PATCH/DELETE | `/goals` | Metas de poupança (entitlement gated) |
+| GET/POST | `/forecasts/current`, `/forecasts/recompute` | Forecast engine |
+| GET | `/ai/insight` | Insight do Especialista IA (entitlement + rate-limit) |
+| GET/PUT | `/salary/profile` | Perfil salarial CLT |
+| GET/POST/PATCH/DELETE | `/bills` | Contas a pagar |
+| GET/POST/PATCH/DELETE | `/income-sources` | Fontes de renda |
+| GET/PUT | `/me` | Perfil do usuário |
+| POST | `/billing/…` | Planos, checkout, portal Stripe |
+| POST | `/analytics/events`, `/analytics/paywall` | Eventos de ativação e paywall |
+| GET | `/health` | Health check |
+| GET | `/metrics` | Métricas Prometheus |
 
-A importacao CSV usa um fluxo seguro em duas etapas:
-
-1. Upload do arquivo
-2. Pre-visualizacao e validacao (`dry-run`)
-3. Commit somente das linhas validas
-
-Isso evita persistir dados invalidos no banco.
-
-### Formato aceito
+### CSV Import
 
 ```csv
 date,type,value,description,notes,category
-2026-03-01,Entrada,1000,Salario,,Trabalho
-2026-03-02,Saida,250,Supermercado,Compras do mes,Mercado
+2026-03-01,Entrada,1000,Salário,,Trabalho
+2026-03-02,Saida,250,Supermercado,Compras do mês,Mercado
 ```
 
-| Column        | Required | Description                                    |
-| ------------- | -------- | ---------------------------------------------- |
-| `date`        | Yes      | Formato `YYYY-MM-DD`                           |
-| `type`        | Yes      | `Entrada` ou `Saida` (case-insensitive)        |
-| `value`       | Yes      | Numero `> 0` (suporta `.` e `,`)               |
-| `description` | Yes      | Texto nao vazio                                |
-| `notes`       | No       | Opcional                                       |
-| `category`    | No       | Deve existir para o usuario (case-insensitive) |
-
-### Validacao por linha
-
-Quando uma linha e invalida, a resposta traz erros por campo:
-
-```json
-{
-  "line": 3,
-  "status": "invalid",
-  "errors": [{ "field": "date", "message": "Data invalida. Use YYYY-MM-DD." }]
-}
-```
-
-### Segurança e consistência
-
-- Sessao de dry-run com TTL de 30 minutos
-- Commit em uma unica transacao de banco
-- Commit idempotente (sessao ja confirmada retorna `409`)
-- Sessao expirada retorna `410`
-- Erros padronizados no formato `{ message }`
-- Status de erro: `400` (input invalido), `404` (sessao nao encontrada/sem ownership), `409` (ja confirmada), `410` (expirada)
-
-### API reference (resumo)
-
-- `POST /transactions/import/dry-run`
-  - `multipart/form-data` com campo `file`
-  - resposta com `importId`, `expiresAt`, `summary` e `rows`
-- `POST /transactions/import/commit`
-  - `application/json` com `{ importId }`
-
-```json
-{
-  "importId": "uuid"
-}
-```
-
-## Import History
-
-- Endpoint: `GET /transactions/imports?limit=20&offset=0`
-- Retorna sessoes de importacao do usuario autenticado em ordem `createdAt DESC`
-- Campos por item: `id`, `createdAt`, `expiresAt`, `committedAt`, `summary`
-- Regra de `summary.imported`: `committedAt ? validRows : 0`
-
-### Status no Web
-
-- `Committed`: possui `committedAt`
-- `Expired`: nao possui `committedAt` e `Date.now() > Date.parse(expiresAt)`
-- `Pending`: nao possui `committedAt` e nao expirou
-
-## Pagination
-
-The transactions list supports server-side pagination using `limit` and `offset`.
-
-Example:
-
-```http
-GET /transactions?limit=20&offset=40
-```
-
-Notes:
-
-- `offset` takes precedence over `page`
-- The dashboard persists pagination and filters in the querystring
-- URLs are shareable and refresh-safe
-- Pagination metadata is returned in `meta`:
-
-```json
-{
-  "meta": {
-    "page": 3,
-    "limit": 20,
-    "offset": 40,
-    "total": 95,
-    "totalPages": 5
-  }
-}
-```
-
-## API (apps/api)
-
-- `GET /health` retorna `{ ok, version, commit, buildTimestamp, uptimeSeconds, db, requestId }`
-  - `version`: `apps/api/package.json` por padrao, com fallback opcional `APP_VERSION` e depois `sha-<commit-curto>`
-  - `commit`: prioriza `RENDER_GIT_COMMIT`, com fallback para `APP_COMMIT`/`COMMIT_SHA`
-  - `buildTimestamp`: prioriza `APP_BUILD_TIMESTAMP`, fallback para `BUILD_TIMESTAMP`
-  - `db`: `{ status: "ok" | "error", latencyMs }`; em falha de DB o endpoint retorna `503` com `ok: false`
-- `GET /metrics` expõe metricas HTTP em formato Prometheus
-  - `http_requests_total{status="2xx|3xx|4xx|5xx"}`
-  - `http_request_latency_ms` (histograma para `/transactions`, `/categories`, `/auth/login`)
-  - Em `production`, requer bearer token configurado em `METRICS_AUTH_TOKEN`
-- `POST /auth/register` cria usuario no Postgres
-- `POST /auth/login` retorna `{ token, user }`
-- `/auth/login` aplica rate limit por IP e bloqueio temporario por brute force
-- `GET /categories` lista categorias ativas do usuario autenticado (`?includeDeleted=true` inclui removidas por soft delete)
-- `POST /categories` cria categoria (`name`) com unicidade por usuario (case/acento-insensitive)
-- `PATCH /categories/:id` renomeia categoria ativa do usuario autenticado
-- `DELETE /categories/:id` aplica soft delete em categoria ativa do usuario autenticado
-- `POST /categories/:id/restore` restaura categoria removida (retorna `409` em conflito de nome ativo)
-- Manutencao: `npm -w apps/api run db:backfill:categories-normalized` para alinhar `normalized_name` legado com a normalizacao atual da API
-- Metas mensais: veja [Monthly Budgets](#monthly-budgets)
-- `GET /transactions` lista transacoes do usuario autenticado com filtros opcionais (`type`, `from`, `to`, `q`, `includeDeleted`, `page`, `limit`, `offset`)
-  - defaults: `limit=20`, `offset=0`
-  - validacao: `limit` inteiro entre `1` e `100`; `offset` inteiro `>= 0`
-  - Pagination precedence: when `offset` is provided, it takes precedence over `page`.
-  - Paginated response shape: `{ data, meta: { page, limit, offset, total, totalPages } }`
-- `POST /transactions` cria transacao para o usuario autenticado
-- `PATCH /transactions/:id` atualiza transacao do usuario autenticado
-- `DELETE /transactions/:id` aplica soft delete para o usuario autenticado
-- `POST /transactions/:id/restore` restaura transacao removida
-- `GET /transactions/export.csv` exporta CSV filtrado com totais de entradas, saidas e saldo
-- `POST /transactions/import/dry-run` valida CSV por linha e cria sessao de importacao com TTL
-- `POST /transactions/import/commit` confirma sessao de importacao e persiste apenas linhas validas
-- `GET /transactions/imports` lista historico de sessoes de importacao por usuario com `limit`/`offset`
-- `GET /transactions/imports/metrics` retorna metricas por usuario (`total`, `last30Days`, `lastImportAt`)
-- Correlacao de request: aceita `x-request-id` (ou `x-correlation-id`) e ecoa `x-request-id` na resposta
-- Migrations SQL automaticas no startup (`src/db/migrations`)
-- Middleware global de erro e fallback `404`
+| Campo | Obrigatório | Descrição |
+|-------|-------------|-----------|
+| `date` | Sim | `YYYY-MM-DD` |
+| `type` | Sim | `Entrada` ou `Saida` (case-insensitive) |
+| `value` | Sim | Número `> 0` (suporta `.` e `,`) |
+| `description` | Sim | Texto não vazio |
+| `notes` | Não | Opcional |
+| `category` | Não | Deve existir para o usuário (case-insensitive) |
 
 ## Como rodar localmente
 
-1. Instalar dependencias:
-
 ```bash
+# 1. Instalar dependências
 npm ci
-```
 
-2. Subir web + api juntos:
+# 2. Criar arquivo de env
+cp apps/api/.env.example apps/api/.env
+# editar: DATABASE_URL, JWT_SECRET, ANTHROPIC_API_KEY, ...
 
-```bash
+# 3. Subir web + api
 npm run dev
 ```
-
-3. Endpoints locais:
 
 - Web: `http://localhost:5173`
 - API: `http://localhost:3001/health`
 
-## Variaveis de ambiente
+## Variáveis de ambiente
 
-- Referencia geral: `.env.example`
-- Web: `apps/web/.env.example`
-- API: `apps/api/.env.example`
-- Em deploy (Vercel), `VITE_API_URL` e obrigatoria e deve apontar para a URL publica da API
-- Para Postgres gerenciado com SSL, configure `DB_SSL=true` na API
-- Em deploy com proxy (Render), use `TRUST_PROXY=1` na API
-- `CORS_ORIGIN` da API pode receber lista separada por virgula (local + dominios de deploy)
-- Hardening de login: `AUTH_RATE_LIMIT_*` e `AUTH_BRUTE_FORCE_*`
-- Build identity da API no healthcheck: versao do `apps/api/package.json`, commit (`RENDER_GIT_COMMIT`) e timestamp de build (`APP_BUILD_TIMESTAMP`/`BUILD_TIMESTAMP`)
-- Observabilidade de metricas em producao: `METRICS_AUTH_TOKEN`
+Referência completa: `apps/api/.env.example` e `apps/web/.env.example`
 
-## Scripts (root)
+| Variável | Onde | Descrição |
+|----------|------|-----------|
+| `DATABASE_URL` | API | Connection string Postgres |
+| `JWT_SECRET` | API | Segredo de assinatura JWT |
+| `ANTHROPIC_API_KEY` | API | Chave para o Especialista IA (Claude Haiku) |
+| `VITE_API_URL` | Web | URL pública da API (obrigatório em produção) |
+| `CORS_ORIGIN` | API | Origens permitidas (lista separada por vírgula) |
+| `COOKIE_DOMAIN` | API | Domínio dos cookies de sessão |
+| `COOKIE_SAME_SITE` | API | `strict` (padrão) ou `none` para cross-site |
+| `TRUST_PROXY` | API | `1` em deploy com proxy reverso (Render) |
+| `DB_SSL` | API | `true` para Postgres gerenciado com SSL |
+| `AI_RATE_LIMIT_MAX` | API | Máx. chamadas IA por janela (padrão: 10) |
+| `AI_RATE_LIMIT_WINDOW_MS` | API | Janela em ms (padrão: 600000 = 10 min) |
+| `METRICS_AUTH_TOKEN` | API | Bearer token para `GET /metrics` em produção |
+| `ACCESS_TOKEN_EXPIRES_IN` | API | Expiração do JWT de acesso (padrão: `15m`) |
+| `REFRESH_TOKEN_EXPIRES_DAYS` | API | Expiração do refresh token (padrão: `30`) |
 
-- `npm run dev` inicia `apps/web` e `apps/api`
-- `npm run lint` roda lint nos dois apps
-- `npm run typecheck` valida tipos no `apps/web`
-- `npm run test` roda testes dos dois apps
-- `npm run build` builda web e valida build da api
-- `npm run preview` sobe preview do web
+## Scripts
 
-## Release Automation
+```bash
+npm run dev        # inicia web + api
+npm run lint       # ESLint nos dois apps
+npm run typecheck  # validação de tipos (web)
+npm run test       # testes dos dois apps (552 api + 239 web)
+npm run build      # build web + validação de build api
+```
 
-- `scripts/release.ps1` — release completo: bump, PR, merge, tag, GitHub Release (veja [Release Automation](#release-automation))
-- `scripts/smoke-categories-v2.ps1` — smoke test de categorias pos-deploy
-- `scripts/smoke-paywall-forecast.ps1` — smoke test de paywall (401/200/402) e forecast engine
-- `scripts/warmup-observability.ps1` — aquecimento da API para metricas de observabilidade
+```bash
+# Release automático (PowerShell)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version "1.30.0" -DryRun
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version "1.30.0"
 
-## Scripts (api)
-
-- `npm -w apps/api run db:migrate` aplica migrations do Postgres
-- `npm -w apps/api run db:seed` executa seed minima (usuario demo + transacoes)
-- `npm -w apps/web run typecheck` valida tipos do frontend
+# Smoke tests pós-deploy
+scripts/smoke-categories-v2.ps1 -BaseUrl "https://<api-host>"
+scripts/smoke-paywall-forecast.ps1 -BaseUrl "https://<api-host>"
+```
 
 ## Qualidade
 
-- CI com jobs separados para web e api em `.github/workflows/ci.yml`
-- Branch protection habilitada na `main`
-- Runtime padronizado em Node `24.x`
+- CI com jobs separados para web e api (`.github/workflows/ci.yml`)
+- Branch protection ativa na `main` — CI verde obrigatório antes de merge
+- Runtime: Node `24.x`
+- Testes: `552/552` (api, pg-mem in-memory) · `239/239` (web, jsdom)
+- 0 warnings ESLint (`--max-warnings 0`)
 
-## Operational Maturity
+## Maturidade Operacional
 
-### CI & Quality Gates
+### Health & Version Integrity
 
-The project enforces continuous integration across the monorepo:
-
-```bash
-npm run lint
-npm run test
-npm run build
+```http
+GET /health
 ```
-
-All pull requests must pass:
-
-- ESLint (API + Web)
-- Full test suite (pg-mem for API)
-- Production build validation
-
-CI status must be green before merge.
-CI must be green before any merge to `main`.
-
-### Release Runbook
-
-Production releases follow a documented checklist:
-
-`docs/runbooks/release-production-checklist.md`
-
-Includes:
-
-- Migration verification
-- Post-deploy validation
-- Monitoring window (15-30 min)
-- Rollback awareness
-
-### Release Automation
-
-Releases are automated via `scripts/release.ps1` (PowerShell 5.1+, no `gh` CLI required).
-
-**Prerequisites:** CHANGELOG.md must already contain a `## [X.Y.Z]` section before running.
-
-```powershell
-# Preview — no changes made
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version "1.27.0" -DryRun
-
-# Full release
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1 -Version "1.27.0"
-```
-
-What the script does automatically:
-
-1. Validates CHANGELOG has the target section (fails fast if missing)
-2. Bumps `package.json` in root, `apps/api`, and `apps/web`
-3. Creates `chore/release-vX.Y.Z` branch, commits, pushes
-4. Opens a PR via GitHub API and squash-merges it
-5. Tags the squash merge SHA and pushes the tag
-6. Creates the GitHub Release with the CHANGELOG section as body
-7. Deletes the release branch (remote + local) and syncs local `main`
-
-**Environment notes (Windows):**
-
-- `gh` CLI is installed at `C:\Program Files\GitHub CLI\gh.exe` but is not in the Git Bash PATH. The script uses `git credential fill` + `Invoke-RestMethod` — no `gh` required.
-- JSON payloads must be written to a temp file before sending via `curl` on Git Bash (inline `-d '{...}'` causes encoding issues). The release.ps1 script handles this transparently via `Invoke-RestMethod`.
-- `python3` is not in PATH; use `node -e` for any ad-hoc JSON processing.
-- All scripts target **PowerShell 5.1** (Windows default). Do not use PS7-only operators (`?.`, `??`, `||=`) — they will cause parse errors on the CI/dev machine.
-
-### Automated Smoke Validation
-
-After deploy, critical domain integrity can be validated via:
-
-```bash
-scripts/smoke-categories-v2.ps1 -BaseUrl "https://<api-host>"
-```
-
-Validates:
-
-- Category creation
-- Transaction with category
-- Soft delete category
-- PATCH transaction -> `category_id = null`
-- Negative test (404 for deleted category)
-- Explicit status code validation
-- `x-request-id` traceability
-
-### Backfill Tooling
-
-Domain normalization alignment is enforced via:
-
-```bash
-npm -w apps/api run db:backfill:categories-normalized
-```
-
-Ensures legacy `normalized_name` values match runtime normalization logic.
-
-Must be executed once after upgrading to Categories v2.
-
-### Runtime Health & Version Integrity
-
-The API exposes operational metadata:
-
-`GET /health`
-
-Returns:
 
 ```json
 {
   "ok": true,
-  "version": "x.y.z",
+  "version": "1.30.0",
   "commit": "abcdef1",
-  "buildTimestamp": "2026-02-21T03:45:00.000Z",
+  "buildTimestamp": "2026-03-25T05:00:00.000Z",
   "uptimeSeconds": 1234,
-  "db": {
-    "status": "ok",
-    "latencyMs": 3
-  },
-  "requestId": "rid-123"
+  "db": { "status": "ok", "latencyMs": 3 },
+  "migrations": { "applied": 30, "latest": "030_create_user_goals" },
+  "requestId": "rid-abc"
 }
 ```
 
-Used to verify deployment consistency (version/commit hash)
-and ensure environment alignment after releases.
+Usado para verificar consistência pós-deploy:
 
-Operational maturity is treated as a first-class concern,
-not as an afterthought.
+```bash
+curl https://<api-host>/health | jq '.migrations'
+```
+
+### Release Automation
+
+`scripts/release.ps1` — release completo sem `gh` CLI:
+
+1. Valida seção no CHANGELOG
+2. Bumpa `package.json` (root + api + web)
+3. Cria branch `chore/release-vX.Y.Z`, commita, push
+4. Abre PR via GitHub API e faz squash merge
+5. Cria tag e GitHub Release com o corpo do CHANGELOG
+6. Limpa branch remota + local e sincroniza `main`
 
 ## Roadmap
 
-- [x] PR 2 (v1.3.0): autenticacao JWT + rotas protegidas
-- [x] PR 3 (v1.3.0): transacoes por usuario no backend + frontend API-first
-- [x] Persistencia em banco remoto (Postgres) para ambiente de producao
-- [x] Exportacao CSV com filtros e totais
-- [x] Importacao CSV com dry-run + commit
-- [x] Historico de importacoes (API + Web)
-- [x] Dark mode com sistema de tokens semanticos (PR-N6/N7/N8)
-- [x] Google OAuth — login/registro com conta Google
-- [x] Configuracoes de conta — perfil, senha, Google link, plano
-- [x] Trial inteligente (14 dias, extensivel via payday)
-- [x] Paywall — middleware 402 para trial expirado sem plano pago
-- [x] Motor de forecast — balanco projetado + deteccao de flip
-- [x] Notificacoes por email best-effort (flip negativo + lembrete de payday)
-- [x] Forecast card com onboarding progressivo e estado congelado pos-trial
-- [ ] Importacao JSON
-- [ ] Dark mode para graficos Recharts (cores de eixo/grid dinamicas)
-- [ ] Smoke test automatizado pos-deploy para paywall + forecast
+### Concluído
 
-## Licenca
+- [x] Autenticação JWT + rotas protegidas
+- [x] Transações por usuário com CRUD completo
+- [x] Exportação e importação CSV (dry-run + commit)
+- [x] Importação OFX e PDF com OCR de fallback
+- [x] Dark mode com sistema de tokens semânticos
+- [x] Google OAuth
+- [x] Trial inteligente + paywall Stripe
+- [x] Motor de forecast com detecção de flip e notificações
+- [x] Calculadora de salário líquido CLT (INSS + IRRF 2026)
+- [x] Contas a pagar e fontes de renda
+- [x] Recuperação de senha por e-mail (transacional, com rollback em falha SMTP)
+- [x] Sessão httpOnly cookie com rotação de refresh token e detecção de roubo
+- [x] Dashboard visual: FinancialAlertBanner + CategoryTreemap + HealthOverview (trajetória + gauge)
+- [x] Especialista IA — Claude Haiku com contexto de forecast + metas
+- [x] Metas de poupança full-stack (`/goals`) com badge de risco e contribuição rápida
+- [x] Funil de ativação instrumentado (`activation_events` + `paywall_events`)
+- [x] WelcomeCard v2 — onboarding narrativo em 4 passos
+
+### Próximas frentes
+
+- [ ] M2 — testes negativos de importação (OFX truncado, PDF rejeitado, OCR falhando)
+- [ ] M3 — teste direto de `email.service.js` isolado
+- [ ] Simulação "e se?" — projeção interativa de corte de gastos
+- [ ] Insights acionáveis vinculados às metas (ex: "cortar R$ X em Lazer garante sua meta de Viagem")
+- [ ] Importação JSON
+
+## Licença
 
 MIT. Consulte `LICENSE`.
