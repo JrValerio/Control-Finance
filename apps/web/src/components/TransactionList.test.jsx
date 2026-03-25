@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import TransactionList from "./TransactionList";
-import { DiscreetModeContext } from "../context/DiscreetModeContext";
 
 vi.mock("../context/DiscreetModeContext", async (importOriginal) => {
   const actual = await importOriginal();
