@@ -1071,4 +1071,49 @@ describe("transaction imports", () => {
 
     expect(check.body.summary.duplicateRows).toBeGreaterThan(0);
   });
+
+  it("POST /transactions/import/dry-run retorna documentType bank_statement para CSV manual", async () => {
+    const token = await registerAndLogin("import-doctype-csv@controlfinance.dev");
+    await makeProUser("import-doctype-csv@controlfinance.dev");
+    const csv = csvFile(
+      ["date,type,value,description", "2026-02-05,Entrada,100,Salario"].join("\n"),
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.documentType).toBe("bank_statement");
+  });
+
+  it("POST /transactions/import/dry-run retorna documentType bank_statement para OFX", async () => {
+    const token = await registerAndLogin("import-doctype-ofx@controlfinance.dev");
+    await makeProUser("import-doctype-ofx@controlfinance.dev");
+    const ofxFile = csvFile(
+      [
+        "OFXHEADER:100",
+        "DATA:OFXSGML",
+        "<OFX>",
+        "<BANKTRANLIST>",
+        "<STMTTRN>",
+        "<TRNTYPE>CREDIT",
+        "<DTPOSTED>20260205000000[-3:BRT]",
+        "<TRNAMT>100.00",
+        "<FITID>DOC001",
+        "<MEMO>Teste OFX documentType</MEMO>",
+        "</STMTTRN>",
+      ].join("\n"),
+      "extrato.ofx",
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", ofxFile.buffer, { filename: ofxFile.fileName, contentType: "application/ofx" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.documentType).toBe("bank_statement");
+  });
 });
