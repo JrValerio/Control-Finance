@@ -639,7 +639,6 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                                     onKeyDown={(e) => { if (e.key === "Enter") handleInlineCreateCategory(row.line, row.raw.type); if (e.key === "Escape") setInlineCreate(null); }}
                                     placeholder="Nova categoria"
                                     className="rounded border border-cf-border bg-cf-surface px-1 py-0.5 text-xs text-cf-text-primary"
-                                    // eslint-disable-next-line jsx-a11y/no-autofocus
                                     autoFocus
                                   />
                                   <button

@@ -182,7 +182,7 @@ const BillModal = ({
         setIsSaving(false);
       }
     },
-    [title, amount, dueDate, categoryId, provider, referenceMonth, notes, isEditing, initialBill, onSaved, showInstallments, installmentCount],
+    [title, amount, dueDate, categoryId, provider, referenceMonth, notes, isEditing, initialBill, prefill, onSaved, showInstallments, installmentCount],
   );
 
   if (!isOpen) return null;
