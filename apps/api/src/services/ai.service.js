@@ -1,10 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getLatestForecast } from "./forecast.service.js";
+import { getGoalsSummaryForAI } from "./goals.service.js";
 import { dbQuery } from "../db/index.js";
 import { logInfo, logWarn, logError } from "../observability/logger.js";
 
 const SYSTEM_PROMPT =
-  "Você é o Especialista Financeiro do app Control Finance. Analise os dados JSON fornecidos e retorne um único insight acionável de no máximo 180 caracteres. Seja pragmático. Se os dados forem positivos, parabenize e sugira uma meta de reserva. Se forem negativos, aponte a categoria culpada e sugira um corte específico. Retorne APENAS o texto do insight, sem formatação, sem aspas, sem JSON.";
+  "Você é o Especialista Financeiro do app Control Finance. Analise os dados JSON e retorne um único insight acionável de no máximo 180 caracteres. Prioridade: se alguma meta tiver monthly_needed maior que o balance, alerte que o plano está inviável e sugira qual gasto cortar. Se os dados forem negativos sem metas, aponte a categoria culpada. Se forem positivos, parabenize e reforce a meta mais próxima do prazo. Retorne APENAS o texto do insight, sem formatação, sem aspas, sem JSON.";
 
 const monthStartStr = (now) => {
   const y = now.getUTCFullYear();
@@ -63,7 +64,10 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
   const forecast = await getLatestForecast(userId, { now });
   if (!forecast || forecast.daysRemaining <= 0) return null;
 
-  const topCategories = await getTopExpenseCategories(userId, now);
+  const [topCategories, goals] = await Promise.all([
+    getTopExpenseCategories(userId, now),
+    getGoalsSummaryForAI(userId, { now }),
+  ]);
 
   const context = {
     balance: forecast.adjustedProjectedBalance,
@@ -71,6 +75,7 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
     runway: forecast.daysRemaining,
     health_score: forecast.adjustedProjectedBalance > 0 ? "positive" : "negative",
     top_categories: topCategories,
+    goals,
   };
 
   const client = anthropicClient ?? new Anthropic();
