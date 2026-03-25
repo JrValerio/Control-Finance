@@ -2,6 +2,7 @@ import { useState } from "react";
 import PropTypes from "prop-types";
 import { CATEGORY_ENTRY } from "./DatabaseUtils";
 import { useMaskedCurrency } from "../context/DiscreetModeContext";
+import ConfirmDialog from "./ConfirmDialog";
 
 const formatDate = (value) => {
   const date = new Date(`${value}T00:00:00`);
@@ -15,6 +16,7 @@ const formatDate = (value) => {
 const TransactionList = ({ transactions, onDelete, onEdit, onBulkDelete }) => {
   const money = useMaskedCurrency();
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [showBulkConfirm, setShowBulkConfirm] = useState(false);
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
@@ -36,10 +38,11 @@ const TransactionList = ({ transactions, onDelete, onEdit, onBulkDelete }) => {
     }
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDeleteConfirm = () => {
     if (selectedIds.size === 0 || !onBulkDelete) return;
     const ids = [...selectedIds];
     setSelectedIds(new Set());
+    setShowBulkConfirm(false);
     onBulkDelete(ids);
   };
 
@@ -55,7 +58,7 @@ const TransactionList = ({ transactions, onDelete, onEdit, onBulkDelete }) => {
           </span>
           <button
             type="button"
-            onClick={handleBulkDelete}
+            onClick={() => setShowBulkConfirm(true)}
             className="rounded border border-red-300 bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-200 dark:border-red-700 dark:bg-red-900/40 dark:text-red-300"
           >
             Excluir selecionadas ({selectedIds.size})
@@ -140,6 +143,15 @@ const TransactionList = ({ transactions, onDelete, onEdit, onBulkDelete }) => {
           </div>
         </div>
       ))}
+
+      <ConfirmDialog
+        isOpen={showBulkConfirm}
+        title={`Excluir ${selectedIds.size} ${selectedIds.size === 1 ? "transação" : "transações"}?`}
+        description="Esta ação não pode ser desfeita."
+        confirmLabel="Excluir"
+        onConfirm={handleBulkDeleteConfirm}
+        onCancel={() => setShowBulkConfirm(false)}
+      />
     </div>
   );
 };
