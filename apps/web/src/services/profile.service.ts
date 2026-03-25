@@ -5,6 +5,8 @@ export interface UserProfile {
   salaryMonthly: number | null;
   payday: number | null;
   avatarUrl: string | null;
+  aiTone?: string;
+  aiInsightFrequency?: string;
 }
 
 export interface MeResponse {
@@ -23,6 +25,8 @@ export interface ProfileUpdatePayload {
   salary_monthly?: number | null;
   payday?: number | null;
   avatar_url?: string | null;
+  ai_tone?: string;
+  ai_insight_frequency?: string;
 }
 
 export const profileService = {

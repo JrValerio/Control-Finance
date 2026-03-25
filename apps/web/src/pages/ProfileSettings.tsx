@@ -90,6 +90,10 @@ const ProfileSettings = ({
   const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [trialExpired, setTrialExpired] = useState(false);
 
+  // Copilot preferences (saved inline on change)
+  const [aiTone, setAiTone] = useState("pragmatic");
+  const [aiInsightFrequency, setAiInsightFrequency] = useState("always");
+
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -119,6 +123,8 @@ const ProfileSettings = ({
         p?.payday !== null && p?.payday !== undefined ? String(p.payday) : "",
       );
       setAvatarUrl(p?.avatarUrl ?? "");
+      setAiTone(p?.aiTone ?? "pragmatic");
+      setAiInsightFrequency(p?.aiInsightFrequency ?? "always");
     } catch (error) {
       setLoadError(getApiErrorMessage(error, "Não foi possível carregar o perfil."));
     } finally {
@@ -132,6 +138,19 @@ const ProfileSettings = ({
       if (successTimerRef.current) clearTimeout(successTimerRef.current);
     };
   }, [loadProfile]);
+
+  const handleAiPrefChange = useCallback(
+    async (field: "ai_tone" | "ai_insight_frequency", value: string) => {
+      if (field === "ai_tone") setAiTone(value);
+      else setAiInsightFrequency(value);
+      try {
+        await profileService.updateProfile({ [field]: value });
+      } catch {
+        // silent fail — preference restored on next page load
+      }
+    },
+    [],
+  );
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -388,31 +407,109 @@ const ProfileSettings = ({
                 description="Configurações de exibição e privacidade."
               />
 
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-semibold text-cf-text-primary">Modo Discreto</p>
-                  <p className="mt-0.5 text-xs text-cf-text-secondary">
-                    Oculta valores monetários nas telas. Útil para usar o app em público.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={isDiscreetMode}
-                  onClick={toggleDiscreetMode}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-1 focus:ring-offset-2 ${
-                    isDiscreetMode ? "bg-brand-1" : "bg-cf-border"
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                      isDiscreetMode ? "translate-x-6" : "translate-x-1"
+              <div className="space-y-5">
+                {/* Modo Discreto */}
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-cf-text-primary">Modo Discreto</p>
+                    <p className="mt-0.5 text-xs text-cf-text-secondary">
+                      Oculta valores monetários nas telas. Útil para usar o app em público.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isDiscreetMode}
+                    onClick={toggleDiscreetMode}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-1 focus:ring-offset-2 ${
+                      isDiscreetMode ? "bg-brand-1" : "bg-cf-border"
                     }`}
-                  />
-                  <span className="sr-only">
-                    {isDiscreetMode ? "Desativar modo discreto" : "Ativar modo discreto"}
-                  </span>
-                </button>
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        isDiscreetMode ? "translate-x-6" : "translate-x-1"
+                      }`}
+                    />
+                    <span className="sr-only">
+                      {isDiscreetMode ? "Desativar modo discreto" : "Ativar modo discreto"}
+                    </span>
+                  </button>
+                </div>
+
+                <hr className="border-cf-border" />
+
+                {/* Tom do Especialista IA */}
+                <div>
+                  <p className="text-sm font-semibold text-cf-text-primary">Tom do Especialista IA</p>
+                  <p className="mt-0.5 text-xs text-cf-text-secondary">
+                    Como o Especialista se comunica com você.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Tom do Especialista IA">
+                    {(
+                      [
+                        { value: "pragmatic", label: "Pragmático", desc: "Direto e objetivo" },
+                        { value: "motivator", label: "Motivador", desc: "Encorajador e positivo" },
+                        { value: "sarcastic", label: "Sarcástico", desc: "Com humor ácido" },
+                      ] as const
+                    ).map(({ value, label, desc }) => (
+                      <label
+                        key={value}
+                        className={`flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm transition-colors ${
+                          aiTone === value
+                            ? "border-brand-1 bg-brand-1/10 text-cf-text-primary"
+                            : "border-cf-border bg-cf-bg-subtle text-cf-text-secondary hover:border-brand-1/50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="ai_tone"
+                          value={value}
+                          checked={aiTone === value}
+                          onChange={() => void handleAiPrefChange("ai_tone", value)}
+                          className="sr-only"
+                        />
+                        <span className="font-semibold">{label}</span>
+                        <span className="text-xs opacity-70">— {desc}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Frequência do insight */}
+                <div>
+                  <p className="text-sm font-semibold text-cf-text-primary">Frequência do insight</p>
+                  <p className="mt-0.5 text-xs text-cf-text-secondary">
+                    Quando o Especialista aparece no dashboard.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2" role="radiogroup" aria-label="Frequência do insight">
+                    {(
+                      [
+                        { value: "always", label: "Sempre", desc: "Mostra o insight em todo acesso" },
+                        { value: "risk_only", label: "Só quando há risco", desc: "Suprime mensagens positivas" },
+                      ] as const
+                    ).map(({ value, label, desc }) => (
+                      <label
+                        key={value}
+                        className={`flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm transition-colors ${
+                          aiInsightFrequency === value
+                            ? "border-brand-1 bg-brand-1/10 text-cf-text-primary"
+                            : "border-cf-border bg-cf-bg-subtle text-cf-text-secondary hover:border-brand-1/50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="ai_insight_frequency"
+                          value={value}
+                          checked={aiInsightFrequency === value}
+                          onChange={() => void handleAiPrefChange("ai_insight_frequency", value)}
+                          className="sr-only"
+                        />
+                        <span className="font-semibold">{label}</span>
+                        <span className="text-xs opacity-70">— {desc}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
               </div>
             </section>
 
