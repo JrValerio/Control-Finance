@@ -17,14 +17,14 @@
 }
 
 .dark {
-  --cf-bg-page:        #0f172a;
-  --cf-header-bg:      #1e293b;
-  --cf-surface:        #1e293b;
-  --cf-bg-subtle:      #243044;
-  --cf-text-primary:   #F1F5F9;
-  --cf-text-secondary: #94A3B8;
-  --cf-border:         #334155;
-  --cf-border-input:   #475569;
+  --cf-bg-page:        #0e0e0e;
+  --cf-header-bg:      #111111;
+  --cf-surface:        #1a1a1a;
+  --cf-bg-subtle:      #242424;
+  --cf-text-primary:   #f0f0f0;
+  --cf-text-secondary: #888888;
+  --cf-border:         #2e2e2e;
+  --cf-border-input:   #3a3a3a;
 }
 
 
