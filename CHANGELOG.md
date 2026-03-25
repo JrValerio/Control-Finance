@@ -2,6 +2,57 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.30.0] - 2026-03-25
+
+### Title
+
+v1.30.0 - Especialista IA + Metas de Poupança
+
+### Added
+
+#### AI Insight Layer — PR #264
+
+- New endpoint `GET /ai/insight` (auth + `requireActiveTrialOrPaidPlan` + `aiRateLimiter`)
+  - Rate limit: 10 calls / 10 min per user (`AI_RATE_LIMIT_MAX` / `AI_RATE_LIMIT_WINDOW_MS`)
+- `ai.service.js`: builds prompt context from forecast (balance, burn_rate, runway, health_score) + top 3 expense categories of the month; calls `claude-haiku-4-5-20251001`; returns `null` silently on LLM failure or missing forecast
+- Structured observability logs: `ai.insight.generated` (info), `ai.insight.empty_response` (warn), `ai.insight.llm_error` (error) — each with `latencyMs` and `userId`
+- `aiRateLimiter` added to `rate-limit.middleware.js`
+- `AIInsightPanel.tsx`: animated shimmer while loading; semantic card by type (`warning`=amber, `info`=blue, `success`=green); returns null on failure — never blocks dashboard
+- `HealthOverview.tsx`: expands to `sm:grid-cols-3` when insight present or loading; degrades to 2 columns silently
+
+#### Saving Goals Full-Stack — PR #266
+
+- Migration `030_create_user_goals.sql`: `user_goals` table with soft-delete (`deleted_at TIMESTAMPTZ`) and composite index `(user_id, deleted_at)`
+- `goals.service.js`:
+  - `calcMonthlyNeeded(targetAmount, currentAmount, targetDate, now)` — pure function, injectable `now` for deterministic tests; returns full remaining when past due
+  - Full CRUD: `listGoalsForUser`, `createGoalForUser`, `updateGoalForUser`, `deleteGoalForUser`
+  - `getGoalsSummaryForAI` — returns up to 5 active goals with `title`, `monthly_needed`, `progress_pct` for LLM context
+- `goals.routes.js`: `GET/POST/PATCH/DELETE /goals` — all behind auth + `requireActiveTrialOrPaidPlan` + `goalsWriteRateLimiter`
+- `goalsWriteRateLimiter` added to `rate-limit.middleware.js`
+- `ai.service.js` updated: goals injected into Haiku context in parallel with top categories; SYSTEM_PROMPT updated to prioritize `monthly_needed > balance` conflicts before any other insight
+- `goals.service.ts` (frontend): typed client with `GOAL_ICONS` emoji map (`🎯 ✈️ 🏠 🚗 🎓 ❤️ ⭐ 🎁 💼 ☂️`)
+- `GoalFormModal.tsx`: create/edit modal with emoji icon picker, client-side validation, a11y (`htmlFor` on date input, `role="dialog"`, Escape key)
+- `GoalsSection.tsx`: self-contained component fetching `/goals` + `/forecasts/current` in parallel
+  - Grid of `GoalCard` components with color-coded progress bar (gray → amber → brand purple → green)
+  - **At-risk badge** `⚠ risco`: shown when `goal.monthlyNeeded > forecast.adjustedProjectedBalance`
+  - **Quick contribution** `+ Registrar poupança`: inline collapsible form — fires `PATCH /goals/:id` without opening full modal; validates amount > 0 and ≤ remaining
+  - Shimmer loading skeleton, error state with retry, empty state with CTA
+- `WelcomeCard.tsx` v2: 4-step onboarding narrative (transaction → profile → goals → AI); sessionStorage key bumped to `cf_activation_welcome_viewed_v2`
+- `App.tsx`: `GoalsSection` lazy-loaded after `SalaryWidget`
+
+#### Documentation — PR #267
+
+- `README.md` rewritten to reflect current product: cockpit financeiro pessoal with IA, visual dashboard, goals, secure session, and billing — replacing the outdated v1.5 description
+
+### Test coverage delta
+
+| Suite | Before | After | Delta |
+|-------|--------|-------|-------|
+| API   | 531    | 552   | +21 (goals.test.js) |
+| Web   | 219    | 239   | +20 (GoalsSection.test.tsx) |
+
+---
+
 ## [1.29.0] - 2026-02-24
 
 ### Title
