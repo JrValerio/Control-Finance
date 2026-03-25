@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatCurrency } from "../utils/formatCurrency";
 import { getApiErrorMessage } from "../utils/apiError";
 import type { Goal, CreateGoalPayload, GoalIcon } from "../services/goals.service";
 import { GOAL_ICONS, goalsService } from "../services/goals.service";
+import { forecastService } from "../services/forecast.service";
 import GoalFormModal from "./GoalFormModal";
 import ConfirmDialog from "./ConfirmDialog";
 
@@ -10,11 +11,19 @@ import ConfirmDialog from "./ConfirmDialog";
 
 interface GoalCardProps {
   goal: Goal;
+  projectedBalance: number | null;
   onEdit: (goal: Goal) => void;
   onDelete: (goal: Goal) => void;
+  onContribute: (goalId: number, amount: number) => Promise<void>;
 }
 
-function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
+function GoalCard({ goal, projectedBalance, onEdit, onDelete, onContribute }: GoalCardProps) {
+  const [showContrib, setShowContrib] = useState(false);
+  const [contribAmt, setContribAmt] = useState("");
+  const [contributing, setContributing] = useState(false);
+  const [contribError, setContribError] = useState<string | null>(null);
+  const contribInputRef = useRef<HTMLInputElement>(null);
+
   const pct = goal.targetAmount > 0
     ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100))
     : 0;
@@ -31,6 +40,42 @@ function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
     month: "short",
     year: "numeric",
   });
+
+  const isAtRisk =
+    goal.monthlyNeeded > 0 &&
+    projectedBalance !== null &&
+    goal.monthlyNeeded > projectedBalance;
+
+  const handleContribOpen = () => {
+    setContribAmt("");
+    setContribError(null);
+    setShowContrib(true);
+    setTimeout(() => contribInputRef.current?.focus(), 50);
+  };
+
+  const handleContribSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = Number(contribAmt);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      setContribError("Valor inválido.");
+      return;
+    }
+    if (goal.currentAmount + amt > goal.targetAmount) {
+      setContribError("Ultrapassaria o valor alvo.");
+      return;
+    }
+    setContributing(true);
+    setContribError(null);
+    try {
+      await onContribute(goal.id, amt);
+      setShowContrib(false);
+      setContribAmt("");
+    } catch (err) {
+      setContribError(getApiErrorMessage(err, "Erro ao registrar."));
+    } finally {
+      setContributing(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3 rounded border border-cf-border bg-cf-surface p-4">
@@ -87,15 +132,71 @@ function GoalCard({ goal, onEdit, onDelete }: GoalCardProps) {
       {/* Footer stats */}
       <div className="flex items-center justify-between text-xs text-cf-text-secondary">
         {goal.monthlyNeeded > 0 ? (
-          <span>
+          <span className="flex items-center gap-1">
             <span className="font-semibold text-cf-text-primary">{formatCurrency(goal.monthlyNeeded)}</span>
             /mês necessário
+            {isAtRisk && (
+              <span
+                title="Esta meta consome mais do que seu saldo projetado este mês."
+                aria-label="Meta em risco: necessidade mensal supera saldo projetado"
+                className="inline-flex items-center justify-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-500"
+              >
+                ⚠ risco
+              </span>
+            )}
           </span>
         ) : (
           <span className="font-semibold text-green-500">Meta atingida 🎉</span>
         )}
         <span>até {deadline}</span>
       </div>
+
+      {/* Quick contribution */}
+      {goal.monthlyNeeded > 0 && (
+        <div className="border-t border-cf-border pt-2">
+          {!showContrib ? (
+            <button
+              type="button"
+              onClick={handleContribOpen}
+              className="text-xs font-medium text-brand-1 hover:underline"
+            >
+              + Registrar poupança
+            </button>
+          ) : (
+            <form onSubmit={handleContribSubmit} className="flex items-center gap-2">
+              <span className="shrink-0 text-xs text-cf-text-secondary">R$</span>
+              <input
+                ref={contribInputRef}
+                type="number"
+                min="0.01"
+                step="0.01"
+                value={contribAmt}
+                onChange={(e) => { setContribAmt(e.target.value); setContribError(null); }}
+                placeholder="0,00"
+                aria-label="Valor da contribuição"
+                className="w-24 rounded border border-cf-border-input bg-cf-bg-subtle px-2 py-1 text-xs text-cf-text-primary focus:outline-none focus:ring-1 focus:ring-brand-1"
+              />
+              <button
+                type="submit"
+                disabled={contributing}
+                className="rounded bg-brand-1 px-2 py-1 text-xs font-semibold text-white hover:bg-brand-2 disabled:opacity-50"
+              >
+                {contributing ? "…" : "Guardar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowContrib(false)}
+                className="text-xs text-cf-text-secondary hover:text-cf-text-primary"
+              >
+                ✕
+              </button>
+              {contribError && (
+                <span className="text-xs text-red-500" role="alert">{contribError}</span>
+              )}
+            </form>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -106,17 +207,22 @@ type ModalMode = { type: "create" } | { type: "edit"; goal: Goal };
 
 export default function GoalsSection() {
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [projectedBalance, setProjectedBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modal, setModal] = useState<ModalMode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Goal | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchGoals = async () => {
+  const fetchData = async () => {
     setError(null);
     try {
-      const data = await goalsService.list();
-      setGoals(data);
+      const [goalsData, forecast] = await Promise.all([
+        goalsService.list(),
+        forecastService.getCurrent().catch(() => null),
+      ]);
+      setGoals(goalsData);
+      setProjectedBalance(forecast?.adjustedProjectedBalance ?? null);
     } catch (err) {
       setError(getApiErrorMessage(err, "Erro ao carregar metas."));
     } finally {
@@ -125,7 +231,7 @@ export default function GoalsSection() {
   };
 
   useEffect(() => {
-    void fetchGoals();
+    void fetchData();
   }, []);
 
   const handleSave = async (data: {
@@ -162,6 +268,15 @@ export default function GoalsSection() {
     }
 
     setModal(null);
+  };
+
+  const handleContribute = async (goalId: number, amount: number) => {
+    const goal = goals.find((g) => g.id === goalId);
+    if (!goal) return;
+    const updated = await goalsService.update(goalId, {
+      current_amount: Number((goal.currentAmount + amount).toFixed(2)),
+    });
+    setGoals((prev) => prev.map((g) => (g.id === updated.id ? updated : g)));
   };
 
   const handleDeleteConfirm = async () => {
@@ -202,7 +317,7 @@ export default function GoalsSection() {
         {loading ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="h-32 animate-pulse rounded border border-cf-border bg-cf-bg-subtle" />
+              <div key={i} className="h-40 animate-pulse rounded border border-cf-border bg-cf-bg-subtle" />
             ))}
           </div>
         ) : error ? (
@@ -213,7 +328,7 @@ export default function GoalsSection() {
             <span>{error}</span>
             <button
               type="button"
-              onClick={() => { setLoading(true); void fetchGoals(); }}
+              onClick={() => { setLoading(true); void fetchData(); }}
               className="shrink-0 text-xs font-semibold underline"
             >
               Tentar novamente
@@ -240,8 +355,10 @@ export default function GoalsSection() {
               <GoalCard
                 key={goal.id}
                 goal={goal}
+                projectedBalance={projectedBalance}
                 onEdit={(g) => setModal({ type: "edit", goal: g })}
                 onDelete={setDeleteTarget}
+                onContribute={handleContribute}
               />
             ))}
           </div>

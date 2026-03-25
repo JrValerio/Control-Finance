@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import GoalsSection from "./GoalsSection";
 import type { Goal } from "../services/goals.service";
+import type { Forecast } from "../services/forecast.service";
 
 vi.mock("../services/goals.service", () => ({
   GOAL_ICONS: {
@@ -17,7 +17,14 @@ vi.mock("../services/goals.service", () => ({
   },
 }));
 
+vi.mock("../services/forecast.service", () => ({
+  forecastService: {
+    getCurrent: vi.fn(),
+  },
+}));
+
 const { goalsService } = await import("../services/goals.service");
+const { forecastService } = await import("../services/forecast.service");
 
 const buildGoal = (overrides: Partial<Goal> = {}): Goal => ({
   id: 1,
@@ -34,8 +41,25 @@ const buildGoal = (overrides: Partial<Goal> = {}): Goal => ({
   ...overrides,
 });
 
+const buildForecast = (overrides: Partial<Forecast> = {}): Forecast => ({
+  month: "2026-03",
+  projectedBalance: 1000,
+  spendingToDate: 2000,
+  dailyAvgSpending: 80,
+  daysRemaining: 6,
+  flipDetected: false,
+  flipDirection: null,
+  engineVersion: "v2",
+  incomeExpected: 5000,
+  billsPendingTotal: 0,
+  billsPendingCount: 0,
+  adjustedProjectedBalance: 1000,
+  ...overrides,
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(forecastService.getCurrent).mockResolvedValue(null);
 });
 
 describe("GoalsSection", () => {
@@ -82,6 +106,31 @@ describe("GoalsSection", () => {
     vi.mocked(goalsService.list).mockRejectedValue(new Error("Falha na rede"));
     render(<GoalsSection />);
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+  });
+
+  // ── At-risk indicator ─────────────────────────────────────────────────────
+
+  it("exibe badge de risco quando monthlyNeeded supera saldo projetado", async () => {
+    vi.mocked(goalsService.list).mockResolvedValue([buildGoal({ monthlyNeeded: 800 })]);
+    vi.mocked(forecastService.getCurrent).mockResolvedValue(buildForecast({ adjustedProjectedBalance: 300 }));
+    render(<GoalsSection />);
+    await waitFor(() => expect(screen.getByLabelText(/meta em risco/i)).toBeInTheDocument());
+  });
+
+  it("nao exibe badge de risco quando monthlyNeeded e menor que saldo projetado", async () => {
+    vi.mocked(goalsService.list).mockResolvedValue([buildGoal({ monthlyNeeded: 200 })]);
+    vi.mocked(forecastService.getCurrent).mockResolvedValue(buildForecast({ adjustedProjectedBalance: 1000 }));
+    render(<GoalsSection />);
+    await waitFor(() => screen.getByText("Viagem Japão"));
+    expect(screen.queryByLabelText(/meta em risco/i)).toBeNull();
+  });
+
+  it("nao exibe badge de risco quando forecast nao esta disponivel", async () => {
+    vi.mocked(goalsService.list).mockResolvedValue([buildGoal({ monthlyNeeded: 999 })]);
+    vi.mocked(forecastService.getCurrent).mockResolvedValue(null);
+    render(<GoalsSection />);
+    await waitFor(() => screen.getByText("Viagem Japão"));
+    expect(screen.queryByLabelText(/meta em risco/i)).toBeNull();
   });
 
   // ── Create ────────────────────────────────────────────────────────────────
@@ -177,5 +226,63 @@ describe("GoalsSection", () => {
     fireEvent.click(screen.getByText("Excluir", { selector: "button" }));
     await waitFor(() => expect(goalsService.remove).toHaveBeenCalledWith(1));
     await waitFor(() => expect(screen.queryByText("Viagem Japão")).toBeNull());
+  });
+
+  // ── Quick contribution ────────────────────────────────────────────────────
+
+  it("exibe link de contribuicao rapida em metas nao concluidas", async () => {
+    vi.mocked(goalsService.list).mockResolvedValue([buildGoal({ monthlyNeeded: 500 })]);
+    render(<GoalsSection />);
+    await waitFor(() => screen.getByText("Viagem Japão"));
+    expect(screen.getByText("+ Registrar poupança")).toBeInTheDocument();
+  });
+
+  it("nao exibe link de contribuicao quando meta ja atingida", async () => {
+    vi.mocked(goalsService.list).mockResolvedValue([buildGoal({ monthlyNeeded: 0 })]);
+    render(<GoalsSection />);
+    await waitFor(() => screen.getByText(/Meta atingida/));
+    expect(screen.queryByText("+ Registrar poupança")).toBeNull();
+  });
+
+  it("expande mini-form ao clicar em Registrar poupanca", async () => {
+    vi.mocked(goalsService.list).mockResolvedValue([buildGoal()]);
+    render(<GoalsSection />);
+    await waitFor(() => screen.getByText("Viagem Japão"));
+
+    fireEvent.click(screen.getByText("+ Registrar poupança"));
+    expect(screen.getByLabelText("Valor da contribuição")).toBeInTheDocument();
+    expect(screen.getByText("Guardar")).toBeInTheDocument();
+  });
+
+  it("chama goalsService.update com current_amount somado ao registrar poupanca", async () => {
+    const goal = buildGoal({ currentAmount: 3000 });
+    const updated = { ...goal, currentAmount: 3500, monthlyNeeded: 450 };
+    vi.mocked(goalsService.list).mockResolvedValue([goal]);
+    vi.mocked(goalsService.update).mockResolvedValue(updated);
+
+    render(<GoalsSection />);
+    await waitFor(() => screen.getByText("Viagem Japão"));
+
+    fireEvent.click(screen.getByText("+ Registrar poupança"));
+    fireEvent.change(screen.getByLabelText("Valor da contribuição"), { target: { value: "500" } });
+    fireEvent.click(screen.getByText("Guardar"));
+
+    await waitFor(() =>
+      expect(goalsService.update).toHaveBeenCalledWith(1, { current_amount: 3500 }),
+    );
+  });
+
+  it("exibe erro de validacao quando valor de contribuicao e invalido", async () => {
+    vi.mocked(goalsService.list).mockResolvedValue([buildGoal()]);
+    render(<GoalsSection />);
+    await waitFor(() => screen.getByText("Viagem Japão"));
+
+    fireEvent.click(screen.getByText("+ Registrar poupança"));
+    const contribInput = screen.getByLabelText("Valor da contribuição");
+    fireEvent.change(contribInput, { target: { value: "-10" } });
+    fireEvent.submit(contribInput.closest("form")!);
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(goalsService.update).not.toHaveBeenCalled();
   });
 });
