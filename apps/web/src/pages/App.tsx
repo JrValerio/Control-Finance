@@ -545,7 +545,7 @@ const App = ({
 
   const onPaginationReset = useCallback(() => setCurrentOffset(DEFAULT_OFFSET), []);
 
-  const { theme, themePreference, setThemePreference } = useTheme();
+  const { themePreference, setThemePreference } = useTheme();
   const cycleTheme = useCallback(() => {
     setThemePreference(
       themePreference === "system" ? "light" : themePreference === "light" ? "dark" : "system",
