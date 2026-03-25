@@ -137,6 +137,86 @@ describe("ProfileSettings — Preferências (Modo Discreto)", () => {
   });
 });
 
+describe("ProfileSettings — Preferências (Copiloto)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    vi.mocked(profileService.getMe).mockResolvedValue(buildMe());
+    vi.mocked(profileService.updateProfile).mockResolvedValue({
+      displayName: "Jr Valerio",
+      salaryMonthly: 5000,
+      payday: 5,
+      avatarUrl: null,
+      aiTone: "pragmatic",
+      aiInsightFrequency: "always",
+    });
+  });
+
+  it("renders ai_tone radio group with pragmatic selected by default", async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /Pragmático/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("radio", { name: /Pragmático/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Motivador/i })).not.toBeChecked();
+    expect(screen.getByRole("radio", { name: /Sarcástico/i })).not.toBeChecked();
+  });
+
+  it("saves ai_tone immediately when radio is selected", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /Motivador/i })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole("radio", { name: /Motivador/i }));
+    expect(profileService.updateProfile).toHaveBeenCalledWith({ ai_tone: "motivator" });
+    expect(screen.getByRole("radio", { name: /Motivador/i })).toBeChecked();
+  });
+
+  it("renders ai_insight_frequency radio group with always selected by default", async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /Sempre/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("radio", { name: /Sempre/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Só quando há risco/i })).not.toBeChecked();
+  });
+
+  it("saves ai_insight_frequency immediately when radio is selected", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /Só quando há risco/i })).toBeInTheDocument(),
+    );
+    await user.click(screen.getByRole("radio", { name: /Só quando há risco/i }));
+    expect(profileService.updateProfile).toHaveBeenCalledWith({
+      ai_insight_frequency: "risk_only",
+    });
+    expect(screen.getByRole("radio", { name: /Só quando há risco/i })).toBeChecked();
+  });
+
+  it("loads saved preferences from profile on mount", async () => {
+    vi.mocked(profileService.getMe).mockResolvedValue(
+      buildMe({
+        profile: {
+          displayName: "Jr Valerio",
+          salaryMonthly: 5000,
+          payday: 5,
+          avatarUrl: null,
+          aiTone: "sarcastic",
+          aiInsightFrequency: "risk_only",
+        },
+      }),
+    );
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /Sarcástico/i })).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("radio", { name: /Sarcástico/i })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /Só quando há risco/i })).toBeChecked();
+  });
+});
+
 describe("ProfileSettings — Assinatura", () => {
   beforeEach(() => {
     vi.clearAllMocks();

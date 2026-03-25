@@ -36,10 +36,12 @@ O Control Finance evoluiu de um gerenciador de gastos para uma experiência de *
 * Health Overview com leitura mais executiva do momento financeiro
 * alertas proativos quando a trajetória exige ajuste
 
-### 3. Especialista IA
+### 3. Especialista IA com preferências do usuário
 
-* endpoint dedicado para geração de insight financeiro
-* análise baseada em forecast e categorias de gasto
+* endpoint dedicado para geração de insight financeiro contextual
+* análise baseada em forecast, categorias de gasto e metas em andamento
+* **tom configurável**: Pragmático · Motivador · Sarcástico — o usuário define como o Especialista se comunica
+* **frequência configurável**: Sempre · Só quando há risco — suprime insights positivos e economiza chamadas ao LLM
 * falha silenciosa do LLM sem quebrar o dashboard
 * proteção por rate limiter para controle de abuso e custo
 
@@ -51,7 +53,13 @@ O Control Finance evoluiu de um gerenciador de gastos para uma experiência de *
 * integração das metas ao contexto da IA
 * ação rápida para reduzir fricção no uso
 
-### 5. Onboarding orientado a valor
+### 5. Painel de controle do usuário
+
+* Perfil reestruturado em três seções: Dados da conta · Preferências · Assinatura
+* Modo Discreto: oculta valores monetários com máscara textual `R$ ••••` (sem blur — layout estável)
+* Preferências do Copiloto: tom e frequência do Especialista IA configuráveis e persistidos no backend
+
+### 6. Onboarding orientado a valor
 
 * WelcomeCard v2 com a jornada:
 

@@ -132,41 +132,33 @@ Toda entrega nova deve responder a pelo menos um destes critérios:
 
 ---
 
-## 5. Sprint B — Preferências do Copiloto (próximo)
+## 5. ✅ Sprint B — Preferências do Copiloto (mergeado em main — PR #269)
 
-### Objetivo
+### O que foi entregue
 
-Permitir que o usuário ajuste o comportamento do copiloto.
+**Migration 031** — `ai_tone` e `ai_insight_frequency` em `user_profiles`.
 
-### Pré-requisito
+| Campo | Tipo | Default | Valores válidos |
+|---|---|---|---|
+| `ai_tone` | TEXT NOT NULL | `'pragmatic'` | `pragmatic` · `motivator` · `sarcastic` |
+| `ai_insight_frequency` | TEXT NOT NULL | `'always'` | `always` · `risk_only` |
 
-Sprint A mergeado e em produção.
+**Backend:**
+- `normalizeAiTone` e `normalizeAiInsightFrequency` — validação de enum com 400 explícito
+- `rowToProfile` inclui os dois campos com fallback defensivo (valor inválido no banco → default)
+- `GET /me` retorna `aiTone` e `aiInsightFrequency` dentro de `profile`
+- `PATCH /me/profile` persiste os dois campos na allowlist (bug silencioso prevenido)
+- `ai.service`: `SYSTEM_PROMPTS` por tom + early exit quando `risk_only + success` (0 tokens gastos)
 
-### Escopo previsto
+**Frontend (`ProfileSettings.tsx`):**
+- Seção **Preferências** ganha dois radio groups: Tom do Especialista IA + Frequência do insight
+- Preferências salvas inline no onChange via `PATCH /me/profile` (sem botão extra)
+- Carregadas do backend no mount; fallback local para `pragmatic` / `always`
 
-#### Backend (1 migration)
-
-Adicionar à tabela `user_profiles`:
-
-```sql
-ai_tone TEXT DEFAULT 'pragmatic'  -- 'pragmatic' | 'motivator' | 'sarcastic'
-ai_insight_frequency TEXT DEFAULT 'always'  -- 'always' | 'risk_only'
-```
-
-`updateMyProfile` já tem o padrão de normalização — apenas adicionar as duas novas chaves.
-
-#### Frontend
-
-- Radio group "Tom do Especialista" na seção **Preferências** do perfil
-- `ai_insight_frequency = 'risk_only'`: `AIInsightPanel` suprime o painel quando `type === "success"`
-- `ai_tone` passado via request param ou carregado no contexto do fetch de `GET /ai/insight`
-
-### O que NÃO entra no Sprint B
-
-- Contador de uso de IA visível (precisaria de tabela dedicada + cron de janela)
-- Histórico de sessões (device tracking — outra liga)
-- Upload de foto (sem storage configurado)
-- `plan` completo no `GET /me` (precisaria join na tabela `subscriptions`)
+**Regras respeitadas:**
+- Persistência via backend — sobrevive troca de dispositivo (não é `localStorage`)
+- Valor inválido no banco nunca quebra a UI
+- `risk_only` suprime o painel **e** o call à Anthropic (sem custo de token em forecast positivo)
 
 ---
 
@@ -258,3 +250,286 @@ Se essa frente for aberta no futuro, deve nascer como **subdomínio próprio**, 
 
 > **O Control Finance já pensa como copiloto.**
 > **Os próximos passos devem fazê-lo agir como copiloto — sem sacrificar foco, clareza e qualidade estrutural.**
+
+---
+
+## 11. Visão de produto — O Copiloto da Vida Real
+
+O Control Finance tem potencial de ser o app financeiro mais útil para a maioria dos brasileiros:
+trabalhadores com renda mensal entre R$ 2.000 e R$ 8.000, que vivem o fluxo de caixa mês a mês,
+não têm assessor financeiro, e precisam de clareza — não de palestra.
+
+### O usuário real
+
+- Recebe salário todo dia 5 ou todo dia 15
+- Tem conta bancária, talvez cartão de crédito, talvez rotativo
+- Paga boletos no prazo (quando lembra)
+- Não tem "investimentos" — tem uma TED para poupança quando sobra
+- Sente o dinheiro acabar antes do fim do mês e não sabe exatamente por quê
+- Não quer um app que o julgue; quer um app que o ajude
+
+### O que diferencia este produto
+
+- **Proativo, não reativo**: avisa antes do problema, não depois
+- **Sem julgamento**: linguagem de parceiro, não de banco
+- **Contextual**: entende o calendário brasileiro (payday, 13°, FGTS, INSS, IPVA, IPTU)
+- **Útil sem esforço**: o valor cresce com uso mínimo — não exige planilhas
+
+---
+
+## 12. Regra de Ouro de UX — Modo Sem Humilhação
+
+> **Nunca fazer o usuário se sentir burro, pobre ou irresponsável.**
+
+O app lida com dinheiro — o assunto mais carregado emocionalmente na vida da maioria das pessoas.
+Copywriting errado quebra a relação com o produto.
+
+### O que NÃO escrever
+
+| ❌ Tom errado | ✅ Tom correto |
+|---|---|
+| "Você gastou demais este mês" | "O mês tá mais apertado que o planejado" |
+| "Sua saúde financeira está crítica" | "Atenção: o saldo pode zerar antes do dia 30" |
+| "Você ainda não atingiu sua meta" | "Faltam R$ 120 para a meta. Você consegue" |
+| "Sem assinatura, você perde acesso" | "Quer continuar com o copiloto completo?" |
+| "Plano gratuito limitado" | "Você está no trial — aproveite" |
+
+### Princípios
+
+1. **Parceiro, não juiz** — o app está do lado do usuário, não avaliando ele
+2. **Concreto, não vago** — "R$ 312 a menos que semana passada" > "gastos aumentaram"
+3. **Ação, não culpa** — toda mensagem negativa termina com o que o usuário pode fazer
+4. **Humor contextual** — tom leve quando situação permite; sério quando o risco é real
+5. **Celebrar o pequeno** — guardar R$ 50 é uma vitória real para muita gente
+
+---
+
+## 13. Backlog estratégico — Faixa 1: Sobrevivência e Controle de Dano
+
+Features que evitam que o usuário "se afogue" no mês. Alto impacto emocional, baixo esforço técnico.
+
+### 13.1 Modo Sobrevivência
+
+Ativado automaticamente quando `projeção do mês < 10% do salário` (ou quando o usuário ativa manualmente).
+
+No modo sobrevivência:
+- Dashboard simplifica: mostra só saldo atual, dias até o pagamento, e quanto pode gastar por dia
+- Fórmula exibida: `(saldo atual) ÷ (dias restantes) = R$ X/dia`
+- Especialista IA muda tom: foco em cortes imediatos, não em metas de longo prazo
+- Notificação diária opcional: "Hoje: R$ 43 disponíveis"
+
+Requer: nenhuma migration nova — usa forecast existente + novo threshold no frontend.
+
+### 13.2 Detector de Semanas Perigosas
+
+Analisa o histórico de transações e detecta padrões de semanas pesadas (ex: semana do boleto do aluguel, semana do cartão).
+
+Exibe no dashboard: "Semana de 20 a 26 costuma ser pesada para você — R$ 800 em média."
+
+Requer: query de agregação sobre `transactions` por semana do mês; sem nova tabela.
+
+### 13.3 Reserva Anti-Aperto
+
+Meta especial: "fundo de emergência mínimo" — valor equivalente a N dias de gasto médio.
+
+Diferente das metas normais (Saving Goals):
+- Meta é dinâmica (recalcula conforme gasto médio muda)
+- Não tem prazo — é um nível mínimo permanente
+- Badge "Reserva protegida" / "Reserva em risco" no dashboard
+
+Requer: novo tipo de meta ou campo especial em `user_goals`.
+
+### 13.4 Calendário de Pressão Financeira
+
+Vista mensal que pinta os dias com base na pressão esperada:
+- Vermelho: dia de vencimento de boleto / fatura de cartão
+- Amarelo: semana historicamente pesada
+- Verde: dias tranquilos
+
+Permite o usuário ver, de relance, onde o mês vai apertar.
+
+Requer: cruzamento de `bills` (vencimentos) + histórico de `transactions` por dia da semana do mês.
+
+### 13.5 Alertas de Conta Esquecida
+
+Detecta contas cadastradas em `bills` com vencimento nos próximos 3 dias sem pagamento registrado.
+
+Notificação: "Conta de luz vence em 2 dias — R$ 89. Já pagou?"
+Ação rápida: marcar como paga direto da notificação.
+
+Requer: lógica de comparação entre `bills.due_date` e ausência de transação correspondente.
+
+### 13.6 Gastos Domésticos Essenciais (Botijão, Remédios, Escola)
+
+Categoria especial "Essenciais recorrentes" para gastos que não são mensais mas são certos:
+- Botijão de gás (a cada 30–45 dias, ~R$ 120)
+- Remédios de uso contínuo (mensal, valor fixo)
+- Material escolar (anual, mas previsível)
+- IPVA / IPTU (anual, parcelável)
+
+O app detecta esses gastos no histórico e os projeta automaticamente no forecast.
+
+Requer: tag/flag especial em categorias ou novo campo `recurrence_type` em `transactions`.
+
+### 13.7 Planejamento Familiar e Escolar
+
+Módulo de eventos financeiros de ciclo anual:
+- Janeiro/Fevereiro: material escolar + matrícula
+- Março: IPVA
+- Junho/Julho: férias escolares
+- Novembro/Dezembro: 13° salário + presentes de Natal
+
+O usuário marca os eventos relevantes para ele e o copiloto os inclui no forecast anual.
+
+Requer: tabela `financial_calendar_events` com tipo, mês, valor estimado.
+
+---
+
+## 14. Backlog estratégico — Faixa 2: Otimização de Fluxo de Caixa
+
+Features que melhoram como o dinheiro flui — sem exigir disciplina extra do usuário.
+
+### 14.1 Missão Escapar de Dívida Cara
+
+Para usuários com cartão rotativo ou empréstimo pessoal:
+
+1. Usuário cadastra a dívida (valor, juros mensais, parcelas)
+2. App calcula o custo real da dívida (quanto vai pagar no total)
+3. Compara com cenário de quitar antecipado
+4. Propõe um plano: "Se guardar R$ 150/mês, quita em 4 meses e economiza R$ 380"
+
+Formato de missão (gamificação leve): progresso visual, celebração ao atingir marcos.
+
+Requer: nova tabela `debts` com campos de amortização; cálculo de juros compostos.
+
+### 14.2 Radar de Assinaturas
+
+Detecta automaticamente gastos recorrentes no histórico de transações e os agrupa:
+- Netflix, Spotify, Amazon Prime
+- Academia, plano de saúde
+- Software, serviços digitais
+
+Exibe painel: "Você tem R$ 320/mês em assinaturas. Qual você realmente usa?"
+Botão: "Marcar como cancelada" (não bloqueia a transação; só marca no radar).
+
+Requer: algoritmo de detecção de recorrência sobre `transactions` (mesmo descritor + intervalo regular).
+
+### 14.3 Análise de Gastos por Semana
+
+Granularidade menor no dashboard: ver quanto foi gasto em cada semana do mês.
+
+Útil para entender onde o dinheiro vai — muitos usuários percebem padrões semanais que não viam no mensal.
+
+Requer: query de agregação por semana do mês sobre `transactions`; sem nova infra.
+
+### 14.4 Simulador de Impacto — "Posso comprar isso?"
+
+Usuário informa um valor e recebe:
+- Impacto no saldo projetado do mês
+- Impacto nas metas em andamento
+- Recomendação do Especialista IA ("Pode, mas vai ficar apertado na semana de 20 a 26")
+
+Alta percepção de valor. Reutiliza forecast existente + `GET /ai/insight` com prompt especializado.
+
+Requer: endpoint de simulação ou lógica client-side com re-cálculo do forecast.
+
+### 14.5 Comparativo Mês a Mês
+
+Gráfico de barras simples: gastos por categoria nos últimos 3 meses.
+Destaque automático: "Alimentação subiu 23% em relação ao mês passado."
+
+Requer: query agregada sobre `transactions` por categoria + mês; sem nova tabela.
+
+### 14.6 Análise do 13° Salário
+
+Quando usuário cadastra recebimento do 13° (ou o app detecta pela data + valor):
+- Simula impacto nas metas se X% for destinado a elas
+- Sugere quitação da dívida cara com o 13°
+- Alerta sobre gastos de dezembro que costumam consumir o 13° antes do Natal
+
+Requer: detecção de sazonalidade + prompt especializado para IA.
+
+---
+
+## 15. Backlog estratégico — Faixa 3: Inteligência Avançada
+
+Features que transformam dados em decisões. Requerem mais dados acumulados para funcionar bem.
+
+### 15.1 Especialista IA com Memória de Contexto
+
+O Especialista hoje responde com contexto do mês atual.
+Com memória:
+- Compara com comportamento histórico do próprio usuário
+- Identifica padrões de vários meses ("Você sempre estoura em março — é IPVA?")
+- Ajusta tom conforme progresso do usuário ao longo do tempo
+
+Requer: histórico de insights salvo por usuário; contexto ampliado no prompt.
+
+### 15.2 Tom Personalizado do Especialista IA
+
+Configuração na seção Preferências (Sprint B):
+- **Pragmático** (padrão): direto, objetivo, sem enrolação
+- **Motivador**: celebra progresso, enquadra problemas como desafios superáveis
+- **Sarcástico**: humor ácido para quem prefere esse estilo ("Parabéns, mais um mês sem economizar nada")
+
+Implementação: campo `ai_tone` em `user_profiles` + variação de system prompt.
+
+### 15.3 Frequência do Especialista IA
+
+Configuração na seção Preferências (Sprint B):
+- **Sempre** (padrão): insight toda vez que o usuário abre o dashboard
+- **Só quando há risco**: suprime insights de tipo `success`; exibe só `warning` e `info`
+
+Implementação: campo `ai_insight_frequency` em `user_profiles` + filtro no `AIInsightPanel`.
+
+### 15.4 Score de Saúde Financeira Pessoal
+
+Número de 0 a 100 calculado a partir de:
+- Razão despesas/renda
+- Regularidade de poupança
+- Cobertura da reserva de emergência
+- Controle de dívidas
+
+Não é comparativo com outras pessoas — é histórico pessoal.
+Exibido no HealthOverview como número + tendência (↑ melhorando / ↓ piorando).
+
+### 15.5 Previsão de Fim de Dinheiro
+
+Não apenas "saldo projetado no fim do mês" — mas "em qual dia o saldo vai zerar (se o padrão continuar)".
+
+Exibido como: "No ritmo atual, o saldo zera por volta do dia 22."
+Com destaque quando a data é menos de 5 dias à frente.
+
+Requer: refinamento do forecast engine com projeção diária.
+
+### 15.6 Modo Conversa com o Especialista (Chat Financeiro)
+
+Interface de chat livre com o Especialista IA.
+Usuário pode perguntar: "Quanto gastei com alimentação nos últimos 3 meses?" ou "O que aconteceu de errado em fevereiro?"
+
+O Especialista responde com dados reais do usuário — não respostas genéricas.
+
+Requer: contexto enriquecido (transações + metas + forecast) + interface de chat; uso significativo de tokens.
+
+---
+
+## 16. Decisões de não fazer (e por quê)
+
+| Feature | Por que não agora |
+|---|---|
+| App mobile (iOS/Android) | Web responsiva cobre 80% do uso; mobile nativo antes de tração é risco de escopo |
+| Open Finance / Pix automático | Requer certificação regulatória (BACEN) — fora do alcance de produto solo |
+| Planilha de orçamento anual | Usuário-alvo não tem hábito de planejar 12 meses; fecha o app sem usar |
+| Chatbot de atendimento | Confunde com Especialista IA; duas personas de IA = confusão |
+| Integração com bancos por scraping | Frágil, contra ToS dos bancos, risco legal |
+| Gamificação pesada (pontos, badges, ranking) | Distrai da função; usuários financeiramente estressados não querem jogar |
+
+---
+
+## 17. Notas de produto para não esquecer
+
+- **Payday é sagrado**: tudo no produto orbita em torno do dia de pagamento do usuário. Forecast, metas, alertas — tudo usa `payday` como âncora.
+- **O mês do usuário não é o mês do calendário**: se o usuário recebe dia 15, o "mês financeiro" dele é de 15 a 14.
+- **Renda irregular é a realidade de muitos**: autônomos, freelancers, comissionados. O forecast precisa lidar com isso sem quebrar.
+- **Cartão de crédito = buraco negro para muitos usuários**: a fatura fecha em uma data, vence em outra, e o gasto já foi feito semanas antes. Tratamento correto do cartão é feature de alta percepção de valor.
+- **Silêncio é melhor que dado errado**: se o app não tem dados suficientes para um insight, não inventa um. Melhor não mostrar nada do que mostrar algo impreciso.

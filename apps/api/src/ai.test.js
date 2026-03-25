@@ -153,6 +153,68 @@ describe("GET /ai/insight", () => {
     expect(res.body).toBeNull();
   });
 
+  it("retorna null sem chamar LLM quando risk_only e forecast positivo", async () => {
+    const token = await registerAndLogin("ai-risk-only-skip@test.dev");
+    const userId = await getUserId("ai-risk-only-skip@test.dev");
+    await insertForecast(userId, { projected_balance: 800 });
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, ai_insight_frequency) VALUES ($1, 'risk_only')`,
+      [userId],
+    );
+
+    const res = await request(app)
+      .get("/ai/insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBeNull();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("chama LLM quando risk_only mas forecast negativo", async () => {
+    const token = await registerAndLogin("ai-risk-only-warn@test.dev");
+    const userId = await getUserId("ai-risk-only-warn@test.dev");
+    await insertForecast(userId, { projected_balance: -200 });
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, ai_insight_frequency) VALUES ($1, 'risk_only')`,
+      [userId],
+    );
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Saldo negativo. Corte gastos imediatamente."),
+    );
+
+    const res = await request(app)
+      .get("/ai/insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("warning");
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  it("usa system prompt do tom motivador quando ai_tone e motivator", async () => {
+    const token = await registerAndLogin("ai-motivator@test.dev");
+    const userId = await getUserId("ai-motivator@test.dev");
+    await insertForecast(userId);
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, ai_tone) VALUES ($1, 'motivator')`,
+      [userId],
+    );
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Você está indo bem! Continue assim."),
+    );
+
+    await request(app)
+      .get("/ai/insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(mockCreate).toHaveBeenCalledOnce();
+    const callArg = mockCreate.mock.calls[0][0];
+    expect(callArg.system).toContain("encorajador");
+  });
+
   it("passa top_categories ao LLM quando existem transacoes de saida", async () => {
     const token = await registerAndLogin("ai-categories@test.dev");
     const userId = await getUserId("ai-categories@test.dev");
