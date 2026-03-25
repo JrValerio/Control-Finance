@@ -61,6 +61,28 @@ const normalizeAvatarUrl = (value) => {
   return trimmed;
 };
 
+const AI_TONE_VALID = ["pragmatic", "motivator", "sarcastic"];
+const AI_INSIGHT_FREQUENCY_VALID = ["always", "risk_only"];
+
+const normalizeAiTone = (value) => {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !AI_TONE_VALID.includes(value)) {
+    throw createError(400, `ai_tone deve ser um de: ${AI_TONE_VALID.join(", ")}.`);
+  }
+  return value;
+};
+
+const normalizeAiInsightFrequency = (value) => {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !AI_INSIGHT_FREQUENCY_VALID.includes(value)) {
+    throw createError(
+      400,
+      `ai_insight_frequency deve ser um de: ${AI_INSIGHT_FREQUENCY_VALID.join(", ")}.`,
+    );
+  }
+  return value;
+};
+
 const rowToProfile = (row) => ({
   displayName: row.display_name ?? null,
   salaryMonthly:
@@ -69,6 +91,10 @@ const rowToProfile = (row) => ({
       : null,
   payday: row.payday !== null && row.payday !== undefined ? Number(row.payday) : null,
   avatarUrl: row.avatar_url ?? null,
+  aiTone: AI_TONE_VALID.includes(row.ai_tone) ? row.ai_tone : "pragmatic",
+  aiInsightFrequency: AI_INSIGHT_FREQUENCY_VALID.includes(row.ai_insight_frequency)
+    ? row.ai_insight_frequency
+    : "always",
 });
 
 // Returns ISO string for trial end date and whether trial has expired
@@ -105,7 +131,7 @@ export const getMyProfile = async (userId) => {
 
   const [profileResult, identitiesResult] = await Promise.all([
     dbQuery(
-      `SELECT display_name, salary_monthly, payday, avatar_url
+      `SELECT display_name, salary_monthly, payday, avatar_url, ai_tone, ai_insight_frequency
        FROM user_profiles WHERE user_id = $1 LIMIT 1`,
       [normalizedUserId],
     ),
@@ -144,6 +170,12 @@ export const updateMyProfile = async (userId, payload = {}) => {
 
   const avatarUrl = normalizeAvatarUrl(payload.avatar_url);
   if (avatarUrl !== undefined) updates.avatar_url = avatarUrl;
+
+  const aiTone = normalizeAiTone(payload.ai_tone);
+  if (aiTone !== undefined) updates.ai_tone = aiTone;
+
+  const aiInsightFrequency = normalizeAiInsightFrequency(payload.ai_insight_frequency);
+  if (aiInsightFrequency !== undefined) updates.ai_insight_frequency = aiInsightFrequency;
 
   if (Object.keys(updates).length === 0) {
     throw createError(400, "Nenhum campo valido enviado para atualizacao.");
@@ -188,7 +220,7 @@ export const updateMyProfile = async (userId, payload = {}) => {
   }
 
   const result = await dbQuery(
-    `SELECT display_name, salary_monthly, payday, avatar_url
+    `SELECT display_name, salary_monthly, payday, avatar_url, ai_tone, ai_insight_frequency
      FROM user_profiles WHERE user_id = $1 LIMIT 1`,
     [normalizedUserId],
   );

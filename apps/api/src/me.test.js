@@ -337,6 +337,49 @@ describe("PATCH /me/profile", () => {
     expect(trialEndsAt.getTime()).toBeGreaterThanOrEqual(signupPlus14.getTime() - 1000);
   });
 
+  it("persiste ai_tone e ai_insight_frequency e retorna no round-trip GET /me", async () => {
+    const token = await registerAndLogin("patch-ai-prefs@test.dev");
+
+    const patchRes = await request(app)
+      .patch("/me/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ ai_tone: "motivator", ai_insight_frequency: "risk_only" });
+
+    expect(patchRes.status).toBe(200);
+    expect(patchRes.body.aiTone).toBe("motivator");
+    expect(patchRes.body.aiInsightFrequency).toBe("risk_only");
+
+    const getRes = await request(app)
+      .get("/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.profile.aiTone).toBe("motivator");
+    expect(getRes.body.profile.aiInsightFrequency).toBe("risk_only");
+  });
+
+  it("retorna 400 para ai_tone invalido", async () => {
+    const token = await registerAndLogin("patch-ai-tone-bad@test.dev");
+
+    const response = await request(app)
+      .patch("/me/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ ai_tone: "guru" });
+
+    expectErrorResponseWithRequestId(response, 400, "ai_tone deve ser um de: pragmatic, motivator, sarcastic.");
+  });
+
+  it("retorna 400 para ai_insight_frequency invalido", async () => {
+    const token = await registerAndLogin("patch-ai-freq-bad@test.dev");
+
+    const response = await request(app)
+      .patch("/me/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ ai_insight_frequency: "never" });
+
+    expectErrorResponseWithRequestId(response, 400, "ai_insight_frequency deve ser um de: always, risk_only.");
+  });
+
   it("nao altera trial_ends_at quando payday nao e enviado", async () => {
     const token = await registerAndLogin("patch-no-payday@test.dev");
     const userResult = await dbQuery(

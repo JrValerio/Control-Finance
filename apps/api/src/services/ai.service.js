@@ -4,8 +4,14 @@ import { getGoalsSummaryForAI } from "./goals.service.js";
 import { dbQuery } from "../db/index.js";
 import { logInfo, logWarn, logError } from "../observability/logger.js";
 
-const SYSTEM_PROMPT =
-  "Você é o Especialista Financeiro do app Control Finance. Analise os dados JSON e retorne um único insight acionável de no máximo 180 caracteres. Prioridade: se alguma meta tiver monthly_needed maior que o balance, alerte que o plano está inviável e sugira qual gasto cortar. Se os dados forem negativos sem metas, aponte a categoria culpada. Se forem positivos, parabenize e reforce a meta mais próxima do prazo. Retorne APENAS o texto do insight, sem formatação, sem aspas, sem JSON.";
+const SYSTEM_PROMPTS = {
+  pragmatic:
+    "Você é o Especialista Financeiro do app Control Finance. Analise os dados JSON e retorne um único insight acionável de no máximo 180 caracteres. Prioridade: se alguma meta tiver monthly_needed maior que o balance, alerte que o plano está inviável e sugira qual gasto cortar. Se os dados forem negativos sem metas, aponte a categoria culpada. Se forem positivos, parabenize e reforce a meta mais próxima do prazo. Retorne APENAS o texto do insight, sem formatação, sem aspas, sem JSON.",
+  motivator:
+    "Você é o Especialista Financeiro do app Control Finance, com estilo encorajador. Analise os dados JSON e retorne um único insight de no máximo 180 caracteres que celebre progresso e enquadre desafios como oportunidades. Se alguma meta estiver em risco, incentive a mudança com entusiasmo. Se os dados forem negativos, aponte o caminho com energia positiva. Se forem positivos, comemore e reforce a conquista. Retorne APENAS o texto do insight, sem formatação, sem aspas, sem JSON.",
+  sarcastic:
+    "Você é o Especialista Financeiro do app Control Finance, com estilo levemente sarcástico. Analise os dados JSON e retorne um único insight de no máximo 180 caracteres. Se alguma meta estiver em risco, comente com ironia sobre o gasto culpado. Se os dados forem negativos, seja direto com humor ácido. Se forem positivos, parabenize — mas com leve surpresa. Retorne APENAS o texto do insight, sem formatação, sem aspas, sem JSON.",
+};
 
 const monthStartStr = (now) => {
   const y = now.getUTCFullYear();
@@ -44,6 +50,18 @@ const getTopExpenseCategories = async (userId, now = new Date()) => {
   }));
 };
 
+const getAiPreferences = async (userId) => {
+  const result = await dbQuery(
+    `SELECT ai_tone, ai_insight_frequency FROM user_profiles WHERE user_id = $1 LIMIT 1`,
+    [userId],
+  );
+  const row = result.rows[0];
+  return {
+    aiTone: row?.ai_tone ?? "pragmatic",
+    aiInsightFrequency: row?.ai_insight_frequency ?? "always",
+  };
+};
+
 const resolveInsightType = (adjustedBalance, incomeExpected) => {
   if (adjustedBalance <= 0) return "warning";
   const pct = incomeExpected != null && incomeExpected > 0
@@ -64,10 +82,15 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
   const forecast = await getLatestForecast(userId, { now });
   if (!forecast || forecast.daysRemaining <= 0) return null;
 
-  const [topCategories, goals] = await Promise.all([
+  const [topCategories, goals, { aiTone, aiInsightFrequency }] = await Promise.all([
     getTopExpenseCategories(userId, now),
     getGoalsSummaryForAI(userId, { now }),
+    getAiPreferences(userId),
   ]);
+
+  // Early exit: skip LLM call when user only wants risk alerts and forecast is healthy
+  const previewType = resolveInsightType(forecast.adjustedProjectedBalance, forecast.incomeExpected);
+  if (aiInsightFrequency === "risk_only" && previewType === "success") return null;
 
   const context = {
     balance: forecast.adjustedProjectedBalance,
@@ -79,6 +102,7 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
   };
 
   const client = anthropicClient ?? new Anthropic();
+  const systemPrompt = SYSTEM_PROMPTS[aiTone] ?? SYSTEM_PROMPTS.pragmatic;
 
   let insightText;
   const callStart = Date.now();
@@ -86,7 +110,7 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 256,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: [{ role: "user", content: JSON.stringify(context) }],
     });
     insightText = response.content[0]?.text?.trim() || null;
