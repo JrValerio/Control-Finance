@@ -7,6 +7,7 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 const TITLE_MAX_LENGTH = 200;
 const VALID_STATUS_FILTERS = new Set(["pending", "paid", "overdue"]);
+const VALID_BILL_TYPES = new Set(["energy", "water", "rent", "internet", "phone", "gas", "other"]);
 
 const createError = (status, message) => {
   const error = new Error(message);
@@ -159,6 +160,19 @@ const normalizePaidAt = (value) => {
   return parsed;
 };
 
+const normalizeOptionalBillType = (value) => {
+  if (value == null || value === "") return null;
+  const lower = String(value).toLowerCase().trim();
+  if (!VALID_BILL_TYPES.has(lower)) return null;
+  return lower;
+};
+
+const normalizeOptionalImportSessionId = (value) => {
+  if (value == null || value === "") return null;
+  const s = String(value).trim();
+  return s || null;
+};
+
 // ─── Row mapping ──────────────────────────────────────────────────────────────
 
 const mapBillRow = (row) => ({
@@ -174,6 +188,8 @@ const mapBillRow = (row) => ({
   notes: row.notes || null,
   provider: row.provider || null,
   referenceMonth: row.reference_month || null,
+  billType: row.bill_type || null,
+  sourceImportSessionId: row.source_import_session_id || null,
   createdAt: toISODateTime(row.created_at),
   updatedAt: toISODateTime(row.updated_at),
 });
@@ -200,12 +216,14 @@ export const createBillForUser = async (userId, payload = {}) => {
   const notes = normalizeOptionalText(payload.notes, "Notas");
   const provider = normalizeOptionalText(payload.provider, "Fornecedor");
   const referenceMonth = normalizeOptionalReferenceMonth(payload.referenceMonth);
+  const billType = normalizeOptionalBillType(payload.billType);
+  const sourceImportSessionId = normalizeOptionalImportSessionId(payload.sourceImportSessionId);
 
   const result = await dbQuery(
-    `INSERT INTO bills (user_id, title, amount, due_date, category_id, notes, provider, reference_month)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO bills (user_id, title, amount, due_date, category_id, notes, provider, reference_month, bill_type, source_import_session_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING *`,
-    [normalizedUserId, title, amount, dueDate, categoryId ?? null, notes ?? null, provider ?? null, referenceMonth ?? null],
+    [normalizedUserId, title, amount, dueDate, categoryId ?? null, notes ?? null, provider ?? null, referenceMonth ?? null, billType, sourceImportSessionId],
   );
 
   return mapBillRow(result.rows[0]);

@@ -551,4 +551,43 @@ describe("bills", () => {
 
     expectErrorResponseWithRequestId(res, 429, "Muitas requisicoes. Tente novamente em instantes.");
   });
+
+  it("POST /bills aceita billType e sourceImportSessionId", async () => {
+    const token = await registerAndLogin("bills-bridge@test.dev");
+
+    const res = await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Conta de energia — ENEL",
+        amount: 120.5,
+        dueDate: FUTURE_DATE,
+        billType: "energy",
+        sourceImportSessionId: "import-session-abc",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      title: "Conta de energia — ENEL",
+      billType: "energy",
+      sourceImportSessionId: "import-session-abc",
+    });
+  });
+
+  it("POST /bills ignora billType invalido", async () => {
+    const token = await registerAndLogin("bills-invalid-type@test.dev");
+
+    const res = await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Pendencia",
+        amount: 50,
+        dueDate: FUTURE_DATE,
+        billType: "invalid_type",
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.billType).toBeNull();
+  });
 });
