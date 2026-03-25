@@ -12,9 +12,9 @@ const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardPro
     // "cf_activation_welcome_viewed_v1": sessionStorage key that prevents re-firing on reload.
     // Bump the version suffix (v2, v3…) whenever the WelcomeCard logic changes in a way
     // that requires re-showing the card to users who have already seen it.
-    if (!tracked.current && !sessionStorage.getItem("cf_activation_welcome_viewed_v1")) {
+    if (!tracked.current && !sessionStorage.getItem("cf_activation_welcome_viewed_v2")) {
       tracked.current = true;
-      sessionStorage.setItem("cf_activation_welcome_viewed_v1", "1");
+      sessionStorage.setItem("cf_activation_welcome_viewed_v2", "1");
       trackActivationEvent("welcome_card_viewed");
     }
   }, []);
@@ -24,10 +24,10 @@ const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardPro
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-base font-semibold text-cf-text-primary">
-            Comece a organizar sua vida financeira
+            Comece a pilotar sua vida financeira
           </h2>
           <p className="mt-1 text-sm text-cf-text-secondary">
-            Registre sua primeira transação para visualizar seu saldo, gráficos e projeção de saldo ao fim do mês.
+            Registre sua primeira transação e deixe o Especialista IA guiar você do extrato de hoje até as metas de amanhã.
           </p>
 
           <ol className="mt-4 space-y-2">
@@ -45,8 +45,8 @@ const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardPro
                 2
               </span>
               <span>
-                <strong className="font-semibold text-cf-text-primary">Veja seu saldo em tempo real</strong>
-                {" — "}entradas menos saídas calculadas automaticamente
+                <strong className="font-semibold text-cf-text-primary">Configure seu perfil</strong>
+                {" — "}salário e dia de pagamento para ativar a projeção de saldo do mês
               </span>
             </li>
             <li className="flex items-start gap-2.5 text-sm text-cf-text-secondary">
@@ -54,8 +54,17 @@ const WelcomeCard = ({ onAddTransaction, onOpenProfileSettings }: WelcomeCardPro
                 3
               </span>
               <span>
-                <strong className="font-semibold text-cf-text-primary">Configure seu perfil</strong>
-                {" — "}salário e dia de pagamento para ativar a projeção de saldo
+                <strong className="font-semibold text-cf-text-primary">Defina suas metas de poupança</strong>
+                {" — "}viagem, casa, reserva de emergência — acompanhe o progresso mês a mês
+              </span>
+            </li>
+            <li className="flex items-start gap-2.5 text-sm text-cf-text-secondary">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-1/20 text-xs font-bold text-brand-1">
+                4
+              </span>
+              <span>
+                <strong className="font-semibold text-cf-text-primary">Ouça o Especialista IA</strong>
+                {" — "}análise automática do seu cenário com dicas personalizadas e alertas de risco
               </span>
             </li>
           </ol>
