@@ -2,9 +2,11 @@ import { api } from "./api";
 
 export interface CategoryItem {
   id: number;
-  userId: number;
+  userId: number | null;
   name: string;
   normalizedName: string;
+  type: "income" | "expense" | null;
+  system: boolean;
   deletedAt: string | null;
   createdAt: string | null;
 }
@@ -43,21 +45,27 @@ const normalizeCategoryItem = (payload: CategoryApiPayload): CategoryItem => {
         ? payload.normalized_name.trim()
         : "";
 
+  const rawType = payload?.type;
+  const type: "income" | "expense" | null =
+    rawType === "income" || rawType === "expense" ? rawType : null;
+
   return {
     id: Number.isInteger(normalizedId) && normalizedId > 0 ? normalizedId : 0,
     userId:
       Number.isInteger(normalizedUserId) && normalizedUserId > 0
         ? normalizedUserId
-        : 0,
+        : null,
     name: normalizedName,
     normalizedName: normalizedKey,
+    type,
+    system: Boolean(payload?.system),
     deletedAt: normalizeIsoStringOrNull(payload?.deletedAt ?? payload?.deleted_at),
     createdAt: normalizeIsoStringOrNull(payload?.createdAt ?? payload?.created_at),
   };
 };
 
 const isValidCategoryItem = (item: CategoryItem): boolean =>
-  item.id > 0 && item.userId > 0 && Boolean(item.name);
+  item.id > 0 && Boolean(item.name);
 
 export const categoriesService = {
   listCategories: async (includeDeleted = false): Promise<CategoryItem[]> => {
@@ -73,8 +81,8 @@ export const categoriesService = {
       .filter(isValidCategoryItem);
   },
 
-  createCategory: async (name: string): Promise<CategoryItem> => {
-    const { data } = await api.post("/categories", { name });
+  createCategory: async (name: string, type?: "income" | "expense"): Promise<CategoryItem> => {
+    const { data } = await api.post("/categories", { name, type });
     return normalizeCategoryItem(data as CategoryApiPayload);
   },
 

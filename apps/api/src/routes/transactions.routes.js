@@ -358,9 +358,13 @@ router.post("/import/commit", importRateLimiter, requireFeature("csv_import"), a
   trackCommitAttemptMetrics();
 
   try {
+    const categoryOverrides = Array.isArray(req.body?.categoryOverrides)
+      ? req.body.categoryOverrides
+      : [];
     const commitResult = await commitTransactionsImportForUser(
       req.user.id,
       req.body?.importId,
+      categoryOverrides,
     );
     const observability = commitResult.observability || {};
     const rowsTotal = Number(observability.totalRows) || Number(commitResult.imported) || 0;
