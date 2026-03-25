@@ -22,6 +22,10 @@ vi.mock("../components/HealthOverview", () => ({
   default: () => null,
 }));
 
+vi.mock("../components/GoalsSection", () => ({
+  default: () => null,
+}));
+
 vi.mock("../components/CategoryTreemap", () => ({
   default: ({ data }) =>
     Array.isArray(data) && data.length > 0 ? (

@@ -56,6 +56,7 @@ const TransactionChart = lazy(() => import("../components/TransactionChart"));
 const TrendChart = lazy(() => import("../components/TrendChart"));
 const CategoryTreemap = lazy(() => import("../components/CategoryTreemap"));
 const HealthOverview = lazy(() => import("../components/HealthOverview"));
+const GoalsSection = lazy(() => import("../components/GoalsSection"));
 
 type SummaryMetricKey = "income" | "expense" | "balance";
 type MonthOverMonthDirection = "up" | "down" | "flat";
@@ -2350,6 +2351,10 @@ const App = ({
         <BillsSummaryWidget onOpenBills={handleOpenBills} />
 
         <SalaryWidget />
+
+        <Suspense fallback={null}>
+          <GoalsSection />
+        </Suspense>
 
 
       <section>
