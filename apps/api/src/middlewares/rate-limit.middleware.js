@@ -6,6 +6,8 @@ const DEFAULT_WRITE_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_WRITE_RATE_LIMIT_MAX_REQUESTS = 60;
 const DEFAULT_ANALYTICS_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_ANALYTICS_RATE_LIMIT_MAX_REQUESTS = 30; // analytics events are low-frequency by nature
+const DEFAULT_AI_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const DEFAULT_AI_RATE_LIMIT_MAX_REQUESTS = 10; // LLM calls are expensive
 const WRITE_RATE_LIMIT_ERROR_MESSAGE = "Muitas requisicoes. Tente novamente em instantes.";
 
 const parsePositiveInteger = (value, fallbackValue) => {
@@ -52,6 +54,18 @@ const getAnalyticsRateLimitMaxRequests = () =>
   parsePositiveInteger(
     process.env.ANALYTICS_RATE_LIMIT_MAX,
     DEFAULT_ANALYTICS_RATE_LIMIT_MAX_REQUESTS,
+  );
+
+const getAiRateLimitWindowMs = () =>
+  parsePositiveInteger(
+    process.env.AI_RATE_LIMIT_WINDOW_MS,
+    DEFAULT_AI_RATE_LIMIT_WINDOW_MS,
+  );
+
+const getAiRateLimitMaxRequests = () =>
+  parsePositiveInteger(
+    process.env.AI_RATE_LIMIT_MAX,
+    DEFAULT_AI_RATE_LIMIT_MAX_REQUESTS,
   );
 
 const createError = (status, message) => {
@@ -108,6 +122,15 @@ export const analyticsWriteRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (request) => resolveRateLimitKey(request, "analytics-write"),
+  handler: createRateLimitExceededHandler(),
+});
+
+export const aiRateLimiter = rateLimit({
+  windowMs: getAiRateLimitWindowMs(),
+  max: getAiRateLimitMaxRequests(),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (request) => resolveRateLimitKey(request, "ai"),
   handler: createRateLimitExceededHandler(),
 });
 
