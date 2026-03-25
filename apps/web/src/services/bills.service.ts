@@ -18,6 +18,8 @@ export interface Bill {
   notes: string | null;
   provider: string | null;
   referenceMonth: string | null;
+  billType: string | null;
+  sourceImportSessionId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +44,8 @@ export interface CreateBillPayload {
   notes?: string | null;
   provider?: string | null;
   referenceMonth?: string | null;
+  billType?: string | null;
+  sourceImportSessionId?: string | null;
 }
 
 export type UpdateBillPayload = Partial<CreateBillPayload>;
@@ -82,6 +86,10 @@ interface BillApiPayload {
   provider?: unknown;
   referenceMonth?: unknown;
   reference_month?: unknown;
+  billType?: unknown;
+  bill_type?: unknown;
+  sourceImportSessionId?: unknown;
+  source_import_session_id?: unknown;
   createdAt?: unknown;
   created_at?: unknown;
   updatedAt?: unknown;
@@ -124,6 +132,8 @@ const normalizeBill = (raw: BillApiPayload): Bill => {
     notes: normalizeStringOrNull(raw.notes),
     provider: normalizeStringOrNull(raw.provider),
     referenceMonth: normalizeStringOrNull(raw.referenceMonth ?? raw.reference_month),
+    billType: normalizeStringOrNull(raw.billType ?? raw.bill_type),
+    sourceImportSessionId: normalizeStringOrNull(raw.sourceImportSessionId ?? raw.source_import_session_id),
     createdAt: normalizeISOString(raw.createdAt ?? raw.created_at),
     updatedAt: normalizeISOString(raw.updatedAt ?? raw.updated_at),
   };

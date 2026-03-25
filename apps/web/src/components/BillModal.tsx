@@ -7,11 +7,22 @@ interface CategoryOption {
   name: string;
 }
 
+export interface BillPrefill {
+  title?: string;
+  amount?: number;
+  dueDate?: string;
+  provider?: string;
+  referenceMonth?: string;
+  billType?: string;
+  sourceImportSessionId?: string;
+}
+
 interface BillModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved: (bill: Bill) => void;
   initialBill?: Bill | null;
+  prefill?: BillPrefill | null;
   categories: CategoryOption[];
 }
 
@@ -38,6 +49,7 @@ const BillModal = ({
   onClose,
   onSaved,
   initialBill = null,
+  prefill = null,
   categories = [],
 }: BillModalProps): JSX.Element | null => {
   const isEditing = Boolean(initialBill);
@@ -65,6 +77,14 @@ const BillModal = ({
       setProvider(initialBill.provider || "");
       setReferenceMonth(initialBill.referenceMonth || "");
       setNotes(initialBill.notes || "");
+    } else if (prefill) {
+      setTitle(prefill.title || "");
+      setAmount(prefill.amount != null ? formatAmountForInput(prefill.amount) : "");
+      setDueDate(prefill.dueDate || getTodayISODate());
+      setCategoryId("");
+      setProvider(prefill.provider || "");
+      setReferenceMonth(prefill.referenceMonth || "");
+      setNotes("");
     } else {
       setTitle("");
       setAmount("");
@@ -78,7 +98,7 @@ const BillModal = ({
     setIsSaving(false);
     setShowInstallments(false);
     setInstallmentCount("2");
-  }, [isOpen, initialBill]);
+  }, [isOpen, initialBill, prefill]);
 
   // Escape key listener
   useEffect(() => {
@@ -143,6 +163,10 @@ const BillModal = ({
             provider: provider.trim() || null,
             referenceMonth: referenceMonth.trim() || null,
             notes: notes.trim() || null,
+            ...(!isEditing && prefill ? {
+              billType: prefill.billType ?? null,
+              sourceImportSessionId: prefill.sourceImportSessionId ?? null,
+            } : {}),
           };
           const savedBill = isEditing && initialBill
             ? await billsService.update(initialBill.id, payload)
@@ -158,7 +182,7 @@ const BillModal = ({
         setIsSaving(false);
       }
     },
-    [title, amount, dueDate, categoryId, provider, referenceMonth, notes, isEditing, initialBill, onSaved, showInstallments, installmentCount],
+    [title, amount, dueDate, categoryId, provider, referenceMonth, notes, isEditing, initialBill, prefill, onSaved, showInstallments, installmentCount],
   );
 
   if (!isOpen) return null;

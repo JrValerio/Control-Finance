@@ -75,8 +75,6 @@ const mapCategory = (row) => ({
   createdAt: toISOStringOrNull(row.created_at),
 });
 
-const isSystemCategory = (row) => Boolean(row.system);
-
 const normalizeIncludeDeleted = (value) => String(value || "").toLowerCase() === "true";
 
 const throwIfUniqueConstraintError = (error) => {

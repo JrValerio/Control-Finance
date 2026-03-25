@@ -18,6 +18,8 @@ interface CategoryApiPayload {
   name?: unknown;
   normalizedName?: unknown;
   normalized_name?: unknown;
+  type?: unknown;
+  system?: unknown;
   deletedAt?: unknown;
   deleted_at?: unknown;
   createdAt?: unknown;

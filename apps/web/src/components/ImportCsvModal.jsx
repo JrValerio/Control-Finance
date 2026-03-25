@@ -5,6 +5,7 @@ import { profileService } from "../services/profile.service";
 import { categoriesService } from "../services/categories.service";
 import { formatCurrency } from "../utils/formatCurrency";
 import { getApiErrorMessage } from "../utils/apiError";
+import BillModal from "./BillModal";
 
 const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   const fileInputRef = useRef(null);
@@ -27,6 +28,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   // post-commit state
   const [lastCommitResult, setLastCommitResult] = useState(null);
   const [isUndoing, setIsUndoing] = useState(false);
+  // bill bridge
+  const [isBillModalOpen, setIsBillModalOpen] = useState(false);
+  const [billCreated, setBillCreated] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -47,6 +51,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setInlineCreateName("");
     setLastCommitResult(null);
     setIsUndoing(false);
+    setIsBillModalOpen(false);
+    setBillCreated(false);
   }, [isOpen]);
 
   useEffect(() => {
@@ -144,6 +150,21 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
       if (day >= 1 && day <= 31) patch.payday = day;
     }
     return Object.keys(patch).length > 0 ? patch : null;
+  }, [dryRunResult]);
+
+  const billPrefill = useMemo(() => {
+    const suggestion = dryRunResult?.suggestion;
+    if (suggestion?.type !== "bill") return null;
+    const typeLabel = suggestion.billType === "energy" ? "Conta de energia" : "Conta de água";
+    const title = suggestion.issuer ? `${typeLabel} — ${suggestion.issuer}` : typeLabel;
+    return {
+      title,
+      amount: suggestion.amountDue ?? undefined,
+      dueDate: suggestion.dueDate ?? undefined,
+      referenceMonth: suggestion.referenceMonth ?? undefined,
+      billType: suggestion.billType ?? undefined,
+      sourceImportSessionId: dryRunResult?.importId ?? undefined,
+    };
   }, [dryRunResult]);
 
   const handleApplyProfile = async () => {
@@ -475,6 +496,20 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                     Perfil atualizado com sucesso.
                   </p>
                 ) : null}
+                {suggestionCard.kind === "bill" && !billCreated ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsBillModalOpen(true)}
+                    className="mt-1 rounded border border-blue-400 bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/40"
+                  >
+                    Criar pendência
+                  </button>
+                ) : null}
+                {suggestionCard.kind === "bill" && billCreated ? (
+                  <p className="mt-1 text-xs font-semibold text-green-600 dark:text-green-400">
+                    Pendência criada com sucesso.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
@@ -604,7 +639,6 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                                     onKeyDown={(e) => { if (e.key === "Enter") handleInlineCreateCategory(row.line, row.raw.type); if (e.key === "Escape") setInlineCreate(null); }}
                                     placeholder="Nova categoria"
                                     className="rounded border border-cf-border bg-cf-surface px-1 py-0.5 text-xs text-cf-text-primary"
-                                    // eslint-disable-next-line jsx-a11y/no-autofocus
                                     autoFocus
                                   />
                                   <button
@@ -650,6 +684,17 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
           </div>
         ) : null}
       </div>
+
+      <BillModal
+        isOpen={isBillModalOpen}
+        onClose={() => setIsBillModalOpen(false)}
+        onSaved={() => {
+          setIsBillModalOpen(false);
+          setBillCreated(true);
+        }}
+        prefill={billPrefill}
+        categories={categories}
+      />
     </div>
   );
 };
