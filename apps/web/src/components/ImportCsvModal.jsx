@@ -24,6 +24,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   const [inlineCreate, setInlineCreate] = useState(null);
   const [inlineCreateName, setInlineCreateName] = useState("");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  // post-commit state
+  const [lastCommitResult, setLastCommitResult] = useState(null);
+  const [isUndoing, setIsUndoing] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -42,6 +45,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setCategoryOverrides({});
     setInlineCreate(null);
     setInlineCreateName("");
+    setLastCommitResult(null);
+    setIsUndoing(false);
   }, [isOpen]);
 
   useEffect(() => {
@@ -220,13 +225,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
         categoryId: categoryId ?? null,
       }));
       const commitResult = await transactionsService.commitImportCsv(dryRunResult.importId, overridesArray);
-
-      if (onImported) {
-        await onImported(commitResult);
-        return;
-      }
-
-      setSuccessMessage(`Importação concluída com sucesso (${commitResult.imported} linhas).`);
+      setLastCommitResult(commitResult);
     } catch (error) {
       const apiMessage = getApiErrorMessage(error, "Não foi possível confirmar a importação.");
       setErrorMessage(
@@ -236,6 +235,25 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
       );
     } finally {
       setIsCommitting(false);
+    }
+  };
+
+  const handleCloseAfterCommit = async () => {
+    if (onImported) await onImported(lastCommitResult);
+    else onClose();
+  };
+
+  const handleUndo = async () => {
+    if (!lastCommitResult?.importSessionId) return;
+    setIsUndoing(true);
+    setErrorMessage("");
+    try {
+      await transactionsService.deleteImportSession(lastCommitResult.importSessionId);
+      if (onImported) await onImported(null);
+      else onClose();
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Não foi possível desfazer a importação."));
+      setIsUndoing(false);
     }
   };
 
@@ -313,31 +331,59 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
           </p>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleDryRun}
-            disabled={isDryRunning || isCommitting}
-            className="rounded border border-brand-1 bg-brand-1 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isDryRunning ? "Processando..." : "Pré-visualizar"}
-          </button>
-          <button
-            type="button"
-            onClick={handleCommit}
-            disabled={!hasValidRows || isDryRunning || isCommitting}
-            className="rounded border border-cf-border bg-cf-surface px-3 py-1.5 text-sm font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isCommitting ? "Importando..." : "Importar"}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-1.5 text-sm font-semibold text-cf-text-secondary"
-          >
-            Fechar
-          </button>
-        </div>
+        {lastCommitResult ? (
+          <div className="mt-3 rounded border border-green-200 bg-green-50 px-3 py-3 dark:border-green-800 dark:bg-green-950/40">
+            <p className="mb-2 text-sm font-semibold text-green-700 dark:text-green-400">
+              {lastCommitResult.imported === 1
+                ? "1 lançamento importado."
+                : `${lastCommitResult.imported} lançamentos importados.`}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCloseAfterCommit}
+                disabled={isUndoing}
+                className="rounded border border-green-400 bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-green-700 dark:bg-green-900/40 dark:text-green-300"
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={isUndoing}
+                className="rounded border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-700 dark:bg-red-950/40 dark:text-red-400"
+              >
+                {isUndoing ? "Desfazendo..." : "Desfazer importação"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDryRun}
+              disabled={isDryRunning || isCommitting}
+              className="rounded border border-brand-1 bg-brand-1 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isDryRunning ? "Processando..." : "Pré-visualizar"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCommit}
+              disabled={!hasValidRows || isDryRunning || isCommitting}
+              className="rounded border border-cf-border bg-cf-surface px-3 py-1.5 text-sm font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isCommitting ? "Importando..." : "Importar"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-1.5 text-sm font-semibold text-cf-text-secondary"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
 
         {errorMessage ? (
           <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

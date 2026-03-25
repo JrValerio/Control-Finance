@@ -694,6 +694,8 @@ export const dryRunTransactionsImportForUser = async (userId, importFile) => {
   const persistedSession = await persistImportSession(userId, {
     normalizedRows,
     summary,
+    fileName: importFile?.originalname || null,
+    documentType,
   });
 
   return {
@@ -813,6 +815,8 @@ export const commitTransactionsImportForUser = async (userId, importId, category
           : row,
       );
   const payloadSummary = payload.summary || {};
+  const importFileName = payload.fileName || null;
+  const importDocumentType = payload.documentType || null;
   const observabilitySummary = {
     totalRows: normalizeSummaryInteger(payloadSummary.totalRows, normalizedRows.length),
     validRows: normalizeSummaryInteger(payloadSummary.validRows, normalizedRows.length),
@@ -851,8 +855,8 @@ export const commitTransactionsImportForUser = async (userId, importId, category
 
     const insertValuesPlaceholders = normalizedRows
       .map((_, rowIndex) => {
-        const startParameter = rowIndex * 7 + 2;
-        return `($1, $${startParameter}, $${startParameter + 1}, $${startParameter + 2}::date, $${startParameter + 3}, $${startParameter + 4}, $${startParameter + 5}, $${startParameter + 6})`;
+        const p = rowIndex * 10 + 2;
+        return `($1, $${p}, $${p + 1}, $${p + 2}::date, $${p + 3}, $${p + 4}, $${p + 5}, $${p + 6}, $${p + 7}, NOW(), $${p + 8}, $${p + 9})`;
       })
       .join(", ");
 
@@ -867,12 +871,15 @@ export const commitTransactionsImportForUser = async (userId, importId, category
         row.notes || "",
         row.categoryId,
         row.fingerprint || null,
+        normalizedImportId,
+        importFileName,
+        importDocumentType,
       );
     });
 
     const insertResult = await transactionClient.query(
       `
-        INSERT INTO transactions (user_id, type, value, date, description, notes, category_id, import_fingerprint)
+        INSERT INTO transactions (user_id, type, value, date, description, notes, category_id, import_fingerprint, import_session_id, imported_at, import_file_name, import_document_type)
         VALUES ${insertValuesPlaceholders}
         RETURNING type, value
       `,
@@ -904,6 +911,7 @@ export const commitTransactionsImportForUser = async (userId, importId, category
 
   return {
     imported: commitOutcome.imported,
+    importSessionId: normalizedImportId,
     summary: {
       income: commitOutcome.income,
       expense: commitOutcome.expense,
@@ -916,4 +924,48 @@ export const commitTransactionsImportForUser = async (userId, importId, category
       invalidRows: observabilitySummary.invalidRows,
     },
   };
+};
+
+export const deleteImportSessionForUser = async (userId, sessionId) => {
+  const normalizedSessionId = normalizeImportId(sessionId);
+
+  const result = await withDbTransaction(async (transactionClient) => {
+    const sessionResult = await transactionClient.query(
+      `SELECT id, user_id FROM transaction_import_sessions WHERE id = $1 LIMIT 1`,
+      [normalizedSessionId],
+    );
+    const session = sessionResult.rows[0] || null;
+    assertSessionOwnership(session, userId);
+
+    const deleteResult = await transactionClient.query(
+      `UPDATE transactions SET deleted_at = NOW()
+       WHERE user_id = $1 AND import_session_id = $2 AND deleted_at IS NULL`,
+      [userId, normalizedSessionId],
+    );
+
+    return { deletedCount: Number(deleteResult.rowCount || 0) };
+  });
+
+  return { importSessionId: normalizedSessionId, deletedCount: result.deletedCount, success: true };
+};
+
+export const bulkDeleteTransactionsForUser = async (userId, transactionIds) => {
+  if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
+    return { deletedCount: 0, success: true };
+  }
+
+  const validIds = transactionIds.filter((id) => Number.isInteger(id) && id > 0);
+
+  if (validIds.length === 0) {
+    return { deletedCount: 0, success: true };
+  }
+
+  const placeholders = validIds.map((_, index) => `$${index + 2}`).join(", ");
+  const result = await dbQuery(
+    `UPDATE transactions SET deleted_at = NOW()
+     WHERE user_id = $1 AND id IN (${placeholders}) AND deleted_at IS NULL`,
+    [userId, ...validIds],
+  );
+
+  return { deletedCount: Number(result.rowCount || 0), success: true };
 };

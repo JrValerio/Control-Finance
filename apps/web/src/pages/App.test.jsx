@@ -104,6 +104,8 @@ vi.mock("../services/transactions.service", () => ({
     getImportHistory: vi.fn(),
     dryRunImportCsv: vi.fn(),
     commitImportCsv: vi.fn(),
+    deleteImportSession: vi.fn(),
+    bulkDeleteTransactions: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
@@ -291,6 +293,8 @@ describe("App", () => {
     });
     transactionsService.update.mockResolvedValue({});
     transactionsService.restore.mockResolvedValue({});
+    transactionsService.bulkDeleteTransactions.mockResolvedValue({ deletedCount: 0, success: true });
+    transactionsService.deleteImportSession.mockResolvedValue({ importSessionId: "", deletedCount: 0, success: true });
     analyticsService.getMonthlyTrend.mockResolvedValue(buildTrendResponse());
     forecastService.getCurrent.mockResolvedValue(null);
     forecastService.recompute.mockResolvedValue({
@@ -2113,7 +2117,14 @@ describe("App", () => {
     await waitFor(() => {
       expect(transactionsService.commitImportCsv).toHaveBeenCalledWith(
         "11111111-1111-4111-8111-111111111111",
+        [],
       );
+    });
+
+    // Modal shows committed state — click Fechar to trigger onImported
+    await user.click(screen.getByRole("button", { name: "Fechar" }));
+
+    await waitFor(() => {
       expect(transactionsService.listPage).toHaveBeenCalledTimes(2);
       expect(transactionsService.getMonthlySummary).toHaveBeenCalledTimes(2);
       expect(transactionsService.getMonthlySummaryCompare).toHaveBeenCalledTimes(2);
