@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getLatestForecast } from "./forecast.service.js";
 import { dbQuery } from "../db/index.js";
+import { logInfo, logWarn, logError } from "../observability/logger.js";
 
 const SYSTEM_PROMPT =
   "Você é o Especialista Financeiro do app Control Finance. Analise os dados JSON fornecidos e retorne um único insight acionável de no máximo 180 caracteres. Seja pragmático. Se os dados forem positivos, parabenize e sugira uma meta de reserva. Se forem negativos, aponte a categoria culpada e sugira um corte específico. Retorne APENAS o texto do insight, sem formatação, sem aspas, sem JSON.";
@@ -75,6 +76,7 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
   const client = anthropicClient ?? new Anthropic();
 
   let insightText;
+  const callStart = Date.now();
   try {
     const response = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
@@ -83,15 +85,34 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
       messages: [{ role: "user", content: JSON.stringify(context) }],
     });
     insightText = response.content[0]?.text?.trim() || null;
-  } catch {
+  } catch (error) {
+    logError({
+      event: "ai.insight.llm_error",
+      userId,
+      errorMessage: error?.message || "unknown",
+      latencyMs: Date.now() - callStart,
+    });
     return null;
   }
 
-  if (!insightText) return null;
+  if (!insightText) {
+    logWarn({ event: "ai.insight.empty_response", userId, latencyMs: Date.now() - callStart });
+    return null;
+  }
+
+  const type = resolveInsightType(forecast.adjustedProjectedBalance, forecast.incomeExpected);
+
+  logInfo({
+    event: "ai.insight.generated",
+    userId,
+    type,
+    charCount: insightText.length,
+    latencyMs: Date.now() - callStart,
+  });
 
   return {
     id: `insight_${userId}_${Date.now()}`,
-    type: resolveInsightType(forecast.adjustedProjectedBalance, forecast.incomeExpected),
+    type,
     title: "Dica do Especialista",
     message: insightText,
     action_label: "Ver detalhes",
