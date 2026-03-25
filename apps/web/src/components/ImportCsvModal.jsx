@@ -31,6 +31,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   // bill bridge
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billCreated, setBillCreated] = useState(false);
+  // batch category
+  const [selectedPreviewLines, setSelectedPreviewLines] = useState(new Set());
+  const [batchCategoryId, setBatchCategoryId] = useState("");
 
   useEffect(() => {
     if (isOpen) {
@@ -53,6 +56,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setIsUndoing(false);
     setIsBillModalOpen(false);
     setBillCreated(false);
+    setSelectedPreviewLines(new Set());
+    setBatchCategoryId("");
   }, [isOpen]);
 
   useEffect(() => {
@@ -180,6 +185,39 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
       setIsApplyingProfile(false);
       setShowProfileConfirm(false);
     }
+  };
+
+  const validPreviewLines = useMemo(
+    () => (dryRunResult?.rows ?? []).filter((r) => r.status === "valid").map((r) => r.line),
+    [dryRunResult],
+  );
+
+  const togglePreviewLine = (line) => {
+    setSelectedPreviewLines((prev) => {
+      const next = new Set(prev);
+      if (next.has(line)) next.delete(line); else next.add(line);
+      return next;
+    });
+  };
+
+  const toggleSelectAllPreview = () => {
+    if (selectedPreviewLines.size === validPreviewLines.length) {
+      setSelectedPreviewLines(new Set());
+    } else {
+      setSelectedPreviewLines(new Set(validPreviewLines));
+    }
+  };
+
+  const handleApplyBatchCategory = () => {
+    if (selectedPreviewLines.size === 0) return;
+    const val = batchCategoryId === "" ? null : Number(batchCategoryId);
+    setCategoryOverrides((prev) => {
+      const next = { ...prev };
+      selectedPreviewLines.forEach((line) => { next[line] = val; });
+      return next;
+    });
+    setSelectedPreviewLines(new Set());
+    setBatchCategoryId("");
   };
 
   const handleInlineCreateCategory = useCallback(
@@ -553,10 +591,52 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                 Sem linhas para pré-visualizar.
               </div>
             ) : (
+              <>
+                {selectedPreviewLines.size > 0 && (
+                  <div className="mb-1 flex flex-wrap items-center gap-2 rounded border border-brand-1/40 bg-brand-1/5 px-3 py-2">
+                    <span className="text-xs font-medium text-cf-text-primary">
+                      {selectedPreviewLines.size} {selectedPreviewLines.size === 1 ? "linha selecionada" : "linhas selecionadas"}
+                    </span>
+                    <select
+                      aria-label="Categoria para aplicar em lote"
+                      value={batchCategoryId}
+                      onChange={(e) => setBatchCategoryId(e.target.value)}
+                      className="rounded border border-cf-border bg-cf-surface px-1 py-0.5 text-xs text-cf-text-primary"
+                    >
+                      <option value="">— Sem categoria —</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={handleApplyBatchCategory}
+                      className="rounded border border-brand-1 bg-brand-1 px-2 py-0.5 text-xs font-semibold text-white hover:opacity-90"
+                    >
+                      Aplicar categoria
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPreviewLines(new Set())}
+                      className="rounded border border-cf-border px-2 py-0.5 text-xs text-cf-text-secondary hover:bg-cf-bg-subtle"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
               <div className="max-h-80 overflow-auto rounded border border-cf-border">
                 <table className="min-w-full border-collapse text-left text-xs">
                   <thead className="bg-cf-bg-subtle">
                     <tr>
+                      <th className="border-b border-cf-border px-2 py-2">
+                        <input
+                          type="checkbox"
+                          aria-label="Selecionar todas as linhas válidas"
+                          checked={validPreviewLines.length > 0 && selectedPreviewLines.size === validPreviewLines.length}
+                          onChange={toggleSelectAllPreview}
+                          className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
+                        />
+                      </th>
                       <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Linha</th>
                       <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Status</th>
                       <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Descricao</th>
@@ -569,6 +649,17 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                   <tbody>
                     {dryRunResult.rows.map((row) => (
                       <tr key={`import-row-${row.line}`} className="align-top">
+                        <td className="border-b border-cf-border px-2 py-2">
+                          {row.status === "valid" ? (
+                            <input
+                              type="checkbox"
+                              aria-label={`Selecionar linha ${row.line}`}
+                              checked={selectedPreviewLines.has(row.line)}
+                              onChange={() => togglePreviewLine(row.line)}
+                              className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
+                            />
+                          ) : null}
+                        </td>
                         <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">{row.line}</td>
                         <td className="border-b border-cf-border px-2 py-2">
                           <span
@@ -680,6 +771,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         ) : null}
