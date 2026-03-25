@@ -116,6 +116,7 @@ export const categoriesWriteRateLimiter = createUserWriteRateLimiter("categories
 export const budgetsWriteRateLimiter = createUserWriteRateLimiter("budgets-write");
 export const billsWriteRateLimiter = createUserWriteRateLimiter("bills-write");
 export const incomeSourcesWriteRateLimiter = createUserWriteRateLimiter("income-sources-write");
+export const goalsWriteRateLimiter = createUserWriteRateLimiter("goals-write");
 export const analyticsWriteRateLimiter = rateLimit({
   windowMs: getAnalyticsRateLimitWindowMs(),
   max: getAnalyticsRateLimitMaxRequests(),
