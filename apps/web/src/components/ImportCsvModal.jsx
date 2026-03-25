@@ -6,6 +6,7 @@ import { categoriesService } from "../services/categories.service";
 import { formatCurrency } from "../utils/formatCurrency";
 import { getApiErrorMessage } from "../utils/apiError";
 import BillModal from "./BillModal";
+import IncomeStatementQuickModal from "./IncomeStatementQuickModal";
 
 const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   const fileInputRef = useRef(null);
@@ -31,6 +32,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   // bill bridge
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billCreated, setBillCreated] = useState(false);
+  // income statement bridge
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+  const [incomeStatementCreated, setIncomeStatementCreated] = useState(false);
   // batch category
   const [selectedPreviewLines, setSelectedPreviewLines] = useState(new Set());
   const [batchCategoryId, setBatchCategoryId] = useState("");
@@ -56,6 +60,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setIsUndoing(false);
     setIsBillModalOpen(false);
     setBillCreated(false);
+    setIsIncomeModalOpen(false);
+    setIncomeStatementCreated(false);
     setSelectedPreviewLines(new Set());
     setBatchCategoryId("");
   }, [isOpen]);
@@ -169,6 +175,16 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
       referenceMonth: suggestion.referenceMonth ?? undefined,
       billType: suggestion.billType ?? undefined,
       sourceImportSessionId: dryRunResult?.importId ?? undefined,
+    };
+  }, [dryRunResult]);
+
+  const incomePrefill = useMemo(() => {
+    const suggestion = dryRunResult?.suggestion;
+    if (suggestion?.type !== "profile") return null;
+    return {
+      referenceMonth: suggestion.referenceMonth ?? undefined,
+      netAmount: suggestion.netAmount ?? undefined,
+      paymentDate: suggestion.paymentDate ?? undefined,
     };
   }, [dryRunResult]);
 
@@ -534,6 +550,20 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                     Perfil atualizado com sucesso.
                   </p>
                 ) : null}
+                {suggestionCard.kind === "profile" && !incomeStatementCreated ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsIncomeModalOpen(true)}
+                    className="mt-1 rounded border border-blue-400 bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/40"
+                  >
+                    Registrar no histórico de renda
+                  </button>
+                ) : null}
+                {suggestionCard.kind === "profile" && incomeStatementCreated ? (
+                  <p className="mt-1 text-xs font-semibold text-green-600 dark:text-green-400">
+                    Lançamento registrado no histórico de renda.
+                  </p>
+                ) : null}
                 {suggestionCard.kind === "bill" && !billCreated ? (
                   <button
                     type="button"
@@ -786,6 +816,16 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
         }}
         prefill={billPrefill}
         categories={categories}
+      />
+
+      <IncomeStatementQuickModal
+        isOpen={isIncomeModalOpen}
+        onClose={() => setIsIncomeModalOpen(false)}
+        prefill={incomePrefill}
+        onCreated={() => {
+          setIsIncomeModalOpen(false);
+          setIncomeStatementCreated(true);
+        }}
       />
     </div>
   );

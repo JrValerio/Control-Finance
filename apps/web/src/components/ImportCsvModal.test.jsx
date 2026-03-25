@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import ImportCsvModal from "./ImportCsvModal";
 import { transactionsService } from "../services/transactions.service";
 import { categoriesService } from "../services/categories.service";
+import { incomeSourcesService } from "../services/incomeSources.service";
 
 vi.mock("../services/transactions.service", () => ({
   transactionsService: {
@@ -17,6 +18,13 @@ vi.mock("../services/categories.service", () => ({
   categoriesService: {
     listCategories: vi.fn(),
     createCategory: vi.fn(),
+  },
+}));
+
+vi.mock("../services/incomeSources.service", () => ({
+  incomeSourcesService: {
+    list: vi.fn(),
+    createStatement: vi.fn(),
   },
 }));
 
@@ -60,6 +68,7 @@ describe("ImportCsvModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     categoriesService.listCategories.mockResolvedValue([]);
+    incomeSourcesService.list.mockResolvedValue([]);
   });
 
   it("does not render when isOpen is false", () => {
@@ -211,6 +220,66 @@ describe("ImportCsvModal", () => {
       expect(
         screen.getByText("Sessão de importação expirada. Rode a pré-visualização novamente."),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe("income statement bridge", () => {
+    const buildInssResponse = () =>
+      buildDryRunResponse({
+        documentType: "income_statement_inss",
+        summary: { totalRows: 0, validRows: 0, invalidRows: 0, income: 0, expense: 0 },
+        rows: [],
+        suggestion: {
+          type: "profile",
+          referenceMonth: "2026-02",
+          netAmount: 1412.0,
+          paymentDate: "2026-02-25",
+          grossAmount: 1800.0,
+          benefitKind: "Aposentadoria",
+        },
+      });
+
+    it("exibe botao Registrar no historico de renda para suggestion type=profile", async () => {
+      const file = new File(["dummy"], "inss.pdf", { type: "application/pdf" });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildInssResponse());
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Registrar no histórico de renda" }),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it("abre IncomeStatementQuickModal ao clicar no botao", async () => {
+      const file = new File(["dummy"], "inss.pdf", { type: "application/pdf" });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildInssResponse());
+      incomeSourcesService.list.mockResolvedValue([
+        { id: 1, name: "INSS Benefício", deductions: [], userId: 1, categoryId: null, defaultDay: null, notes: null, createdAt: "", updatedAt: "" },
+      ]);
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Registrar no histórico de renda" }),
+        ).toBeInTheDocument();
+      });
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Registrar no histórico de renda" }),
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("dialog", { name: /Registrar no histórico de renda/i }),
+        ).toBeInTheDocument();
+      });
     });
   });
 
