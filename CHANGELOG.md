@@ -2,6 +2,62 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.30.0] - 2026-03-25
+
+**Especialista IA + Metas de Poupança + Dashboard executivo**
+
+O Control Finance deu o salto de gerenciador de gastos para copiloto financeiro pessoal. Esta release conecta três camadas que antes existiam separadas — rastreamento, projeção e inteligência — em uma única experiência de pilotagem.
+
+### Especialista IA no dashboard
+
+O dashboard agora entrega um insight acionável gerado por Claude Haiku a partir do contexto real do usuário: saldo projetado, taxa de queima, categorias de maior gasto e metas de poupança. O painel semântico sinaliza com cores o nível de atenção: alerta quando a trajetória é negativa ou as metas estão inviáveis, parabeniza quando o cenário está sob controle. Falha silenciosa garantida — se o LLM não responder, o dashboard não quebra.
+
+- `GET /ai/insight`: auth + plano ativo + rate limit (10 chamadas/10 min)
+- Contexto injetado no prompt: `balance`, `burn_rate`, `runway`, `top_categories`, `goals`
+- `AIInsightPanel.tsx`: shimmer enquanto carrega; card warning/info/success; null em falha
+- `HealthOverview.tsx`: grade 3 colunas com o painel de IA; degrada para 2 colunas em silêncio
+
+### Metas de poupança (full-stack)
+
+Criar uma meta agora é o início de um acompanhamento real, não só um número salvo. O app calcula automaticamente quanto guardar por mês, sinaliza quando o plano está inviável dado o saldo projetado, e permite registrar uma contribuição sem abrir o modal completo.
+
+- Migration `030_create_user_goals.sql`: tabela `user_goals` com soft-delete e índice composto `(user_id, deleted_at)`
+- `calcMonthlyNeeded`: função pura, `now` injetável para testes determinísticos; retorna o total restante quando a data já passou
+- CRUD completo: `GET/POST/PATCH/DELETE /goals` — auth + plano ativo + rate limiter
+- Goals injetadas no contexto do Haiku em paralelo com categorias; SYSTEM_PROMPT prioriza `monthly_needed > balance` antes de qualquer outro insight
+- `GoalFormModal.tsx`: seletor de ícone emoji, validação no cliente, a11y (labels, role dialog, Escape)
+- `GoalsSection.tsx`: busca `/goals` + `/forecasts/current` em paralelo; barra de progresso colorida (cinza → âmbar → roxo → verde); badge ⚠ risco quando `monthlyNeeded > projectedBalance`; contribuição rápida inline sem abrir modal
+- `WelcomeCard.tsx` v2: narrativa de 4 etapas — transação → perfil → metas → IA
+
+### Health Overview mais executivo
+
+O painel de saúde financeira ganhou gráfico de trajetória mensal (AreaChart) e gauge de dinheiro livre. A leitura agora é executiva: você vê em três segundos se o mês vai fechar no azul, onde está queimando mais e qual meta exige atenção imediata.
+
+### Nova experiência de onboarding
+
+O `WelcomeCard` v2 guia o usuário pelos quatro passos que ativam o valor do produto: registrar, configurar, definir metas, ouvir o Especialista IA. Cada passo tem peso visual distinto — o primeiro em destaque como ação imediata, os demais como próximos horizontes.
+
+### Visualização avançada de gastos
+
+O `CategoryTreemap` substitui a lista plana de categorias por um treemap Recharts com 8 tons de roxo. Proporção visual imediata: onde o dinheiro vai fica óbvio sem precisar ler números.
+
+### Estado da release
+
+**Confirmado (CI + runner local):**
+- 552 testes de API passando (531 → +21 goals.test.js)
+- 239 testes web passando (219 → +20 GoalsSection.test.tsx)
+- Lint limpo em ambos os workspaces
+
+**Reportado no fluxo (integração validada, cobertura unitária parcial):**
+- HealthOverview (trajetória + gauge): coberto por 12 testes de integração; lógica `generateTrajectory` coberta por unitários
+- AIInsightPanel: coberto via mock do serviço; LLM path validado manualmente
+
+**Pendente (fora do escopo desta release):**
+- Testes negativos de importação (OFX truncado, PDF rejeitado, OCR com falha)
+- Testes diretos de `email.service.js`
+
+---
+
 ## [1.29.0] - 2026-02-24
 
 ### Title
