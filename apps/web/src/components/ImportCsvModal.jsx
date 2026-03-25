@@ -53,6 +53,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     return (dryRunResult?.summary?.validRows || 0) > 0;
   }, [dryRunResult]);
 
+  const hasDuplicates = useMemo(() => {
+    return (dryRunResult?.summary?.duplicateRows || 0) > 0;
+  }, [dryRunResult]);
+
   const handleDryRun = async () => {
     if (!selectedFile) {
       setErrorMessage("Selecione um arquivo CSV, OFX ou PDF.");
@@ -220,7 +224,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
 
         {dryRunResult ? (
           <div className="mt-4 space-y-3">
-            <div className="grid gap-2 sm:grid-cols-5">
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Total</p>
                 <p className="text-sm font-semibold text-cf-text-primary">{dryRunResult.summary.totalRows}</p>
@@ -232,6 +236,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Inválidas</p>
                 <p className="text-sm font-semibold text-cf-text-primary">{dryRunResult.summary.invalidRows}</p>
+              </div>
+              <div className={`rounded border px-3 py-2 ${hasDuplicates ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40" : "border-cf-border bg-cf-bg-subtle"}`}>
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Duplicadas</p>
+                <p className={`text-sm font-semibold ${hasDuplicates ? "text-red-600 dark:text-red-400" : "text-cf-text-primary"}`}>{dryRunResult.summary.duplicateRows ?? 0}</p>
               </div>
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Entradas</p>
@@ -277,12 +285,21 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                           <span
                             className={`rounded px-2 py-0.5 font-semibold ${
                               row.status === "valid"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-red-100 text-red-700"
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+                                : row.status === "duplicate"
+                                  ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                                  : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
                             }`}
                           >
-                            {row.status === "valid" ? "Valida" : "Invalida"}
+                            {row.status === "valid"
+                              ? "Valida"
+                              : row.status === "duplicate"
+                                ? "Duplicada"
+                                : "Invalida"}
                           </span>
+                          {row.status === "duplicate" && (
+                            <span className="ml-1.5 text-xs text-cf-text-secondary">já existe</span>
+                          )}
                         </td>
                         <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
                           {row.raw.description || "-"}

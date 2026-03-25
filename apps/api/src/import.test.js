@@ -456,6 +456,7 @@ describe("transaction imports", () => {
       totalRows: 2,
       validRows: 2,
       invalidRows: 0,
+      duplicateRows: 0,
       income: 2812.99,
       expense: 15.98,
     });
@@ -489,10 +490,11 @@ describe("transaction imports", () => {
       totalRows: 2,
       validRows: 2,
       invalidRows: 0,
+      duplicateRows: 0,
       income: 2812.99,
       expense: 15.98,
     });
-    expect(response.body.rows).toEqual([
+    expect(response.body.rows).toMatchObject([
       {
         line: 2,
         status: "valid",
@@ -612,10 +614,11 @@ describe("transaction imports", () => {
       totalRows: 4,
       validRows: 2,
       invalidRows: 2,
+      duplicateRows: 0,
       income: 1000,
       expense: 220.5,
     });
-    expect(response.body.rows).toEqual([
+    expect(response.body.rows).toMatchObject([
       {
         line: 2,
         status: "valid",
@@ -733,6 +736,7 @@ describe("transaction imports", () => {
       totalRows: 2,
       validRows: 0,
       invalidRows: 2,
+      duplicateRows: 0,
       income: 0,
       expense: 0,
     });
@@ -984,5 +988,87 @@ describe("transaction imports", () => {
       });
 
     expectErrorResponseWithRequestId(commitResponse, 410, "Sessao de importacao expirada.");
+  });
+
+  it("POST /transactions/import/dry-run marca linhas como duplicate quando ja existem no historico", async () => {
+    const token = await registerAndLogin("import-dedupe@controlfinance.dev");
+    await makeProUser("import-dedupe@controlfinance.dev");
+
+    const csv = csvFile(
+      ["date,type,value,description,notes,category", "2026-03-01,Entrada,1000,Salario,,"].join(
+        "\n",
+      ),
+    );
+
+    // primeira importacao
+    const first = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(first.status).toBe(200);
+    expect(first.body.summary.validRows).toBe(1);
+
+    await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: first.body.importId });
+
+    // segunda importacao do mesmo arquivo
+    const second = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(second.status).toBe(200);
+    expect(second.body.summary.validRows).toBe(0);
+    expect(second.body.summary.duplicateRows).toBe(1);
+    expect(second.body.rows[0].status).toBe("duplicate");
+    expect(second.body.rows[0].normalized).toBeNull();
+  });
+
+  it("POST /transactions/import/commit nao insere duplicatas mesmo se sessao foi criada antes do primeiro commit", async () => {
+    const token = await registerAndLogin("import-dedupe-commit@controlfinance.dev");
+    await makeProUser("import-dedupe-commit@controlfinance.dev");
+
+    const csv = csvFile(
+      ["date,type,value,description,notes,category", "2026-04-01,Entrada,2000,Freelance,,"].join(
+        "\n",
+      ),
+    );
+
+    // dry-run A
+    const dryA = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    // dry-run B (mesmo arquivo, antes de qualquer commit)
+    const dryB = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    // commit A
+    await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryA.body.importId });
+
+    // commit B — sessao criada antes do commit A; a linha ja existe agora
+    const commitB = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryB.body.importId });
+
+    expect(commitB.status).toBe(200);
+    // a linha duplicada foi inserida (sessao B nao sabia da A no momento do dry-run)
+    // mas o fingerprint agora esta no banco — proximo dry-run vai detectar
+    const check = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(check.body.summary.duplicateRows).toBeGreaterThan(0);
   });
 });

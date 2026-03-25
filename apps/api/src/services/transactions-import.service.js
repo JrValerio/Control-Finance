@@ -1,5 +1,5 @@
 import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { parse as parseCsv } from "csv-parse/sync";
 import { dbQuery, withDbTransaction } from "../db/index.js";
 import {
@@ -31,6 +31,37 @@ const HEADER_ERROR_MESSAGE =
   "CSV invalido. Cabecalho esperado: date,type,value,description,notes,category";
 const IMPORT_FORMAT_ERROR_MESSAGE =
   "Arquivo nao reconhecido. Envie um CSV manual com cabecalho date,type,value,description,notes,category ou um CSV, OFX ou PDF de extrato.";
+
+const extractFitId = (notes) => {
+  const match = String(notes || "").match(/^FITID\s+(\S+)/);
+  return match ? match[1] : null;
+};
+
+const generateImportFingerprint = (normalizedRow) => {
+  const fitId = extractFitId(normalizedRow.notes);
+  const key = fitId
+    ? `fitid|${fitId}`
+    : [
+        normalizedRow.date,
+        normalizedRow.type,
+        String(normalizedRow.value),
+        String(normalizedRow.description || "")
+          .toLowerCase()
+          .replace(/\s+/g, " ")
+          .trim(),
+      ].join("|");
+  return createHash("sha256").update(key).digest("hex").slice(0, 32);
+};
+
+const loadExistingFingerprints = async (userId, fingerprints) => {
+  if (fingerprints.length === 0) return new Set();
+  const result = await dbQuery(
+    `SELECT import_fingerprint FROM transactions
+     WHERE user_id = $1 AND deleted_at IS NULL AND import_fingerprint = ANY($2)`,
+    [userId, fingerprints],
+  );
+  return new Set(result.rows.map((row) => row.import_fingerprint));
+};
 
 const createError = (status, message) => {
   const error = new Error(message);
@@ -476,6 +507,8 @@ const createSummary = (rows = []) => {
         } else if (row.normalized.type === CATEGORY_EXIT) {
           summary.expense += row.normalized.value;
         }
+      } else if (row.status === "duplicate") {
+        summary.duplicateRows += 1;
       } else {
         summary.invalidRows += 1;
       }
@@ -486,6 +519,7 @@ const createSummary = (rows = []) => {
       totalRows: rows.length,
       validRows: 0,
       invalidRows: 0,
+      duplicateRows: 0,
       income: 0,
       expense: 0,
     },
@@ -576,9 +610,8 @@ export const dryRunTransactionsImportForUser = async (userId, importFile) => {
     loadCategoriesForUser(userId),
   ]);
   const classifiedRows = applySmartClassification(parsedRows, categories);
-  const rows = classifiedRows.map((row) => {
+  const validatedRows = classifiedRows.map((row) => {
     const normalizedRow = normalizeCsvRow(row.raw, categoryMap);
-
     return {
       line: row.line,
       status: normalizedRow.status,
@@ -587,11 +620,28 @@ export const dryRunTransactionsImportForUser = async (userId, importFile) => {
       errors: normalizedRow.errors,
     };
   });
+
+  // Deduplicate: compute fingerprints for valid rows, check against existing transactions
+  const validOnly = validatedRows.filter((r) => r.status === "valid" && r.normalized);
+  const fingerprintMap = new Map(
+    validOnly.map((r) => [r.line, generateImportFingerprint(r.normalized)]),
+  );
+  const existingSet = await loadExistingFingerprints(userId, [...fingerprintMap.values()]);
+
+  const rows = validatedRows.map((row) => {
+    if (row.status !== "valid" || !row.normalized) return row;
+    const fp = fingerprintMap.get(row.line);
+    if (existingSet.has(fp)) {
+      return { ...row, status: "duplicate", fingerprint: fp, normalized: null };
+    }
+    return { ...row, fingerprint: fp };
+  });
+
   const summary = createSummary(rows);
 
   const normalizedRows = rows
     .filter((row) => row.status === "valid" && row.normalized)
-    .map((row) => row.normalized);
+    .map((row) => ({ ...row.normalized, fingerprint: row.fingerprint }));
 
   const persistedSession = await persistImportSession(userId, {
     normalizedRows,
@@ -729,8 +779,8 @@ export const commitTransactionsImportForUser = async (userId, importId) => {
 
     const insertValuesPlaceholders = normalizedRows
       .map((_, rowIndex) => {
-        const startParameter = rowIndex * 6 + 2;
-        return `($1, $${startParameter}, $${startParameter + 1}, $${startParameter + 2}::date, $${startParameter + 3}, $${startParameter + 4}, $${startParameter + 5})`;
+        const startParameter = rowIndex * 7 + 2;
+        return `($1, $${startParameter}, $${startParameter + 1}, $${startParameter + 2}::date, $${startParameter + 3}, $${startParameter + 4}, $${startParameter + 5}, $${startParameter + 6})`;
       })
       .join(", ");
 
@@ -744,12 +794,13 @@ export const commitTransactionsImportForUser = async (userId, importId) => {
         row.description,
         row.notes || "",
         row.categoryId,
+        row.fingerprint || null,
       );
     });
 
     const insertResult = await transactionClient.query(
       `
-        INSERT INTO transactions (user_id, type, value, date, description, notes, category_id)
+        INSERT INTO transactions (user_id, type, value, date, description, notes, category_id, import_fingerprint)
         VALUES ${insertValuesPlaceholders}
         RETURNING type, value
       `,
