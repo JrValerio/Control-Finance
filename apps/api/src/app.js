@@ -17,6 +17,7 @@ import billsRoutes from "./routes/bills.routes.js";
 import incomeSourcesRoutes from "./routes/income-sources.routes.js";
 import salaryRoutes from "./routes/salary.routes.js";
 import opsRoutes from "./routes/ops.routes.js";
+import aiRoutes from "./routes/ai.routes.js";
 import { notFoundHandler, errorHandler } from "./middlewares/error.middleware.js";
 import { requestIdMiddleware } from "./middlewares/request-id.middleware.js";
 import { requestLoggingMiddleware } from "./middlewares/request-logging.middleware.js";
@@ -96,6 +97,7 @@ app.use("/bills", billsRoutes);
 app.use("/income-sources", incomeSourcesRoutes);
 app.use("/salary", salaryRoutes);
 app.use("/ops", opsRoutes);
+app.use("/ai", aiRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

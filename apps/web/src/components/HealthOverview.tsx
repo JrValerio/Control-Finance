@@ -8,6 +8,8 @@ import {
   XAxis,
 } from "recharts";
 import { forecastService, type Forecast } from "../services/forecast.service";
+import { aiService, type AiInsight } from "../services/ai.service";
+import AIInsightPanel from "./AIInsightPanel";
 import { formatCurrency } from "../utils/formatCurrency";
 
 interface TrajectoryPoint {
@@ -94,9 +96,20 @@ const TrajectoryTooltip = ({
 
 const HealthOverview = (): JSX.Element | null => {
   const [forecast, setForecast] = useState<Forecast | null>(null);
+  const [insight, setInsight] = useState<AiInsight | null>(null);
+  const [isLoadingInsight, setIsLoadingInsight] = useState(true);
 
   useEffect(() => {
     void forecastService.getCurrent().then(setForecast).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    setIsLoadingInsight(true);
+    void aiService
+      .getInsight()
+      .then(setInsight)
+      .catch(() => setInsight(null))
+      .finally(() => setIsLoadingInsight(false));
   }, []);
 
   if (forecast === null || forecast.daysRemaining <= 0) return null;
@@ -110,10 +123,12 @@ const HealthOverview = (): JSX.Element | null => {
   const color = gaugeColor(adjustedProjectedBalance, gaugePct);
   const isAtRisk = adjustedProjectedBalance <= 0;
 
+  const showInsightPanel = isLoadingInsight || insight !== null;
+
   return (
     <div className="rounded border border-cf-border bg-cf-surface p-4">
       <h3 className="mb-4 text-sm font-semibold text-cf-text-primary">Saúde Financeira do Mês</h3>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={`grid gap-4 ${showInsightPanel ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         {/* D5 — Gauge */}
         <div className="flex flex-col items-center justify-center gap-2 rounded border border-cf-border bg-cf-bg-subtle p-4">
           <p className="text-xs font-medium uppercase text-cf-text-secondary">Dinheiro Livre</p>
@@ -125,6 +140,11 @@ const HealthOverview = (): JSX.Element | null => {
             {isAtRisk ? "Projeção negativa — revise seus gastos" : "projetado ao fim do mês"}
           </p>
         </div>
+
+        {/* AI Insight */}
+        {showInsightPanel && (
+          <AIInsightPanel insight={insight} isLoading={isLoadingInsight} />
+        )}
 
         {/* D4-lite — Trajectory */}
         <div className="rounded border border-cf-border bg-cf-bg-subtle p-4">
