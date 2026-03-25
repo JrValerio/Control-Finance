@@ -66,12 +66,16 @@ const toISOStringOrNull = (value) => {
 
 const mapCategory = (row) => ({
   id: Number(row.id),
-  userId: Number(row.user_id),
+  userId: row.user_id != null ? Number(row.user_id) : null,
   name: row.name,
   normalizedName: row.normalized_name,
+  type: row.type ?? null,
+  system: Boolean(row.system),
   deletedAt: toISOStringOrNull(row.deleted_at),
   createdAt: toISOStringOrNull(row.created_at),
 });
+
+const isSystemCategory = (row) => Boolean(row.system);
 
 const normalizeIncludeDeleted = (value) => String(value || "").toLowerCase() === "true";
 
@@ -81,19 +85,26 @@ const throwIfUniqueConstraintError = (error) => {
   }
 };
 
+const normalizeType = (value) => {
+  if (typeof value === "undefined") return undefined;
+  if (value === "income" || value === "expense") return value;
+  return null;
+};
+
 export const createCategoryForUser = async (userId, payload = {}) => {
   const normalizedUserId = normalizeUserId(userId);
   const name = normalizeCategoryName(payload.name);
   const normalizedName = normalizeCategoryNameKey(name);
+  const type = normalizeType(payload.type);
 
   try {
     const result = await dbQuery(
       `
-        INSERT INTO categories (user_id, name, normalized_name)
-        VALUES ($1, $2, $3)
-        RETURNING id, user_id, name, normalized_name, deleted_at, created_at
+        INSERT INTO categories (user_id, name, normalized_name, type)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id, user_id, name, normalized_name, type, system, deleted_at, created_at
       `,
-      [normalizedUserId, name, normalizedName],
+      [normalizedUserId, name, normalizedName, type ?? null],
     );
 
     return mapCategory(result.rows[0]);
@@ -109,12 +120,14 @@ export const listCategoriesByUser = async (userId, options = {}) => {
 
   const result = await dbQuery(
     `
-      SELECT id, user_id, name, normalized_name, deleted_at, created_at
+      SELECT id, user_id, name, normalized_name, type, system, deleted_at, created_at
       FROM categories
-      WHERE user_id = $1
+      WHERE (user_id = $1 OR user_id IS NULL)
       ${includeDeleted ? "" : "AND deleted_at IS NULL"}
       ORDER BY
         (deleted_at IS NOT NULL) ASC,
+        system DESC,
+        type ASC NULLS LAST,
         normalized_name ASC,
         id ASC
     `,
@@ -137,8 +150,9 @@ export const updateCategoryForUser = async (userId, categoryId, payload = {}) =>
         SET name = $3, normalized_name = $4
         WHERE id = $1
           AND user_id = $2
+          AND system IS NOT TRUE
           AND deleted_at IS NULL
-        RETURNING id, user_id, name, normalized_name, deleted_at, created_at
+        RETURNING id, user_id, name, normalized_name, type, system, deleted_at, created_at
       `,
       [normalizedCategoryId, normalizedUserId, name, normalizedName],
     );
@@ -164,8 +178,9 @@ export const deleteCategoryForUser = async (userId, categoryId) => {
       SET deleted_at = NOW()
       WHERE id = $1
         AND user_id = $2
+        AND system IS NOT TRUE
         AND deleted_at IS NULL
-      RETURNING id, user_id, name, normalized_name, deleted_at, created_at
+      RETURNING id, user_id, name, normalized_name, type, system, deleted_at, created_at
     `,
     [normalizedCategoryId, normalizedUserId],
   );
@@ -188,8 +203,9 @@ export const restoreCategoryForUser = async (userId, categoryId) => {
         SET deleted_at = NULL
         WHERE id = $1
           AND user_id = $2
+          AND system IS NOT TRUE
           AND deleted_at IS NOT NULL
-        RETURNING id, user_id, name, normalized_name, deleted_at, created_at
+        RETURNING id, user_id, name, normalized_name, type, system, deleted_at, created_at
       `,
       [normalizedCategoryId, normalizedUserId],
     );

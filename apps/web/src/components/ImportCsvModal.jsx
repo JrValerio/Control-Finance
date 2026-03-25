@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { transactionsService } from "../services/transactions.service";
 import { profileService } from "../services/profile.service";
+import { categoriesService } from "../services/categories.service";
 import { formatCurrency } from "../utils/formatCurrency";
 import { getApiErrorMessage } from "../utils/apiError";
 
@@ -16,6 +17,13 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   const [showProfileConfirm, setShowProfileConfirm] = useState(false);
   const [isApplyingProfile, setIsApplyingProfile] = useState(false);
   const [profileApplied, setProfileApplied] = useState(false);
+  const [categories, setCategories] = useState([]);
+  // categoryOverrides: Record<line, categoryId | null>
+  const [categoryOverrides, setCategoryOverrides] = useState({});
+  // inlineCreate: { line, type } | null — which row's inline form is open
+  const [inlineCreate, setInlineCreate] = useState(null);
+  const [inlineCreateName, setInlineCreateName] = useState("");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -31,6 +39,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setShowProfileConfirm(false);
     setIsApplyingProfile(false);
     setProfileApplied(false);
+    setCategoryOverrides({});
+    setInlineCreate(null);
+    setInlineCreateName("");
   }, [isOpen]);
 
   useEffect(() => {
@@ -55,6 +66,11 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
       window.removeEventListener("keydown", handleEscapeKey);
     };
   }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    categoriesService.listCategories().then(setCategories).catch(() => {});
+  }, [isOpen]);
 
   const hasValidRows = useMemo(() => {
     return (dryRunResult?.summary?.validRows || 0) > 0;
@@ -140,6 +156,27 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     }
   };
 
+  const handleInlineCreateCategory = useCallback(
+    async (line, rowType) => {
+      const trimmedName = inlineCreateName.trim();
+      if (!trimmedName) return;
+      setIsCreatingCategory(true);
+      try {
+        const inferredType = rowType === "Entrada" ? "income" : rowType === "Saida" ? "expense" : undefined;
+        const created = await categoriesService.createCategory(trimmedName, inferredType);
+        setCategories((prev) => [...prev, created]);
+        setCategoryOverrides((prev) => ({ ...prev, [line]: created.id }));
+        setInlineCreate(null);
+        setInlineCreateName("");
+      } catch {
+        // silently fail — user can try again
+      } finally {
+        setIsCreatingCategory(false);
+      }
+    },
+    [inlineCreateName],
+  );
+
   const handleDryRun = async () => {
     if (!selectedFile) {
       setErrorMessage("Selecione um arquivo CSV, OFX ou PDF.");
@@ -178,7 +215,11 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setSuccessMessage("");
 
     try {
-      const commitResult = await transactionsService.commitImportCsv(dryRunResult.importId);
+      const overridesArray = Object.entries(categoryOverrides).map(([line, categoryId]) => ({
+        line: Number(line),
+        categoryId: categoryId ?? null,
+      }));
+      const commitResult = await transactionsService.commitImportCsv(dryRunResult.importId, overridesArray);
 
       if (onImported) {
         await onImported(commitResult);
@@ -258,6 +299,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
               setSuccessMessage("");
               setProfileApplied(false);
               setShowProfileConfirm(false);
+              setCategoryOverrides({});
+              setInlineCreate(null);
+              setInlineCreateName("");
             }}
             className="block w-full text-sm text-cf-text-primary file:mr-3 file:rounded file:border file:border-cf-border file:bg-cf-bg-subtle file:px-3 file:py-1 file:text-sm file:font-semibold file:text-cf-text-primary hover:file:bg-cf-border"
           />
@@ -472,16 +516,76 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                           {row.raw.value || "-"}
                         </td>
                         <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">{row.raw.date || "-"}</td>
-                        <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
-                          {row.raw.category ? (
-                            row.raw.category
-                          ) : row.status === "valid" ? (
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
-                                Revisar
-                              </span>
-                              <span className="text-cf-text-secondary">Sem categoria</span>
-                            </span>
+                        <td className="border-b border-cf-border px-2 py-2">
+                          {row.status === "valid" ? (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1">
+                                <select
+                                  aria-label={`Categoria da linha ${row.line}`}
+                                  value={
+                                    categoryOverrides[row.line] !== undefined
+                                      ? categoryOverrides[row.line] ?? ""
+                                      : row.normalized?.categoryId ?? ""
+                                  }
+                                  onChange={(e) => {
+                                    const val = e.target.value === "" ? null : Number(e.target.value);
+                                    setCategoryOverrides((prev) => ({ ...prev, [row.line]: val }));
+                                  }}
+                                  className="rounded border border-cf-border bg-cf-surface px-1 py-0.5 text-xs text-cf-text-primary"
+                                >
+                                  <option value="">— Sem categoria —</option>
+                                  {categories.map((cat) => (
+                                    <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                  ))}
+                                </select>
+                                {inlineCreate?.line !== row.line && (
+                                  <button
+                                    type="button"
+                                    title="Nova categoria"
+                                    onClick={() => { setInlineCreate({ line: row.line, type: row.raw.type }); setInlineCreateName(""); }}
+                                    className="rounded border border-cf-border px-1 py-0.5 text-xs text-cf-text-secondary hover:bg-cf-bg-subtle"
+                                  >
+                                    +
+                                  </button>
+                                )}
+                              </div>
+                              {inlineCreate?.line === row.line && (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="text"
+                                    value={inlineCreateName}
+                                    onChange={(e) => setInlineCreateName(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleInlineCreateCategory(row.line, row.raw.type); if (e.key === "Escape") setInlineCreate(null); }}
+                                    placeholder="Nova categoria"
+                                    className="rounded border border-cf-border bg-cf-surface px-1 py-0.5 text-xs text-cf-text-primary"
+                                    // eslint-disable-next-line jsx-a11y/no-autofocus
+                                    autoFocus
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={isCreatingCategory}
+                                    onClick={() => handleInlineCreateCategory(row.line, row.raw.type)}
+                                    className="rounded border border-brand-1 bg-brand-1 px-1.5 py-0.5 text-xs text-white disabled:opacity-60"
+                                  >
+                                    OK
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setInlineCreate(null)}
+                                    className="rounded border border-cf-border px-1.5 py-0.5 text-xs text-cf-text-secondary"
+                                  >
+                                    ✕
+                                  </button>
+                                </div>
+                              )}
+                              {!categoryOverrides[row.line] && !row.normalized?.categoryId && inlineCreate?.line !== row.line && (
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700">
+                                    Revisar
+                                  </span>
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             "—"
                           )}

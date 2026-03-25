@@ -721,8 +721,11 @@ export const transactionsService = {
       rows,
     };
   },
-  commitImportCsv: async (importId: string): Promise<ImportCommitResult> => {
-    const { data } = await api.post("/transactions/import/commit", { importId });
+  commitImportCsv: async (
+    importId: string,
+    categoryOverrides: { line: number; categoryId: number | null }[] = [],
+  ): Promise<ImportCommitResult> => {
+    const { data } = await api.post("/transactions/import/commit", { importId, categoryOverrides });
     const responseBody = data as ImportCommitApiResponse;
 
     return {

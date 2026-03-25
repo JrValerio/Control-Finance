@@ -689,7 +689,7 @@ export const dryRunTransactionsImportForUser = async (userId, importFile) => {
 
   const normalizedRows = rows
     .filter((row) => row.status === "valid" && row.normalized)
-    .map((row) => ({ ...row.normalized, fingerprint: row.fingerprint }));
+    .map((row) => ({ ...row.normalized, fingerprint: row.fingerprint, line: row.line }));
 
   const persistedSession = await persistImportSession(userId, {
     normalizedRows,
@@ -777,7 +777,23 @@ export const getTransactionsImportMetricsByUser = async (userId) => {
   };
 };
 
-export const commitTransactionsImportForUser = async (userId, importId) => {
+const buildCategoryOverrideMap = (overrides) => {
+  if (!Array.isArray(overrides) || overrides.length === 0) return new Map();
+  return new Map(
+    overrides
+      .filter(
+        (o) =>
+          o != null &&
+          typeof o.line === "number" &&
+          Number.isInteger(o.line) &&
+          o.line > 0 &&
+          (o.categoryId === null || (Number.isInteger(o.categoryId) && o.categoryId > 0)),
+      )
+      .map((o) => [o.line, o.categoryId ?? null]),
+  );
+};
+
+export const commitTransactionsImportForUser = async (userId, importId, categoryOverrides = []) => {
   const normalizedImportId = normalizeImportId(importId);
   const importSession = await loadImportSessionById(normalizedImportId);
 
@@ -787,9 +803,15 @@ export const commitTransactionsImportForUser = async (userId, importId) => {
     typeof importSession.payload_json === "string"
       ? JSON.parse(importSession.payload_json)
       : importSession.payload_json || {};
-  const normalizedRows = Array.isArray(payload.normalizedRows)
-    ? payload.normalizedRows
-    : [];
+  const sessionRows = Array.isArray(payload.normalizedRows) ? payload.normalizedRows : [];
+  const overrideMap = buildCategoryOverrideMap(categoryOverrides);
+  const normalizedRows = overrideMap.size === 0
+    ? sessionRows
+    : sessionRows.map((row) =>
+        overrideMap.has(row.line)
+          ? { ...row, categoryId: overrideMap.get(row.line) }
+          : row,
+      );
   const payloadSummary = payload.summary || {};
   const observabilitySummary = {
     totalRows: normalizeSummaryInteger(payloadSummary.totalRows, normalizedRows.length),
