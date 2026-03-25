@@ -79,6 +79,33 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     );
   }, [dryRunResult]);
 
+  const suggestionCard = useMemo(() => {
+    const suggestion = dryRunResult?.suggestion;
+    if (!suggestion) return null;
+
+    if (suggestion.type === "profile") {
+      const lines = [];
+      if (suggestion.referenceMonth) lines.push(`Competência: ${suggestion.referenceMonth}`);
+      if (suggestion.paymentDate) lines.push(`Pagamento: ${suggestion.paymentDate}`);
+      if (suggestion.netAmount != null) lines.push(`Líquido: R$ ${suggestion.netAmount.toFixed(2).replace(".", ",")}`);
+      if (suggestion.grossAmount != null) lines.push(`Bruto (MR): R$ ${suggestion.grossAmount.toFixed(2).replace(".", ",")}`);
+      if (suggestion.benefitKind) lines.push(`Espécie: ${suggestion.benefitKind}`);
+      return { kind: "profile", lines };
+    }
+
+    if (suggestion.type === "bill") {
+      const lines = [];
+      if (suggestion.issuer) lines.push(`Emissor: ${suggestion.issuer}`);
+      if (suggestion.referenceMonth) lines.push(`Referência: ${suggestion.referenceMonth}`);
+      if (suggestion.dueDate) lines.push(`Vencimento: ${suggestion.dueDate}`);
+      if (suggestion.amountDue != null) lines.push(`Total a pagar: R$ ${suggestion.amountDue.toFixed(2).replace(".", ",")}`);
+      if (suggestion.customerCode) lines.push(`Código: ${suggestion.customerCode}`);
+      return { kind: "bill", lines };
+    }
+
+    return null;
+  }, [dryRunResult]);
+
   const handleDryRun = async () => {
     if (!selectedFile) {
       setErrorMessage("Selecione um arquivo CSV, OFX ou PDF.");
@@ -257,6 +284,19 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
             {isUtilityBill ? (
               <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
                 Boleto detectado. O suporte completo à importação de contas de energia e água chegará em breve. Por enquanto, nenhuma transação é extraída.
+              </div>
+            ) : null}
+
+            {suggestionCard ? (
+              <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/40">
+                <p className="mb-1 text-xs font-semibold uppercase text-blue-700 dark:text-blue-400">
+                  {suggestionCard.kind === "profile" ? "Dados extraídos do comprovante" : "Dados do boleto"}
+                </p>
+                <ul className="space-y-0.5">
+                  {suggestionCard.lines.map((line) => (
+                    <li key={line} className="text-xs text-blue-700 dark:text-blue-300">{line}</li>
+                  ))}
+                </ul>
               </div>
             ) : null}
 

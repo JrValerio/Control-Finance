@@ -15,6 +15,9 @@ import {
   parseInssCreditHistoryPdfText,
   parseGenericBankStatementPdfText,
   parseStatementCsvRows,
+  extractInssSuggestion,
+  extractEnergyBillSuggestion,
+  extractWaterBillSuggestion,
 } from "../domain/imports/statement-import.js";
 import { detectDocumentType } from "../domain/imports/document-classifier.js";
 import { applySmartClassification } from "../domain/imports/transaction-classifier.js";
@@ -288,19 +291,26 @@ const parseImportFileRows = async (importFile) => {
     if (documentType === "income_statement_inss") {
       try {
         const rows = parseInssCreditHistoryPdfText(text);
-        return { rows, documentType };
+        const suggestion = extractInssSuggestion(text);
+        return { rows, documentType, suggestion };
       } catch (error) {
         throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no PDF.");
       }
     }
 
-    if (documentType === "utility_bill_energy" || documentType === "utility_bill_water") {
-      return { rows: [], documentType };
+    if (documentType === "utility_bill_energy") {
+      const suggestion = extractEnergyBillSuggestion(text);
+      return { rows: [], documentType, suggestion };
+    }
+
+    if (documentType === "utility_bill_water") {
+      const suggestion = extractWaterBillSuggestion(text);
+      return { rows: [], documentType, suggestion };
     }
 
     try {
       const rows = parseGenericBankStatementPdfText(text);
-      return { rows, documentType };
+      return { rows, documentType, suggestion: null };
     } catch (error) {
       throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no PDF.");
     }
@@ -310,7 +320,7 @@ const parseImportFileRows = async (importFile) => {
     const documentType = detectDocumentType({ text: "", extension });
     try {
       const rows = parseOfxRows(fileBuffer);
-      return { rows, documentType };
+      return { rows, documentType, suggestion: null };
     } catch (error) {
       throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no OFX.");
     }
@@ -319,7 +329,7 @@ const parseImportFileRows = async (importFile) => {
   try {
     const rows = parseCsvFileRows(fileBuffer);
     const documentType = detectDocumentType({ text: "", extension: ".csv" });
-    return { rows, documentType };
+    return { rows, documentType, suggestion: null };
   } catch (error) {
     if (error?.message !== HEADER_ERROR_MESSAGE) {
       throw error;
@@ -329,7 +339,7 @@ const parseImportFileRows = async (importFile) => {
   try {
     const rows = parseStatementCsvRows(fileBuffer);
     const documentType = detectDocumentType({ text: "", extension: ".csv" });
-    return { rows, documentType };
+    return { rows, documentType, suggestion: null };
   } catch (error) {
     if (
       error?.message === `Arquivo excede o limite de ${getImportCsvMaxRows()} linhas.`
@@ -642,7 +652,7 @@ const assertSessionReadyForCommit = (session, userId) => {
 };
 
 export const dryRunTransactionsImportForUser = async (userId, importFile) => {
-  const { rows: parsedRows, documentType } = await parseImportFileRows(importFile);
+  const { rows: parsedRows, documentType, suggestion } = await parseImportFileRows(importFile);
   const [categoryMap, categories] = await Promise.all([
     loadCategoryMapForUser(userId),
     loadCategoriesForUser(userId),
@@ -690,6 +700,7 @@ export const dryRunTransactionsImportForUser = async (userId, importFile) => {
     importId: persistedSession.importId,
     expiresAt: persistedSession.expiresAt,
     documentType,
+    suggestion: suggestion || null,
     summary,
     rows,
   };

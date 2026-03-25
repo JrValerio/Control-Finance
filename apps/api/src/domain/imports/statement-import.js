@@ -477,6 +477,166 @@ export const parseInssCreditHistoryPdfText = (text) => {
   return finalizeStatementRows(rows);
 };
 
+const MONTH_NAMES_MAP = {
+  janeiro: "01", fevereiro: "02", marco: "03", abril: "04", maio: "05", junho: "06",
+  julho: "07", agosto: "08", setembro: "09", outubro: "10", novembro: "11", dezembro: "12",
+  jan: "01", fev: "02", mar: "03", abr: "04", mai: "05", jun: "06",
+  jul: "07", ago: "08", set: "09", out: "10", nov: "11", dez: "12",
+};
+
+const resolveReferenceMonth = (raw) => {
+  if (!raw) return null;
+  const numericMatch = raw.match(/(\d{2})\/?(\d{4})/);
+  if (numericMatch) return `${numericMatch[1]}/${numericMatch[2]}`;
+  const normalized = collapseWhitespace(raw)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const namedMatch = normalized.match(/([a-z]+)[\s/]+(\d{4})/);
+  if (namedMatch) {
+    const mm = MONTH_NAMES_MAP[namedMatch[1]];
+    if (mm) return `${mm}/${namedMatch[2]}`;
+  }
+  return null;
+};
+
+const normalizeForExtraction = (text) =>
+  String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+export const extractInssSuggestion = (text) => {
+  const normalized = normalizeForExtraction(text);
+
+  // Benefit ID (NB)
+  const nbMatch = normalized.match(/\bnb[:\s#°]*([\d.\-/]+)/i);
+  const benefitId = nbMatch ? nbMatch[1].trim() : null;
+
+  // Benefit kind (Espécie)
+  const especieMatch = normalized.match(/especie[:\s]+(\d+)\s*[-–]\s*([^\n\r]{3,60})/i);
+  const benefitKind = especieMatch ? collapseWhitespace(especieMatch[2]) : null;
+
+  // Most recent credit entry (first match — PDF lists newest first)
+  const entryMatch = normalized.match(/^(\d{2}\/\d{4})\s+r\$\s*([\d.,]+)/m);
+  if (!entryMatch) return null;
+
+  const referenceMonth = entryMatch[1];
+  const netAmount = parseSignedAmount(entryMatch[2]);
+  if (netAmount === null) return null;
+
+  // Find the block for this entry to get payment date and gross amount
+  const entryStart = normalized.indexOf(entryMatch[0]);
+  const nextEntryMatch = normalized.slice(entryStart + 1).match(/\d{2}\/\d{4}\s+r\$\s*[\d.,]+/);
+  const blockEnd = nextEntryMatch
+    ? entryStart + 1 + normalized.slice(entryStart + 1).indexOf(nextEntryMatch[0])
+    : entryStart + 2000;
+  const block = normalized.slice(entryStart, blockEnd);
+
+  const fullDates = block.match(/\d{2}\/\d{2}\/\d{4}/g) || [];
+  const paymentDateRaw = fullDates[fullDates.length - 1] || null;
+  const paymentDate = paymentDateRaw ? toIsoDateString(paymentDateRaw) : null;
+
+  const grossMatch = block.match(/101\s+valor total de mr do periodo\s+r\$\s*([\d.,]+)/i);
+  const grossAmount = grossMatch ? parseSignedAmount(grossMatch[1]) : null;
+
+  return {
+    type: "profile",
+    benefitId,
+    benefitKind,
+    referenceMonth,
+    paymentDate,
+    netAmount: Math.abs(netAmount),
+    grossAmount: grossAmount !== null ? Math.abs(grossAmount) : null,
+  };
+};
+
+const ENERGY_ISSUERS = [
+  "neoenergia", "neoenergia elektro", "cpfl energia", "enel", "cemig", "light", "eletropaulo",
+  "energisa", "elektro", "coelba", "celpe", "cosern", "ceal", "ceron", "boa energia",
+];
+const WATER_ISSUERS = [
+  "saae", "sabesp", "sanepar", "copasa", "cagece", "caern", "casan", "embasa",
+  "compesa", "agespisa", "caema", "cosanpa",
+];
+
+const detectIssuerFromText = (normalizedText, candidates) => {
+  for (const candidate of candidates) {
+    if (normalizedText.includes(candidate)) return candidate;
+  }
+  return null;
+};
+
+const extractBillFields = (normalizedText) => {
+  // Reference month
+  const refMatch = normalizedText.match(
+    /(?:referencia|referencia do mes|competencia|periodo de referencia|mes de referencia)[:\s]+([a-z]+[\s/]+\d{4}|\d{1,2}[/]\d{4})/i,
+  );
+  const referenceMonth = resolveReferenceMonth(refMatch ? refMatch[1] : null);
+
+  // Due date
+  const dueMatch = normalizedText.match(/vencimento[:\s]+(\d{2}\/\d{2}\/\d{4})/i);
+  const dueDate = dueMatch ? toIsoDateString(dueMatch[1]) : null;
+
+  // Amount due
+  const amountMatch = normalizedText.match(
+    /(?:total a pagar|valor a pagar|total do documento|valor total)[:\s]*r?\$?\s*([\d.,]+)/i,
+  );
+  const amountDue = amountMatch ? parseSignedAmount(amountMatch[1]) : null;
+
+  return { referenceMonth, dueDate, amountDue: amountDue !== null ? Math.abs(amountDue) : null };
+};
+
+export const extractEnergyBillSuggestion = (text) => {
+  const normalized = normalizeForExtraction(text);
+
+  const issuerKey = detectIssuerFromText(normalized, ENERGY_ISSUERS);
+  const { referenceMonth, dueDate, amountDue } = extractBillFields(normalized);
+
+  // Customer code: "Código de Instalação", "N° Instalação", "Código do cliente"
+  const codeMatch = normalized.match(
+    /(?:codigo de instalacao|n[°o] instalacao|instalacao|codigo do cliente|numero do cliente|numero da instalacao)[:\s#°]*([\d.\-/]+)/i,
+  );
+  const customerCode = codeMatch ? codeMatch[1].trim() : null;
+
+  if (!referenceMonth && !dueDate && amountDue === null) return null;
+
+  return {
+    type: "bill",
+    billType: "energy",
+    issuer: issuerKey,
+    referenceMonth,
+    dueDate,
+    amountDue,
+    customerCode,
+  };
+};
+
+export const extractWaterBillSuggestion = (text) => {
+  const normalized = normalizeForExtraction(text);
+
+  const issuerKey = detectIssuerFromText(normalized, WATER_ISSUERS);
+  const { referenceMonth, dueDate, amountDue } = extractBillFields(normalized);
+
+  // Customer code: "Matrícula", "Código do cliente", "N° contrato"
+  const codeMatch = normalized.match(
+    /(?:matricula|matricula do imovel|codigo do cliente|n[°o] contrato|numero do cliente)[:\s#°]*([\d.\-/]+)/i,
+  );
+  const customerCode = codeMatch ? codeMatch[1].trim() : null;
+
+  if (!referenceMonth && !dueDate && amountDue === null) return null;
+
+  return {
+    type: "bill",
+    billType: "water",
+    issuer: issuerKey,
+    referenceMonth,
+    dueDate,
+    amountDue,
+    customerCode,
+  };
+};
+
 export const extractTextFromPdfBuffer = async (buffer) => extractTextFromPdfWithOcr(buffer);
 
 export const parseStatementPdfRows = async (buffer) => {
