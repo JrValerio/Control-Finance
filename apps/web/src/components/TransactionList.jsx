@@ -1,3 +1,4 @@
+import { useState } from "react";
 import PropTypes from "prop-types";
 import { CATEGORY_ENTRY } from "./DatabaseUtils";
 import { useMaskedCurrency } from "../context/DiscreetModeContext";
@@ -11,16 +12,90 @@ const formatDate = (value) => {
   return date.toLocaleDateString("pt-BR");
 };
 
-const TransactionList = ({ transactions, onDelete, onEdit }) => {
+const TransactionList = ({ transactions, onDelete, onEdit, onBulkDelete }) => {
   const money = useMaskedCurrency();
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === transactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(transactions.map((t) => t.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0 || !onBulkDelete) return;
+    const ids = [...selectedIds];
+    setSelectedIds(new Set());
+    onBulkDelete(ids);
+  };
+
+  const allSelected = transactions.length > 0 && selectedIds.size === transactions.length;
+  const someSelected = selectedIds.size > 0;
+
   return (
     <div className="mx-auto max-w-700 px-2 sm:px-0">
+      {someSelected && onBulkDelete ? (
+        <div className="mb-2 flex items-center justify-between rounded border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-950/40">
+          <span className="text-sm font-medium text-red-700 dark:text-red-400">
+            {selectedIds.size} {selectedIds.size === 1 ? "selecionada" : "selecionadas"}
+          </span>
+          <button
+            type="button"
+            onClick={handleBulkDelete}
+            className="rounded border border-red-300 bg-red-100 px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-200 dark:border-red-700 dark:bg-red-900/40 dark:text-red-300"
+          >
+            Excluir selecionadas ({selectedIds.size})
+          </button>
+        </div>
+      ) : null}
+
+      {onBulkDelete && transactions.length > 0 ? (
+        <div className="mb-1 flex items-center gap-2 px-1">
+          <input
+            type="checkbox"
+            id="select-all-transactions"
+            checked={allSelected}
+            onChange={toggleSelectAll}
+            className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
+          />
+          <label htmlFor="select-all-transactions" className="cursor-pointer text-xs text-cf-text-secondary">
+            Selecionar todas
+          </label>
+        </div>
+      ) : null}
+
       {transactions.map((transaction) => (
         <div
           key={transaction.id}
           className="my-2 flex w-full min-w-0 flex-col items-start gap-2 rounded border border-brand-1 bg-cf-surface p-3.5 sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="flex min-w-0 flex-1 flex-col">
+            {onBulkDelete ? (
+              <div className="mb-1 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id={`select-transaction-${transaction.id}`}
+                  checked={selectedIds.has(transaction.id)}
+                  onChange={() => toggleSelect(transaction.id)}
+                  className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
+                  aria-label={`Selecionar transação ${transaction.id}`}
+                />
+              </div>
+            ) : null}
             <span className="break-words text-sm font-medium text-cf-text-primary">
               {transaction.description || "Sem descrição"}
             </span>
@@ -83,6 +158,7 @@ TransactionList.propTypes = {
   ).isRequired,
   onDelete: PropTypes.func.isRequired,
   onEdit: PropTypes.func.isRequired,
+  onBulkDelete: PropTypes.func,
 };
 
 export default TransactionList;

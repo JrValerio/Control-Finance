@@ -3,11 +3,20 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ImportCsvModal from "./ImportCsvModal";
 import { transactionsService } from "../services/transactions.service";
+import { categoriesService } from "../services/categories.service";
 
 vi.mock("../services/transactions.service", () => ({
   transactionsService: {
     dryRunImportCsv: vi.fn(),
     commitImportCsv: vi.fn(),
+    deleteImportSession: vi.fn(),
+  },
+}));
+
+vi.mock("../services/categories.service", () => ({
+  categoriesService: {
+    listCategories: vi.fn(),
+    createCategory: vi.fn(),
   },
 }));
 
@@ -50,6 +59,7 @@ const buildDryRunResponse = (overrides = {}) => ({
 describe("ImportCsvModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    categoriesService.listCategories.mockResolvedValue([]);
   });
 
   it("does not render when isOpen is false", () => {
@@ -86,13 +96,14 @@ describe("ImportCsvModal", () => {
     expect(invalidRowsCard).toHaveTextContent("1");
   });
 
-  it("commits import and calls onImported callback", async () => {
+  it("commits import and calls onImported callback when Fechar is clicked", async () => {
     const onImported = vi.fn();
     const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
 
     transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildDryRunResponse());
     transactionsService.commitImportCsv.mockResolvedValueOnce({
       imported: 1,
+      importSessionId: "import-session-1",
       summary: { income: 100, expense: 20, balance: 80 },
     });
 
@@ -107,8 +118,17 @@ describe("ImportCsvModal", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Importar" }));
 
+    // After commit, modal shows success state with count
     await waitFor(() => {
-      expect(transactionsService.commitImportCsv).toHaveBeenCalledWith("import-session-1");
+      expect(screen.getByText("1 lançamento importado.")).toBeInTheDocument();
+    });
+
+    // onImported not yet called — deferred until user clicks Fechar
+    expect(onImported).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Fechar" }));
+
+    await waitFor(() => {
       expect(onImported).toHaveBeenCalled();
     });
   });
@@ -154,6 +174,7 @@ describe("ImportCsvModal", () => {
 
   it("nao exibe badge Revisar quando linha valida ja tem categoria", async () => {
     const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+    categoriesService.listCategories.mockResolvedValueOnce([{ id: 1, name: "Trabalho", normalizedName: "trabalho" }]);
     transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildDryRunResponse());
 
     render(<ImportCsvModal isOpen onClose={vi.fn()} />);

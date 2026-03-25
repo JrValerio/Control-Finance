@@ -850,7 +850,7 @@ describe("transaction imports", () => {
       });
 
     expect(commitResponse.status).toBe(200);
-    expect(commitResponse.body).toEqual({
+    expect(commitResponse.body).toMatchObject({
       imported: 2,
       summary: {
         income: 1000,
@@ -858,6 +858,7 @@ describe("transaction imports", () => {
         balance: 779.5,
       },
     });
+    expect(typeof commitResponse.body.importSessionId).toBe("string");
 
     const listResponse = await request(app)
       .get("/transactions")
@@ -1115,5 +1116,191 @@ describe("transaction imports", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.documentType).toBe("bank_statement");
+  });
+
+  it("POST /transactions/import/commit retorna importSessionId", async () => {
+    const token = await registerAndLogin("import-session-id@controlfinance.dev");
+    await makeProUser("import-session-id@controlfinance.dev");
+
+    const csv = csvFile("date,type,value,description\n2026-03-01,Entrada,500,Teste sessao");
+
+    const dryRunResponse = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(dryRunResponse.status).toBe(200);
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryRunResponse.body.importId });
+
+    expect(commitResponse.status).toBe(200);
+    expect(typeof commitResponse.body.importSessionId).toBe("string");
+    expect(commitResponse.body.importSessionId).toBe(dryRunResponse.body.importId);
+    expect(commitResponse.body.imported).toBe(1);
+  });
+
+  it("DELETE /transactions/imports/:sessionId desfaz importacao por sessao", async () => {
+    const token = await registerAndLogin("import-undo@controlfinance.dev");
+    await makeProUser("import-undo@controlfinance.dev");
+
+    const csv = csvFile(
+      "date,type,value,description\n2026-03-01,Entrada,100,Transacao A\n2026-03-02,Saida,50,Transacao B",
+    );
+
+    const dryRunResponse = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(dryRunResponse.status).toBe(200);
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryRunResponse.body.importId });
+
+    expect(commitResponse.status).toBe(200);
+    expect(commitResponse.body.imported).toBe(2);
+
+    const sessionId = commitResponse.body.importSessionId;
+
+    const undoResponse = await request(app)
+      .delete(`/transactions/imports/${sessionId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(undoResponse.status).toBe(200);
+    expect(undoResponse.body.importSessionId).toBe(sessionId);
+    expect(undoResponse.body.deletedCount).toBe(2);
+    expect(undoResponse.body.success).toBe(true);
+
+    // Transacoes devem estar soft-deleted (GET retorna zero)
+    const listResponse = await request(app)
+      .get("/transactions")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.data).toHaveLength(0);
+  });
+
+  it("DELETE /transactions/imports/:sessionId retorna 404 para sessao de outro usuario", async () => {
+    const tokenA = await registerAndLogin("import-undo-owner-a@controlfinance.dev");
+    const tokenB = await registerAndLogin("import-undo-owner-b@controlfinance.dev");
+    await makeProUser("import-undo-owner-a@controlfinance.dev");
+
+    const csv = csvFile("date,type,value,description\n2026-03-01,Entrada,100,Teste");
+
+    const dryRunResponse = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .send({ importId: dryRunResponse.body.importId });
+
+    const sessionId = commitResponse.body.importSessionId;
+
+    const undoResponse = await request(app)
+      .delete(`/transactions/imports/${sessionId}`)
+      .set("Authorization", `Bearer ${tokenB}`);
+
+    expectErrorResponseWithRequestId(undoResponse, 404, "Sessao de importacao nao encontrada.");
+  });
+
+  it("DELETE /transactions/imports/:sessionId bloqueia sem token", async () => {
+    const response = await request(app).delete(
+      "/transactions/imports/00000000-0000-4000-8000-000000000000",
+    );
+
+    expect(response.status).toBe(401);
+  });
+
+  it("POST /transactions/bulk-delete exclui transacoes selecionadas", async () => {
+    const token = await registerAndLogin("bulk-delete@controlfinance.dev");
+
+    const t1 = await request(app)
+      .post("/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ type: "Entrada", value: 100, date: "2026-03-01", description: "T1" });
+    const t2 = await request(app)
+      .post("/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ type: "Entrada", value: 200, date: "2026-03-02", description: "T2" });
+    const t3 = await request(app)
+      .post("/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ type: "Saida", value: 50, date: "2026-03-03", description: "T3" });
+
+    expect(t1.status).toBe(201);
+    expect(t2.status).toBe(201);
+    expect(t3.status).toBe(201);
+
+    const bulkResponse = await request(app)
+      .post("/transactions/bulk-delete")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionIds: [t1.body.id, t2.body.id] });
+
+    expect(bulkResponse.status).toBe(200);
+    expect(bulkResponse.body.deletedCount).toBe(2);
+    expect(bulkResponse.body.success).toBe(true);
+
+    const listResponse = await request(app)
+      .get("/transactions")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.data).toHaveLength(1);
+    expect(listResponse.body.data[0].id).toBe(t3.body.id);
+  });
+
+  it("POST /transactions/bulk-delete nao exclui transacoes de outro usuario", async () => {
+    const tokenA = await registerAndLogin("bulk-delete-owner-a@controlfinance.dev");
+    const tokenB = await registerAndLogin("bulk-delete-owner-b@controlfinance.dev");
+
+    const tx = await request(app)
+      .post("/transactions")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .send({ type: "Entrada", value: 100, date: "2026-03-01", description: "De A" });
+
+    expect(tx.status).toBe(201);
+
+    const bulkResponse = await request(app)
+      .post("/transactions/bulk-delete")
+      .set("Authorization", `Bearer ${tokenB}`)
+      .send({ transactionIds: [tx.body.id] });
+
+    expect(bulkResponse.status).toBe(200);
+    expect(bulkResponse.body.deletedCount).toBe(0);
+
+    const listResponse = await request(app)
+      .get("/transactions")
+      .set("Authorization", `Bearer ${tokenA}`);
+
+    expect(listResponse.body.data).toHaveLength(1);
+  });
+
+  it("POST /transactions/bulk-delete retorna deletedCount 0 para lista vazia", async () => {
+    const token = await registerAndLogin("bulk-delete-empty@controlfinance.dev");
+
+    const response = await request(app)
+      .post("/transactions/bulk-delete")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionIds: [] });
+
+    expect(response.status).toBe(200);
+    expect(response.body.deletedCount).toBe(0);
+    expect(response.body.success).toBe(true);
+  });
+
+  it("POST /transactions/bulk-delete bloqueia sem token", async () => {
+    const response = await request(app)
+      .post("/transactions/bulk-delete")
+      .send({ transactionIds: [1] });
+
+    expect(response.status).toBe(401);
   });
 });

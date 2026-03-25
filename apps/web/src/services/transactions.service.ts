@@ -174,6 +174,7 @@ export interface ImportDryRunResult {
 
 export interface ImportCommitResult {
   imported: number;
+  importSessionId: string;
   summary: {
     income: number;
     expense: number;
@@ -329,6 +330,7 @@ interface ImportDryRunApiResponse {
 
 interface ImportCommitApiResponse {
   imported?: unknown;
+  importSessionId?: unknown;
   summary?: {
     income?: unknown;
     expense?: unknown;
@@ -730,12 +732,21 @@ export const transactionsService = {
 
     return {
       imported: Number(responseBody.imported) || 0,
+      importSessionId: String(responseBody.importSessionId || ""),
       summary: {
         income: Number(responseBody.summary?.income) || 0,
         expense: Number(responseBody.summary?.expense) || 0,
         balance: Number(responseBody.summary?.balance) || 0,
       },
     };
+  },
+  deleteImportSession: async (sessionId: string): Promise<{ importSessionId: string; deletedCount: number; success: boolean }> => {
+    const { data } = await api.delete(`/transactions/imports/${sessionId}`);
+    return data as { importSessionId: string; deletedCount: number; success: boolean };
+  },
+  bulkDeleteTransactions: async (transactionIds: number[]): Promise<{ deletedCount: number; success: boolean }> => {
+    const { data } = await api.post("/transactions/bulk-delete", { transactionIds });
+    return data as { deletedCount: number; success: boolean };
   },
   getImportHistory: async (options: ImportHistoryOptions = {}): Promise<ImportHistoryResponse> => {
     const fallbackLimit =

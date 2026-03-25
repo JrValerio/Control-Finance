@@ -25,7 +25,9 @@ import {
   updateTransactionForUser,
 } from "../services/transactions.service.js";
 import {
+  bulkDeleteTransactionsForUser,
   commitTransactionsImportForUser,
+  deleteImportSessionForUser,
   dryRunTransactionsImportForUser,
   getTransactionsImportMetricsByUser,
   listTransactionsImportSessionsByUser,
@@ -249,6 +251,25 @@ router.post("/", transactionsWriteRateLimiter, async (req, res, next) => {
   }
 });
 
+router.delete("/imports/:sessionId", transactionsWriteRateLimiter, async (req, res, next) => {
+  try {
+    const result = await deleteImportSessionForUser(req.user.id, req.params.sessionId);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/bulk-delete", transactionsWriteRateLimiter, async (req, res, next) => {
+  try {
+    const ids = Array.isArray(req.body?.transactionIds) ? req.body.transactionIds : [];
+    const result = await bulkDeleteTransactionsForUser(req.user.id, ids);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.patch("/:id", transactionsWriteRateLimiter, async (req, res, next) => {
   try {
     const updatedTransaction = await updateTransactionForUser(
@@ -386,6 +407,7 @@ router.post("/import/commit", importRateLimiter, requireFeature("csv_import"), a
 
     res.status(200).json({
       imported: commitResult.imported,
+      importSessionId: commitResult.importSessionId,
       summary: commitResult.summary,
     });
   } catch (error) {

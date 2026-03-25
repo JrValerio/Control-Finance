@@ -1386,6 +1386,18 @@ const App = ({
     }
   };
 
+  const handleBulkDeleteTransactions = async (ids: number[]) => {
+    setRequestError("");
+    try {
+      await transactionsService.bulkDeleteTransactions(ids);
+      await loadTransactions();
+      await loadMonthlySummary();
+      await loadMonthlyBudgets();
+    } catch (error) {
+      setRequestError(getApiErrorMessage(error, "Não foi possível excluir as transações."));
+    }
+  };
+
   const handleExportCsv = async () => {
     setRequestError("");
     setExportingCsv(true);
@@ -2649,6 +2661,7 @@ const App = ({
             transactions={transactionsWithCategoryName}
             onDelete={requestDeleteTransaction}
             onEdit={openEditModal}
+            onBulkDelete={handleBulkDeleteTransactions}
           />
         )}
 
