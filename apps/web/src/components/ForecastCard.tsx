@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { forecastService, type Forecast } from "../services/forecast.service";
 import { profileService } from "../services/profile.service";
-import { formatCurrency } from "../utils/formatCurrency";
+import { useMaskedCurrency } from "../context/DiscreetModeContext";
 
 interface ForecastCardProps {
   onOpenProfileSettings?: () => void;
@@ -51,6 +51,7 @@ const ForecastCard = ({
   trialExpired = false,
   txCountSinceFreeze = 0,
 }: ForecastCardProps): JSX.Element => {
+  const money = useMaskedCurrency();
   const [cardState, setCardState] = useState<CardState>("loading");
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [isRecomputing, setIsRecomputing] = useState(false);
@@ -163,7 +164,7 @@ const ForecastCard = ({
             {forecast ? (
               <>
                 <p className="mt-2 text-2xl font-bold text-cf-text-primary">
-                  {formatCurrency(forecast.projectedBalance)}
+                  {money(forecast.projectedBalance)}
                 </p>
                 <p className="mt-1 text-xs text-cf-text-secondary">
                   Projeção do mês {forecast.month} - congelada no fim do período de teste.
@@ -223,11 +224,11 @@ const ForecastCard = ({
                   forecast.adjustedProjectedBalance < 0 ? "text-red-600" : "text-cf-text-primary"
                 }`}
               >
-                {formatCurrency(forecast.adjustedProjectedBalance)}
+                {money(forecast.adjustedProjectedBalance)}
               </p>
               {forecast.incomeExpected !== null ? (
                 <p className="mt-0.5 text-xs text-cf-text-secondary">
-                  Salário esperado: {formatCurrency(forecast.incomeExpected)}
+                  Salário esperado: {money(forecast.incomeExpected)}
                 </p>
               ) : null}
               {forecast.billsPendingCount > 0 ? (
@@ -243,10 +244,10 @@ const ForecastCard = ({
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
               <p className="text-xs font-medium uppercase text-cf-text-secondary">Gasto até agora</p>
               <p className="mt-1 text-base font-semibold text-cf-text-primary">
-                {formatCurrency(forecast.spendingToDate)}
+                {money(forecast.spendingToDate)}
               </p>
               <p className="mt-0.5 text-xs text-cf-text-secondary">
-                Media diaria: {formatCurrency(forecast.dailyAvgSpending)}/dia
+                Media diaria: {money(forecast.dailyAvgSpending)}/dia
               </p>
             </div>
 
@@ -265,7 +266,7 @@ const ForecastCard = ({
                   forecast.billsPendingCount > 0 ? "text-amber-600" : "text-cf-text-primary"
                 }`}
               >
-                {formatCurrency(forecast.billsPendingTotal)}
+                {money(forecast.billsPendingTotal)}
               </p>
               <p className="mt-0.5 text-xs text-cf-text-secondary">
                 {forecast.billsPendingCount > 0

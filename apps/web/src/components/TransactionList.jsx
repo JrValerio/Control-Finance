@@ -1,6 +1,7 @@
 import PropTypes from "prop-types";
 import { CATEGORY_ENTRY } from "./DatabaseUtils";
 import { formatCurrency } from "../utils/formatCurrency";
+import { useMaskedCurrency } from "../context/DiscreetModeContext";
 
 const formatDate = (value) => {
   const date = new Date(`${value}T00:00:00`);
@@ -12,6 +13,7 @@ const formatDate = (value) => {
 };
 
 const TransactionList = ({ transactions, onDelete, onEdit }) => {
+  const money = useMaskedCurrency();
   return (
     <div className="mx-auto max-w-700 px-2 sm:px-0">
       {transactions.map((transaction) => (
@@ -24,7 +26,7 @@ const TransactionList = ({ transactions, onDelete, onEdit }) => {
               {transaction.description || "Sem descrição"}
             </span>
             <span className="text-base font-medium text-cf-text-primary">
-              {formatCurrency(transaction.value)}
+              {money(transaction.value)}
             </span>
             <span className="text-xs text-cf-text-secondary">{formatDate(transaction.date)}</span>
             <span className="break-words text-xs text-cf-text-secondary">
