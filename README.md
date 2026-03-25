@@ -280,6 +280,8 @@ npm -w apps/web run build
 
 ## Documentação técnica
 
+* `docs/roadmap-execution.md` — mapa interno de execução: estado atual, próximo sprint, backlog e decisões arquiteturais
+
 * `docs/architecture/v1.3.0.md`
 * `docs/architecture/v1.3.0-auth.md`
 * `docs/architecture/v1.3.1-transactions.md`

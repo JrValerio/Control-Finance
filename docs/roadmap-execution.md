@@ -105,7 +105,7 @@ Toda entrega nova deve responder a pelo menos um destes critérios:
 
 ---
 
-## 4. ✅ Sprint A — Perfil como Painel de Controle (concluído — PR #268)
+## 4. ✅ Sprint A — Perfil como Painel de Controle (mergeado em main — PR #268)
 
 ### O que foi entregue
 
