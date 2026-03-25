@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { transactionsService } from "../services/transactions.service";
+import { profileService } from "../services/profile.service";
 import { formatCurrency } from "../utils/formatCurrency";
 import { getApiErrorMessage } from "../utils/apiError";
 
@@ -12,6 +13,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   const [dryRunResult, setDryRunResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [showProfileConfirm, setShowProfileConfirm] = useState(false);
+  const [isApplyingProfile, setIsApplyingProfile] = useState(false);
+  const [profileApplied, setProfileApplied] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -24,6 +28,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setDryRunResult(null);
     setErrorMessage("");
     setSuccessMessage("");
+    setShowProfileConfirm(false);
+    setIsApplyingProfile(false);
+    setProfileApplied(false);
   }, [isOpen]);
 
   useEffect(() => {
@@ -105,6 +112,33 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
 
     return null;
   }, [dryRunResult]);
+
+  const profilePatch = useMemo(() => {
+    const suggestion = dryRunResult?.suggestion;
+    if (suggestion?.type !== "profile") return null;
+    const patch = {};
+    if (suggestion.netAmount != null) patch.salary_monthly = suggestion.netAmount;
+    if (suggestion.paymentDate) {
+      const day = new Date(`${suggestion.paymentDate}T12:00:00Z`).getUTCDate();
+      if (day >= 1 && day <= 31) patch.payday = day;
+    }
+    return Object.keys(patch).length > 0 ? patch : null;
+  }, [dryRunResult]);
+
+  const handleApplyProfile = async () => {
+    if (!profilePatch) return;
+    setIsApplyingProfile(true);
+    setErrorMessage("");
+    try {
+      await profileService.updateProfile(profilePatch);
+      setProfileApplied(true);
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Não foi possível atualizar o perfil."));
+    } finally {
+      setIsApplyingProfile(false);
+      setShowProfileConfirm(false);
+    }
+  };
 
   const handleDryRun = async () => {
     if (!selectedFile) {
@@ -222,6 +256,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
               setDryRunResult(null);
               setErrorMessage("");
               setSuccessMessage("");
+              setProfileApplied(false);
+              setShowProfileConfirm(false);
             }}
             className="block w-full text-sm text-cf-text-primary file:mr-3 file:rounded file:border file:border-cf-border file:bg-cf-bg-subtle file:px-3 file:py-1 file:text-sm file:font-semibold file:text-cf-text-primary hover:file:bg-cf-border"
           />
@@ -292,11 +328,63 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                 <p className="mb-1 text-xs font-semibold uppercase text-blue-700 dark:text-blue-400">
                   {suggestionCard.kind === "profile" ? "Dados extraídos do comprovante" : "Dados do boleto"}
                 </p>
-                <ul className="space-y-0.5">
+                <ul className="mb-2 space-y-0.5">
                   {suggestionCard.lines.map((line) => (
                     <li key={line} className="text-xs text-blue-700 dark:text-blue-300">{line}</li>
                   ))}
                 </ul>
+                {suggestionCard.kind === "profile" && profilePatch && !profileApplied ? (
+                  showProfileConfirm ? (
+                    <div className="mt-2 rounded border border-blue-300 bg-blue-100 px-3 py-2 dark:border-blue-700 dark:bg-blue-900/40">
+                      <p className="mb-2 text-xs font-semibold text-blue-800 dark:text-blue-200">
+                        Confirmar atualização do perfil?
+                      </p>
+                      <ul className="mb-3 space-y-0.5">
+                        {profilePatch.salary_monthly != null && (
+                          <li className="text-xs text-blue-700 dark:text-blue-300">
+                            Renda líquida mensal → R$ {profilePatch.salary_monthly.toFixed(2).replace(".", ",")}
+                          </li>
+                        )}
+                        {profilePatch.payday != null && (
+                          <li className="text-xs text-blue-700 dark:text-blue-300">
+                            Dia de pagamento → dia {profilePatch.payday}
+                          </li>
+                        )}
+                      </ul>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleApplyProfile}
+                          disabled={isApplyingProfile}
+                          className="rounded bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                        >
+                          {isApplyingProfile ? "Salvando..." : "Confirmar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowProfileConfirm(false)}
+                          disabled={isApplyingProfile}
+                          className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-300 disabled:opacity-60"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowProfileConfirm(true)}
+                      className="mt-1 rounded border border-blue-400 bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/40"
+                    >
+                      Atualizar perfil com esses dados
+                    </button>
+                  )
+                ) : null}
+                {suggestionCard.kind === "profile" && profileApplied ? (
+                  <p className="mt-1 text-xs font-semibold text-green-600 dark:text-green-400">
+                    Perfil atualizado com sucesso.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
