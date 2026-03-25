@@ -213,4 +213,72 @@ describe("ImportCsvModal", () => {
       ).toBeInTheDocument();
     });
   });
+
+  describe("batch category", () => {
+    const buildMultiRowResponse = () =>
+      buildDryRunResponse({
+        summary: { totalRows: 2, validRows: 2, invalidRows: 0, income: 200, expense: 0 },
+        rows: [
+          {
+            line: 2,
+            status: "valid",
+            raw: { date: "2026-02-21", type: "Entrada", value: "100", description: "PIX A", notes: "", category: "" },
+            normalized: { date: "2026-02-21", type: "Entrada", value: 100, description: "PIX A", notes: "", categoryId: null },
+            errors: [],
+          },
+          {
+            line: 3,
+            status: "valid",
+            raw: { date: "2026-02-22", type: "Entrada", value: "100", description: "PIX B", notes: "", category: "" },
+            normalized: { date: "2026-02-22", type: "Entrada", value: 100, description: "PIX B", notes: "", categoryId: null },
+            errors: [],
+          },
+        ],
+      });
+
+    it("selecionar todas exibe toolbar de categoria em lote", async () => {
+      const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildMultiRowResponse());
+      categoriesService.listCategories.mockResolvedValue([{ id: 5, name: "Salário" }]);
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("checkbox", { name: /selecionar todas as linhas válidas/i })).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("checkbox", { name: /selecionar todas as linhas válidas/i }));
+
+      expect(screen.getByText(/2 linhas selecionadas/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /aplicar categoria/i })).toBeInTheDocument();
+    });
+
+    it("aplicar categoria em lote preenche overrides nas linhas selecionadas", async () => {
+      const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildMultiRowResponse());
+      categoriesService.listCategories.mockResolvedValue([{ id: 5, name: "Salário" }]);
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(screen.getByRole("checkbox", { name: /selecionar todas as linhas válidas/i })).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("checkbox", { name: /selecionar todas as linhas válidas/i }));
+      await userEvent.selectOptions(screen.getByRole("combobox", { name: /categoria para aplicar em lote/i }), "5");
+      await userEvent.click(screen.getByRole("button", { name: /aplicar categoria/i }));
+
+      // toolbar disappears after apply (selection cleared)
+      expect(screen.queryByText(/linhas selecionadas/i)).not.toBeInTheDocument();
+
+      // both row selects now show Salário
+      const rowSelects = screen.getAllByRole("combobox", { name: /categoria da linha/i });
+      expect(rowSelects).toHaveLength(2);
+      rowSelects.forEach((sel) => expect(sel).toHaveValue("5"));
+    });
+  });
 });
