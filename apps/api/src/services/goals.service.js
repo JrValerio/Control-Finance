@@ -2,7 +2,6 @@ import { dbQuery } from "../db/index.js";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TITLE_MAX_LENGTH = 200;
-const ICON_MAX_LENGTH = 50;
 const NOTES_MAX_LENGTH = 1000;
 const VALID_ICONS = new Set([
   "target", "plane", "home", "car", "graduation", "heart",
