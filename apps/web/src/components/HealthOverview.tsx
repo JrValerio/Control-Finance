@@ -17,6 +17,7 @@ interface TrajectoryPoint {
   balance: number;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const generateTrajectory = (forecast: Forecast): TrajectoryPoint[] => {
   const { adjustedProjectedBalance, dailyAvgSpending, daysRemaining } = forecast;
   if (daysRemaining <= 0) return [];
