@@ -103,7 +103,17 @@ const ProfileSettingsRoute = () => {
     navigate("/", { replace: true });
   };
 
-  return <ProfileSettings onBack={handleBack} onLogout={handleLogout} />;
+  const handleOpenBilling = () => {
+    navigate("/app/settings/billing");
+  };
+
+  return (
+    <ProfileSettings
+      onBack={handleBack}
+      onLogout={handleLogout}
+      onOpenBilling={handleOpenBilling}
+    />
+  );
 };
 
 const SecuritySettingsRoute = () => {

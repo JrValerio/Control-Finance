@@ -51,6 +51,7 @@ import {
 } from "../features/filters/useFilters";
 import { useTheme } from "../hooks/useTheme";
 import { formatCurrency } from "../utils/formatCurrency";
+import { useMaskedCurrency } from "../context/DiscreetModeContext";
 
 const TransactionChart = lazy(() => import("../components/TransactionChart"));
 const TrendChart = lazy(() => import("../components/TrendChart"));
@@ -453,6 +454,7 @@ const App = ({
   onOpenProfileSettings = undefined,
   onOpenSecuritySettings = undefined,
 }: AppProps): JSX.Element => {
+  const money = useMaskedCurrency();
   const initialFilterState = useMemo(() => getInitialFilterState(), []);
   const initialPaginationState = useMemo(() => getInitialPaginationState(), []);
   // Guards first_transaction_created from duplicate fires within a session.
@@ -2197,7 +2199,7 @@ const App = ({
           <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
             <p className="text-xs font-medium uppercase text-cf-text-secondary">Saldo</p>
             <p className="text-xl font-semibold text-cf-text-primary">
-              {isLoadingSummary ? "Carregando..." : formatCurrency(monthlySummary.balance)}
+              {isLoadingSummary ? "Carregando..." : money(monthlySummary.balance)}
             </p>
             <p
               className={`mt-1 text-xs font-medium ${
@@ -2223,7 +2225,7 @@ const App = ({
           <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
             <p className="text-xs font-medium uppercase text-cf-text-secondary">Entradas</p>
             <p className="text-xl font-semibold text-cf-text-primary">
-              {isLoadingSummary ? "Carregando..." : formatCurrency(monthlySummary.income)}
+              {isLoadingSummary ? "Carregando..." : money(monthlySummary.income)}
             </p>
             <p
               className={`mt-1 text-xs font-medium ${
@@ -2249,7 +2251,7 @@ const App = ({
           <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
             <p className="text-xs font-medium uppercase text-cf-text-secondary">Saídas</p>
             <p className="text-xl font-semibold text-cf-text-primary">
-              {isLoadingSummary ? "Carregando..." : formatCurrency(monthlySummary.expense)}
+              {isLoadingSummary ? "Carregando..." : money(monthlySummary.expense)}
             </p>
             <p
               className={`mt-1 text-xs font-medium ${

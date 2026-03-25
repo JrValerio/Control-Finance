@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { formatCurrency } from "../utils/formatCurrency";
+import { useMaskedCurrency } from "../context/DiscreetModeContext";
 import { getApiErrorMessage } from "../utils/apiError";
 import type { Goal, CreateGoalPayload, GoalIcon } from "../services/goals.service";
 import { GOAL_ICONS, goalsService } from "../services/goals.service";
@@ -18,6 +18,7 @@ interface GoalCardProps {
 }
 
 function GoalCard({ goal, projectedBalance, onEdit, onDelete, onContribute }: GoalCardProps) {
+  const money = useMaskedCurrency();
   const [showContrib, setShowContrib] = useState(false);
   const [contribAmt, setContribAmt] = useState("");
   const [contributing, setContributing] = useState(false);
@@ -113,7 +114,7 @@ function GoalCard({ goal, projectedBalance, onEdit, onDelete, onContribute }: Go
       <div>
         <div className="mb-1 flex items-center justify-between">
           <span className="text-xs text-cf-text-secondary">
-            {formatCurrency(goal.currentAmount)} de {formatCurrency(goal.targetAmount)}
+            {money(goal.currentAmount)} de {money(goal.targetAmount)}
           </span>
           <span className="text-xs font-semibold text-cf-text-primary">{pct}%</span>
         </div>
@@ -133,7 +134,7 @@ function GoalCard({ goal, projectedBalance, onEdit, onDelete, onContribute }: Go
       <div className="flex items-center justify-between text-xs text-cf-text-secondary">
         {goal.monthlyNeeded > 0 ? (
           <span className="flex items-center gap-1">
-            <span className="font-semibold text-cf-text-primary">{formatCurrency(goal.monthlyNeeded)}</span>
+            <span className="font-semibold text-cf-text-primary">{money(goal.monthlyNeeded)}</span>
             /mês necessário
             {isAtRisk && (
               <span

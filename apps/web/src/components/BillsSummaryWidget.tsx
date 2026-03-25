@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { billsService, type BillsSummary } from "../services/bills.service";
-import { formatCurrency } from "../utils/formatCurrency";
+import { useMaskedCurrency } from "../context/DiscreetModeContext";
 
 interface BillsSummaryWidgetProps {
   onOpenBills?: () => void;
@@ -20,6 +20,7 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
       .finally(() => setIsLoading(false));
   }, []);
 
+  const money = useMaskedCurrency();
   if (isLoading) {
     return (
       <div className="rounded border border-cf-border bg-cf-surface p-4">
@@ -49,7 +50,7 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
         <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
           <p className="text-xs font-medium uppercase text-cf-text-secondary">Pendentes</p>
           <p className="text-sm font-semibold text-cf-text-primary">
-            {formatCurrency(summary.pendingTotal)}
+            {money(summary.pendingTotal)}
           </p>
           <p className="text-xs text-cf-text-secondary">
             {summary.pendingCount} {summary.pendingCount === 1 ? "conta" : "contas"}
@@ -61,7 +62,7 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
           <p
             className={`text-sm font-semibold ${summary.overdueCount > 0 ? "text-red-600" : "text-cf-text-primary"}`}
           >
-            {formatCurrency(summary.overdueTotal)}
+            {money(summary.overdueTotal)}
           </p>
           <p className={`text-xs ${summary.overdueCount > 0 ? "text-red-500" : "text-cf-text-secondary"}`}>
             {summary.overdueCount} {summary.overdueCount === 1 ? "conta" : "contas"}
