@@ -17,9 +17,9 @@
       (function () {
         var stored = localStorage.getItem('cf-theme');
         var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (stored === 'dark' || (!stored && prefersDark)) {
-          document.documentElement.classList.add('dark');
-        }
+        // "dark" → always dark; "light" → always light; "system"/null → follow OS
+        var isDark = stored === 'dark' || (stored !== 'light' && prefersDark);
+        if (isDark) document.documentElement.classList.add('dark');
       })();
     </script>
   </head>

@@ -545,7 +545,20 @@ const App = ({
 
   const onPaginationReset = useCallback(() => setCurrentOffset(DEFAULT_OFFSET), []);
 
-  const { theme, toggleTheme } = useTheme();
+  const { theme, themePreference, setThemePreference } = useTheme();
+  const cycleTheme = useCallback(() => {
+    setThemePreference(
+      themePreference === "system" ? "light" : themePreference === "light" ? "dark" : "system",
+    );
+  }, [themePreference, setThemePreference]);
+  const themeLabel =
+    themePreference === "light" ? "☀ Claro" : themePreference === "dark" ? "☾ Escuro" : "◐ Sistema";
+  const themeAriaLabel =
+    themePreference === "light"
+      ? "Mudar para tema escuro"
+      : themePreference === "dark"
+        ? "Mudar para tema sistema"
+        : "Mudar para tema claro";
 
   const {
     selectedCategory,
@@ -1702,10 +1715,10 @@ const App = ({
                     <button
                       type="button"
                       role="menuitem"
-                      onClick={toggleTheme}
+                      onClick={cycleTheme}
                       className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                     >
-                      {theme === "dark" ? "☀ Claro" : "☾ Escuro"}
+                      {themeLabel}
                     </button>
                     {onLogout ? (
                       <>
@@ -1727,11 +1740,11 @@ const App = ({
               <div className="flex min-w-0 items-center gap-1 rounded border border-cf-border bg-cf-surface/70 p-1 sm:gap-2">
                 <button
                   type="button"
-                  onClick={toggleTheme}
-                  aria-label={theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
+                  onClick={cycleTheme}
+                  aria-label={themeAriaLabel}
                   className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                 >
-                  {theme === "dark" ? "☀ Claro" : "☾ Escuro"}
+                  {themeLabel}
                 </button>
                 <button
                   type="button"
