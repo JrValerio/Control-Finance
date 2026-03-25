@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getLatestForecast } from "./forecast.service.js";
+import { getGoalsSummaryForAI } from "./goals.service.js";
 import { dbQuery } from "../db/index.js";
 import { logInfo, logWarn, logError } from "../observability/logger.js";
 
@@ -63,7 +64,10 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
   const forecast = await getLatestForecast(userId, { now });
   if (!forecast || forecast.daysRemaining <= 0) return null;
 
-  const topCategories = await getTopExpenseCategories(userId, now);
+  const [topCategories, goals] = await Promise.all([
+    getTopExpenseCategories(userId, now),
+    getGoalsSummaryForAI(userId, { now }),
+  ]);
 
   const context = {
     balance: forecast.adjustedProjectedBalance,
@@ -71,6 +75,7 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
     runway: forecast.daysRemaining,
     health_score: forecast.adjustedProjectedBalance > 0 ? "positive" : "negative",
     top_categories: topCategories,
+    goals,
   };
 
   const client = anthropicClient ?? new Anthropic();
