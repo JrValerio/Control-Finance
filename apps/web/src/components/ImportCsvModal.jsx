@@ -57,6 +57,28 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     return (dryRunResult?.summary?.duplicateRows || 0) > 0;
   }, [dryRunResult]);
 
+  const documentTypeBadge = useMemo(() => {
+    switch (dryRunResult?.documentType) {
+      case "bank_statement":
+        return { label: "Extrato bancário", className: "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-400" };
+      case "income_statement_inss":
+        return { label: "Comprovante INSS", className: "border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-400" };
+      case "utility_bill_energy":
+        return { label: "Conta de energia", className: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400" };
+      case "utility_bill_water":
+        return { label: "Conta de água", className: "border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-400" };
+      default:
+        return null;
+    }
+  }, [dryRunResult]);
+
+  const isUtilityBill = useMemo(() => {
+    return (
+      dryRunResult?.documentType === "utility_bill_energy" ||
+      dryRunResult?.documentType === "utility_bill_water"
+    );
+  }, [dryRunResult]);
+
   const handleDryRun = async () => {
     if (!selectedFile) {
       setErrorMessage("Selecione um arquivo CSV, OFX ou PDF.");
@@ -224,6 +246,20 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
 
         {dryRunResult ? (
           <div className="mt-4 space-y-3">
+            {documentTypeBadge ? (
+              <div className="flex items-center gap-2">
+                <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${documentTypeBadge.className}`}>
+                  {documentTypeBadge.label}
+                </span>
+              </div>
+            ) : null}
+
+            {isUtilityBill ? (
+              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                Boleto detectado. O suporte completo à importação de contas de energia e água chegará em breve. Por enquanto, nenhuma transação é extraída.
+              </div>
+            ) : null}
+
             <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Total</p>

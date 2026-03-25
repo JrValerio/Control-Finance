@@ -10,9 +10,13 @@ import {
   parseOfxRows,
 } from "../domain/imports/ofx-import.js";
 import {
+  extractTextFromPdfBuffer,
+  getPdfImportGuidanceError,
+  parseInssCreditHistoryPdfText,
+  parseGenericBankStatementPdfText,
   parseStatementCsvRows,
-  parseStatementPdfRows,
 } from "../domain/imports/statement-import.js";
+import { detectDocumentType } from "../domain/imports/document-classifier.js";
 import { applySmartClassification } from "../domain/imports/transaction-classifier.js";
 import { normalizeCategoryNameKey } from "./categories-normalization.js";
 
@@ -267,23 +271,55 @@ const parseImportFileRows = async (importFile) => {
   }
 
   if (extension === ".pdf") {
+    let text;
     try {
-      return await parseStatementPdfRows(fileBuffer);
+      text = await extractTextFromPdfBuffer(fileBuffer);
+    } catch (error) {
+      throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no PDF.");
+    }
+
+    const guidanceError = getPdfImportGuidanceError(text);
+    if (guidanceError) {
+      throw createError(400, guidanceError);
+    }
+
+    const documentType = detectDocumentType({ text, extension });
+
+    if (documentType === "income_statement_inss") {
+      try {
+        const rows = parseInssCreditHistoryPdfText(text);
+        return { rows, documentType };
+      } catch (error) {
+        throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no PDF.");
+      }
+    }
+
+    if (documentType === "utility_bill_energy" || documentType === "utility_bill_water") {
+      return { rows: [], documentType };
+    }
+
+    try {
+      const rows = parseGenericBankStatementPdfText(text);
+      return { rows, documentType };
     } catch (error) {
       throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no PDF.");
     }
   }
 
   if (extension === ".ofx") {
+    const documentType = detectDocumentType({ text: "", extension });
     try {
-      return parseOfxRows(fileBuffer);
+      const rows = parseOfxRows(fileBuffer);
+      return { rows, documentType };
     } catch (error) {
       throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no OFX.");
     }
   }
 
   try {
-    return parseCsvFileRows(fileBuffer);
+    const rows = parseCsvFileRows(fileBuffer);
+    const documentType = detectDocumentType({ text: "", extension: ".csv" });
+    return { rows, documentType };
   } catch (error) {
     if (error?.message !== HEADER_ERROR_MESSAGE) {
       throw error;
@@ -291,7 +327,9 @@ const parseImportFileRows = async (importFile) => {
   }
 
   try {
-    return parseStatementCsvRows(fileBuffer);
+    const rows = parseStatementCsvRows(fileBuffer);
+    const documentType = detectDocumentType({ text: "", extension: ".csv" });
+    return { rows, documentType };
   } catch (error) {
     if (
       error?.message === `Arquivo excede o limite de ${getImportCsvMaxRows()} linhas.`
@@ -604,7 +642,7 @@ const assertSessionReadyForCommit = (session, userId) => {
 };
 
 export const dryRunTransactionsImportForUser = async (userId, importFile) => {
-  const parsedRows = await parseImportFileRows(importFile);
+  const { rows: parsedRows, documentType } = await parseImportFileRows(importFile);
   const [categoryMap, categories] = await Promise.all([
     loadCategoryMapForUser(userId),
     loadCategoriesForUser(userId),
@@ -651,6 +689,7 @@ export const dryRunTransactionsImportForUser = async (userId, importFile) => {
   return {
     importId: persistedSession.importId,
     expiresAt: persistedSession.expiresAt,
+    documentType,
     summary,
     rows,
   };
