@@ -493,6 +493,39 @@ describe("TaxPage", () => {
     expect(taxService.rebuildSummary).not.toHaveBeenCalled();
   });
 
+  it("bloqueia upload quando a API retorna conflito de CPF divergente", async () => {
+    const user = userEvent.setup();
+    const uploadedFile = new File(["conteudo fiscal"], "picpay.pdf", {
+      type: "application/pdf",
+    });
+
+    vi.mocked(taxService.uploadDocument).mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          message:
+            "Conflito de CPF divergente. Documento no CPF 214.679.738-07 e perfil fiscal no CPF 529.982.247-25.",
+          code: "TAX_DOCUMENT_TAXPAYER_CPF_MISMATCH",
+        },
+      },
+    });
+
+    renderPage();
+
+    await screen.findByRole("button", { name: "Enviar documento" });
+    await user.click(screen.getByRole("button", { name: "Enviar documento" }));
+    await user.upload(screen.getByLabelText("Arquivo fiscal"), uploadedFile);
+    await user.click(screen.getByRole("button", { name: "Enviar e processar" }));
+
+    expect(
+      await screen.findByText(
+        "Conflito de CPF divergente. Documento no CPF 214.679.738-07 e perfil fiscal no CPF 529.982.247-25.",
+      ),
+    ).toBeInTheDocument();
+    expect(taxService.reprocessDocument).not.toHaveBeenCalled();
+    expect(taxService.rebuildSummary).not.toHaveBeenCalled();
+  });
+
   it("permite tentar novamente um documento com falha e rebuilda o resumo", async () => {
     const user = userEvent.setup();
 

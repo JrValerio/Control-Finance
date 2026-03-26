@@ -56,15 +56,14 @@ const extractTaxDocumentText = async ({ buffer, originalFileName }) => {
   };
 };
 
-export const classifyStoredTaxDocument = async (documentRecord) => {
-  const buffer = await readStoredTaxDocumentBuffer(documentRecord.storage_key);
+export const classifyTaxDocumentBuffer = async ({ buffer, originalFileName }) => {
   const textResult = await extractTaxDocumentText({
     buffer,
-    originalFileName: documentRecord.original_file_name,
+    originalFileName,
   });
   const classification = classifyTaxDocument({
     text: textResult.text,
-    originalFileName: documentRecord.original_file_name,
+    originalFileName,
   });
 
   return {
@@ -82,4 +81,13 @@ export const classifyStoredTaxDocument = async (documentRecord) => {
     },
     warnings: [...classification.warnings, ...textResult.warnings],
   };
+};
+
+export const classifyStoredTaxDocument = async (documentRecord) => {
+  const buffer = await readStoredTaxDocumentBuffer(documentRecord.storage_key);
+
+  return classifyTaxDocumentBuffer({
+    buffer,
+    originalFileName: documentRecord.original_file_name,
+  });
 };

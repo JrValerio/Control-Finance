@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { dbQuery, withDbTransaction } from "../db/index.js";
+import { runTaxExtractorForDocument } from "../domain/tax/tax-document-extractors.js";
 import {
   createTaxError,
   normalizeOptionalDocumentProcessingStatus,
@@ -9,12 +10,14 @@ import {
   toISOStringOrNull,
 } from "../domain/tax/tax.validation.js";
 import { logWarn } from "../observability/logger.js";
+import { classifyTaxDocumentBuffer } from "./tax-classification.service.js";
 import {
   deleteStoredTaxDocument,
   saveTaxDocumentBuffer,
 } from "./tax-document-storage.service.js";
 
 const DUPLICATE_TAX_DOCUMENT_ERROR_CODE = "23505";
+const TAX_DOCUMENT_TAXPAYER_CPF_MISMATCH_CODE = "TAX_DOCUMENT_TAXPAYER_CPF_MISMATCH";
 
 const mapTaxDocument = (row) => ({
   id: Number(row.id),
@@ -80,6 +83,18 @@ const normalizeOptionalText = (value, { maxLength, fieldName }) => {
   return normalizedValue;
 };
 
+const normalizeDocumentNumber = (value) => String(value || "").replace(/\D/g, "");
+
+const formatCpf = (value) => {
+  const digits = normalizeDocumentNumber(value);
+
+  if (digits.length !== 11) {
+    return digits;
+  }
+
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+
 const TAX_DOCUMENT_SELECT_COLUMNS = `
   id,
   tax_year,
@@ -105,6 +120,72 @@ const findTaxDocumentRowByIdForUser = async (client, userId, documentId) => {
   );
 
   return result.rows[0] || null;
+};
+
+const getUserTaxpayerCpf = async (userId) => {
+  const result = await dbQuery(
+    `SELECT taxpayer_cpf
+     FROM user_profiles
+     WHERE user_id = $1
+     LIMIT 1`,
+    [userId],
+  );
+
+  return normalizeDocumentNumber(result.rows[0]?.taxpayer_cpf);
+};
+
+const resolveExtractorOwnerDocument = (extractorResult) => {
+  const payload =
+    extractorResult?.payload && typeof extractorResult.payload === "object"
+      ? extractorResult.payload
+      : null;
+
+  if (!payload) {
+    return "";
+  }
+
+  return normalizeDocumentNumber(
+    payload.beneficiaryDocument ||
+      payload.customerDocument ||
+      payload.studentDocument ||
+      payload.ownerDocument ||
+      "",
+  );
+};
+
+const buildTaxpayerMismatchMessage = ({ taxpayerCpf, ownerDocument }) =>
+  `Conflito de CPF divergente. Documento no CPF ${formatCpf(ownerDocument)} e perfil fiscal no CPF ${formatCpf(taxpayerCpf)}.`;
+
+const ensureTaxDocumentMatchesUserTaxpayerCpf = async ({ userId, file }) => {
+  const taxpayerCpf = await getUserTaxpayerCpf(userId);
+
+  if (!taxpayerCpf) {
+    return;
+  }
+
+  const classification = await classifyTaxDocumentBuffer({
+    buffer: file.buffer,
+    originalFileName: file.originalname,
+  });
+  const extractorResult = runTaxExtractorForDocument({
+    documentType: classification.documentType,
+    text: classification.text,
+    classification,
+  });
+  const ownerDocument = resolveExtractorOwnerDocument(extractorResult);
+
+  if (!ownerDocument || ownerDocument === taxpayerCpf) {
+    return;
+  }
+
+  throw createTaxError(
+    409,
+    buildTaxpayerMismatchMessage({
+      taxpayerCpf,
+      ownerDocument,
+    }),
+    TAX_DOCUMENT_TAXPAYER_CPF_MISMATCH_CODE,
+  );
 };
 
 export const listTaxDocumentsByUser = async (userId, query = {}) => {
@@ -195,6 +276,11 @@ export const createTaxDocumentForUser = async (userId, payload = {}, file) => {
   if (existingDocumentResult.rows[0]) {
     throw createTaxError(409, "Documento ja enviado anteriormente.", "TAX_DOCUMENT_DUPLICATE");
   }
+
+  await ensureTaxDocumentMatchesUserTaxpayerCpf({
+    userId: normalizedUserId,
+    file,
+  });
 
   let storedDocument = null;
 

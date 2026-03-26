@@ -303,6 +303,111 @@ describe("Tax API foundation", () => {
     });
   });
 
+  it("POST /tax/documents bloqueia upload quando o CPF do documento diverge do titular cadastrado", async () => {
+    const email = "tax-upload-cpf-mismatch@test.dev";
+    const token = await registerAndLogin(email);
+    const userResult = await dbQuery(
+      `SELECT id
+       FROM users
+       WHERE email = $1`,
+      [email],
+    );
+    const userId = Number(userResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, taxpayer_cpf)
+       VALUES ($1, '52998224725')`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Ministerio da Economia Comprovante de Rendimentos Pagos e de",
+            "Imposto sobre a Renda Retido na Fonte",
+            "Exercicio de 2026 Ano-calendario de 2025",
+            "16.727.230/0001-97 Fundo do Regime Geral de Previdencia Social",
+            "214.679.738-07 AMARO VALERIO DA SILVA JUNIOR 1776829899",
+            "3533-PROVENTOS DE APOSENT., RESERVA, REFORMA OU PENSAO PAGOS PELA PREV. SOCIAL",
+            "1. Total dos rendimentos (inclusive ferias) 34.287,13",
+            "5. Imposto sobre a renda retido na fonte 13,36",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "inss-mismatch.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      code: "TAX_DOCUMENT_TAXPAYER_CPF_MISMATCH",
+      message:
+        "Conflito de CPF divergente. Documento no CPF 214.679.738-07 e perfil fiscal no CPF 529.982.247-25.",
+    });
+
+    const persistedDocumentCount = await dbQuery(
+      `SELECT COUNT(*) AS total
+       FROM tax_documents
+       WHERE user_id = $1`,
+      [userId],
+    );
+
+    expect(Number(persistedDocumentCount.rows[0].total)).toBe(0);
+  });
+
+  it("POST /tax/documents permite upload quando o CPF do documento bate com o titular cadastrado", async () => {
+    const email = "tax-upload-cpf-match@test.dev";
+    const token = await registerAndLogin(email);
+    const userResult = await dbQuery(
+      `SELECT id
+       FROM users
+       WHERE email = $1`,
+      [email],
+    );
+    const userId = Number(userResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, taxpayer_cpf)
+       VALUES ($1, '43342760400')`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Ministerio da Economia Comprovante de Rendimentos Pagos e de",
+            "Imposto sobre a Renda Retido na Fonte",
+            "Exercicio de 2026 Ano-calendario de 2025",
+            "16.727.230/0001-97 Fundo do Regime Geral de Previdencia Social",
+            "433.427.604-00 MARIA EDLEUSA MONSAO DA SILVA 1776829899",
+            "3533-PROVENTOS DE APOSENT., RESERVA, REFORMA OU PENSAO PAGOS PELA PREV. SOCIAL",
+            "1. Total dos rendimentos (inclusive ferias) 34.287,13",
+            "5. Imposto sobre a renda retido na fonte 13,36",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "inss-match.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(response.status).toBe(201);
+    expect(response.body.document.originalFileName).toBe("inss-match.csv");
+  });
+
   it("POST /tax/documents permite mesmo arquivo para usuarios diferentes", async () => {
     const tokenA = await registerAndLogin("tax-upload-user-a@test.dev");
     const tokenB = await registerAndLogin("tax-upload-user-b@test.dev");
@@ -1585,12 +1690,6 @@ describe("Tax API foundation", () => {
     );
     const userId = Number(userResult.rows[0].id);
 
-    await dbQuery(
-      `INSERT INTO user_profiles (user_id, taxpayer_cpf)
-       VALUES ($1, '52998224725')`,
-      [userId],
-    );
-
     const uploadResponse = await request(app)
       .post("/tax/documents")
       .set("Authorization", `Bearer ${token}`)
@@ -1620,6 +1719,12 @@ describe("Tax API foundation", () => {
       );
 
     expect(uploadResponse.status).toBe(201);
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, taxpayer_cpf)
+       VALUES ($1, '52998224725')`,
+      [userId],
+    );
 
     const reprocessResponse = await request(app)
       .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
