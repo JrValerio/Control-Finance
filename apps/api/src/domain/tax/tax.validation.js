@@ -1,6 +1,8 @@
 import {
   TAX_DEFAULT_PAGE_SIZE,
   TAX_DOCUMENT_PROCESSING_STATUSES,
+  TAX_FACT_REVIEW_STATUSES,
+  TAX_FACT_TYPES,
   TAX_MAX_PAGE_SIZE,
 } from "./tax.constants.js";
 
@@ -62,6 +64,60 @@ export const normalizeOptionalDocumentProcessingStatus = (value) => {
 
   if (!TAX_DOCUMENT_PROCESSING_STATUSES.includes(normalizedValue)) {
     throw createTaxError(400, "status invalido.");
+  }
+
+  return normalizedValue;
+};
+
+export const normalizeOptionalTaxFactReviewStatus = (value) => {
+  if (typeof value === "undefined" || value === null || value === "") {
+    return undefined;
+  }
+
+  const normalizedValue = String(value).trim();
+
+  if (!TAX_FACT_REVIEW_STATUSES.includes(normalizedValue)) {
+    throw createTaxError(400, "reviewStatus invalido.");
+  }
+
+  return normalizedValue;
+};
+
+export const normalizeTaxFactId = (value, fieldName = "factId") => {
+  const parsedValue = Number(value);
+
+  if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+    throw createTaxError(400, `${fieldName} invalido.`);
+  }
+
+  return parsedValue;
+};
+
+export const normalizeTaxFactType = (value, fieldName = "factType") => {
+  const normalizedValue = String(value || "").trim();
+
+  if (!TAX_FACT_TYPES.includes(normalizedValue)) {
+    throw createTaxError(400, `${fieldName} invalido.`);
+  }
+
+  return normalizedValue;
+};
+
+export const normalizeTaxReviewAction = (value) => {
+  const normalizedValue = String(value || "").trim();
+
+  if (!["approve", "correct", "reject"].includes(normalizedValue)) {
+    throw createTaxError(400, "action invalida.");
+  }
+
+  return normalizedValue;
+};
+
+export const normalizeBulkTaxReviewAction = (value) => {
+  const normalizedValue = String(value || "").trim();
+
+  if (normalizedValue !== "approve") {
+    throw createTaxError(400, "action invalida.");
   }
 
   return normalizedValue;

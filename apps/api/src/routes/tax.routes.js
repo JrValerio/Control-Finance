@@ -9,6 +9,8 @@ import {
   listTaxDocumentsByUser,
 } from "../services/tax-documents.service.js";
 import { processTaxDocumentByIdForUser } from "../services/tax-extraction.service.js";
+import { listTaxFactsByUser } from "../services/tax-facts.service.js";
+import { bulkApproveTaxFactsByUser, reviewTaxFactByUser } from "../services/tax-reviews.service.js";
 import { getTaxRuleSetsByYear } from "../services/tax-rules.service.js";
 import { getTaxSummaryByYear } from "../services/tax-summary.service.js";
 
@@ -124,6 +126,33 @@ router.post("/documents/:id/reprocess", async (req, res, next) => {
   try {
     const document = await processTaxDocumentByIdForUser(req.user.id, req.params.id);
     res.status(200).json(document);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/facts", async (req, res, next) => {
+  try {
+    const facts = await listTaxFactsByUser(req.user.id, req.query ?? {});
+    res.status(200).json(facts);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/facts/bulk-review", async (req, res, next) => {
+  try {
+    const result = await bulkApproveTaxFactsByUser(req.user.id, req.body ?? {});
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch("/facts/:id/review", async (req, res, next) => {
+  try {
+    const result = await reviewTaxFactByUser(req.user.id, req.params.id, req.body ?? {});
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
