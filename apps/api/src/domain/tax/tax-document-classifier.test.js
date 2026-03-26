@@ -47,6 +47,23 @@ describe("tax document classifier", () => {
     expect(result.sourceLabelSuggestion).toBe("INSS");
   });
 
+  it("detecta comprovante anual do INSS antes de cair no classifier de empregador", () => {
+    const result = classifyTaxDocument({
+      originalFileName: "inss-anual.pdf",
+      text: [
+        "Ministerio da Economia Comprovante de Rendimentos Pagos e de",
+        "Imposto sobre a Renda Retido na Fonte",
+        "Exercicio de 2026 Ano-calendario de 2025",
+        "16.727.230/0001-97 Fundo do Regime Geral de Previdencia Social",
+        "Numero do Beneficio",
+        "Parcela isenta do 13o salario de aposentadoria 1.903,98",
+      ].join("\n"),
+    });
+
+    expect(result.documentType).toBe("income_report_inss");
+    expect(result.sourceLabelSuggestion).toBe("INSS");
+  });
+
   it("detecta demonstrativo medico", () => {
     const result = classifyTaxDocument({
       originalFileName: "unimed.csv",

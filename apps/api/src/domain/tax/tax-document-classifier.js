@@ -5,6 +5,7 @@ const normalizeForClassification = (text) =>
   String(text || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[º°]/g, "o")
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
@@ -55,6 +56,14 @@ const INSS_SIGNALS = [
   "meu.inss.gov.br",
   "especie",
   "nb:",
+];
+
+const INSS_ANNUAL_SIGNALS = [
+  "fundo do regime geral de previdencia social",
+  "numero do beneficio",
+  "natureza do rendimento",
+  "parcela isenta do 13o",
+  "proventos de aposentadoria",
 ];
 
 const BANK_INCOME_REPORT_SIGNALS = [
@@ -126,6 +135,11 @@ const isInssIncomeReport = (normalizedText) =>
   normalizedText.includes("instituto nacional do seguro social") &&
   countMatches(normalizedText, INSS_SIGNALS) >= 2;
 
+const isInssAnnualIncomeReport = (normalizedText) =>
+  normalizedText.includes("comprovante de rendimentos pagos e de") &&
+  normalizedText.includes("imposto sobre a renda retido na fonte") &&
+  countMatches(normalizedText, INSS_ANNUAL_SIGNALS) >= 2;
+
 const isBankIncomeReport = (normalizedText) =>
   normalizedText.includes("informe de rendimentos") &&
   (
@@ -180,12 +194,17 @@ export const classifyTaxDocument = ({
 
   if (
     detectImportDocumentType({ text, extension }) === "income_statement_inss" ||
-    isInssIncomeReport(normalizedText)
+    isInssIncomeReport(normalizedText) ||
+    isInssAnnualIncomeReport(normalizedText)
   ) {
     return createClassification({
       documentType: "income_report_inss",
       confidenceScore: 0.99,
-      reasons: ["matched_import_classifier:income_statement_inss"],
+      reasons: [
+        detectImportDocumentType({ text, extension }) === "income_statement_inss"
+          ? "matched_import_classifier:income_statement_inss"
+          : "matched_inss_income_report_signals",
+      ],
       sourceLabelSuggestion: "INSS",
     });
   }

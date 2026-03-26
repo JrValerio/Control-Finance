@@ -695,6 +695,220 @@ describe("Tax API foundation", () => {
     ]);
   });
 
+  it("POST /tax/documents/:id/reprocess normaliza comprovante anual do INSS e o resumo deixa de zerar apos revisao", async () => {
+    const token = await registerAndLogin("tax-reprocess-inss-annual@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Ministerio da Economia Comprovante de Rendimentos Pagos e de",
+            "Imposto sobre a Renda Retido na Fonte",
+            "Exercicio de 2026 Ano-calendario de 2025",
+            "16.727.230/0001-97 Fundo do Regime Geral de Previdencia Social",
+            "433.427.604-00 MARIA EDLEUSA MONSAO DA SILVA 1776829899",
+            "3533-PROVENTOS DE APOSENT., RESERVA, REFORMA OU PENSAO PAGOS PELA PREV. SOCIAL",
+            "1. Total dos rendimentos (inclusive ferias) 34.287,13",
+            "2. Contribuicao previdenciaria oficial 0,00",
+            "3. Contribuicoes a entidades de previdencia complementar e a fundos de aposentadoria programada Individual (FAPI) 0,00",
+            "4. Pensao alimenticia (Informar o beneficiario no quadro 7) 0,00",
+            "5. Imposto sobre a renda retido na fonte 13,36",
+            "1. Parcela isenta dos proventos de aposentadoria, reserva remunerada, reforma e pensao (65 anos ou mais), exceto a 22.847,76",
+            "2. Parcela isenta do 13o salario de aposentadoria, reserva remunerada, reforma e pensao (65 anos ou mais). 1.903,98",
+            "1. Decimo terceiro salario 2.868,57",
+            "2. Imposto sobre a renda retido na fonte sobre 13o salario 0,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "inss-anual.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+    expect(reprocessResponse.body.document).toMatchObject({
+      id: uploadResponse.body.document.id,
+      documentType: "income_report_inss",
+      processingStatus: "normalized",
+    });
+    expect(reprocessResponse.body.document.latestExtraction).toMatchObject({
+      extractorName: "income-report-inss",
+      classification: "income_report_inss",
+    });
+
+    const factsResult = await dbQuery(
+      `SELECT fact_type, subcategory, amount
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+
+    expect(factsResult.rows).toEqual([
+      expect.objectContaining({
+        fact_type: "taxable_income",
+        subcategory: "inss_annual_taxable_income",
+        amount: 34287.13,
+      }),
+      expect.objectContaining({
+        fact_type: "withheld_tax",
+        subcategory: "inss_annual_withheld_tax",
+        amount: 13.36,
+      }),
+      expect.objectContaining({
+        fact_type: "exempt_income",
+        subcategory: "inss_retirement_65_plus_exempt",
+        amount: 22847.76,
+      }),
+      expect.objectContaining({
+        fact_type: "exempt_income",
+        subcategory: "inss_retirement_65_plus_thirteenth_exempt",
+        amount: 1903.98,
+      }),
+      expect.objectContaining({
+        fact_type: "exclusive_tax_income",
+        subcategory: "inss_thirteenth_salary_exclusive",
+        amount: 2868.57,
+      }),
+    ]);
+
+    const factIds = (
+      await dbQuery(
+        `SELECT id
+         FROM tax_facts
+         WHERE source_document_id = $1
+         ORDER BY id ASC`,
+        [uploadResponse.body.document.id],
+      )
+    ).rows.map((row) => Number(row.id));
+
+    const approveResponse = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds,
+        action: "approve",
+      });
+
+    expect(approveResponse.status).toBe(200);
+
+    const rebuildResponse = await request(app)
+      .post("/tax/summary/2026/rebuild")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(rebuildResponse.status).toBe(200);
+    expect(rebuildResponse.body).toMatchObject({
+      annualTaxableIncome: 34287.13,
+      annualExemptIncome: 24751.74,
+      annualExclusiveIncome: 2868.57,
+      annualWithheldTax: 13.36,
+      sourceCounts: {
+        documents: 1,
+        factsPending: 0,
+        factsApproved: 5,
+      },
+    });
+  });
+
+  it("POST /tax/documents/:id/reprocess normaliza informe bancario anual itemizado", async () => {
+    const token = await registerAndLogin("tax-reprocess-bank-annual@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Informe de Rendimentos",
+            "Ano Calendario 2025",
+            "Cliente: MARIA EDILEUSA MONSAO DA SILVA CPF: 433.427.604-00",
+            "Ficha da Declaracao: Rendimentos Sujeitos a Tributacao Exclusiva/Definitiva",
+            "Contas de deposito, pagamento e aplicacoes financeiras",
+            "Fonte Pagadora: Itau Unibanco S.A. CNPJ: 60.701.190/0001-04",
+            "3613/0042196-9 06 RDB/CDB 0,16 0,00 0,16",
+            "Total: 0,16 0,00 0,16",
+            "Ficha da Declaracao: Bens e Direitos",
+            "3613/0042196-9 06 01 CONTA CORRENTE 0,00 1,00",
+            "3613/0042196-9 04 02 RDB/CDB 0,00 1.052,16",
+            "Total: 0,00 1.053,16",
+            "Ficha da Declaracao: Dividas e Onus Reais",
+            "Credor: Itau Unibanco S.A. CNPJ: 60.701.190/0001-04",
+            "3613/0042196-9 11 CREDITO CONSIGNADO",
+            "INTERNO INSS 000002653219945 19/02/2025 0,00 3.308,88",
+            "Total: 0,00 3.308,88",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "itau-anual.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+    expect(reprocessResponse.body.document).toMatchObject({
+      id: uploadResponse.body.document.id,
+      documentType: "income_report_bank",
+      processingStatus: "normalized",
+    });
+    expect(reprocessResponse.body.document.latestExtraction).toMatchObject({
+      extractorName: "income-report-bank",
+      classification: "income_report_bank",
+    });
+
+    const factsResult = await dbQuery(
+      `SELECT fact_type, subcategory, amount, reference_period
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+
+    expect(factsResult.rows).toEqual([
+      expect.objectContaining({
+        fact_type: "exclusive_tax_income",
+        subcategory: "bank_annual_exclusive_income",
+        amount: 0.16,
+        reference_period: "2025-annual",
+      }),
+      expect.objectContaining({
+        fact_type: "asset_balance",
+        subcategory: "bank_account_balance",
+        amount: 1,
+        reference_period: "2025-12-31",
+      }),
+      expect.objectContaining({
+        fact_type: "asset_balance",
+        subcategory: "bank_investment_balance",
+        amount: 1052.16,
+        reference_period: "2025-12-31",
+      }),
+      expect.objectContaining({
+        fact_type: "debt_balance",
+        subcategory: "bank_debt_balance",
+        amount: 3308.88,
+        reference_period: "2025-12-31",
+      }),
+    ]);
+  });
+
   it("POST /tax/documents/:id/reprocess normaliza extrato de apoio sem gerar facts", async () => {
     const token = await registerAndLogin("tax-reprocess-bank-support@test.dev");
     const uploadResponse = await request(app)
