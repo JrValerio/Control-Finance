@@ -156,6 +156,16 @@ describe("Tax API foundation", () => {
     );
   });
 
+  it("DELETE /tax/documents/:id retorna 401 sem token", async () => {
+    const response = await request(app).delete("/tax/documents/1");
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
   it("PATCH /tax/facts/:id/review retorna 401 sem token", async () => {
     const response = await request(app)
       .patch("/tax/facts/1/review")
@@ -433,6 +443,160 @@ describe("Tax API foundation", () => {
       .set("Authorization", `Bearer ${tokenB}`);
 
     expectErrorResponseWithRequestId(detailResponse, 404, "Documento fiscal nao encontrado.");
+  });
+
+  it("DELETE /tax/documents/:id remove documento, fatos vinculados, trilha de revisao e arquivo fisico", async () => {
+    const token = await registerAndLogin("tax-documents-delete@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "delete-document.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const documentId = uploadResponse.body.document.id;
+    const storageResult = await dbQuery(
+      `SELECT storage_key
+       FROM tax_documents
+       WHERE id = $1`,
+      [documentId],
+    );
+    const storageKey = storageResult.rows[0].storage_key;
+    const absolutePath = resolveTaxDocumentAbsolutePath(storageKey);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${documentId}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+
+    const factsResult = await dbQuery(
+      `SELECT id
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [documentId],
+    );
+    const factId = Number(factsResult.rows[0].id);
+
+    const reviewResponse = await request(app)
+      .patch(`/tax/facts/${factId}/review`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        action: "approve",
+        note: "Criando trilha para o delete.",
+      });
+
+    expect(reviewResponse.status).toBe(200);
+
+    const deleteResponse = await request(app)
+      .delete(`/tax/documents/${documentId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(deleteResponse.status).toBe(200);
+    expect(deleteResponse.body).toEqual({
+      deletedDocumentId: documentId,
+      deletedFactsCount: 2,
+    });
+
+    const persistedDocumentCount = await dbQuery(
+      `SELECT COUNT(*) AS total
+       FROM tax_documents
+       WHERE id = $1`,
+      [documentId],
+    );
+    const persistedExtractionCount = await dbQuery(
+      `SELECT COUNT(*) AS total
+       FROM tax_document_extractions
+       WHERE document_id = $1`,
+      [documentId],
+    );
+    const persistedFactsCount = await dbQuery(
+      `SELECT COUNT(*) AS total
+       FROM tax_facts
+       WHERE source_document_id = $1`,
+      [documentId],
+    );
+    const persistedReviewsCount = await dbQuery("SELECT COUNT(*) AS total FROM tax_reviews");
+
+    expect(Number(persistedDocumentCount.rows[0].total)).toBe(0);
+    expect(Number(persistedExtractionCount.rows[0].total)).toBe(0);
+    expect(Number(persistedFactsCount.rows[0].total)).toBe(0);
+    expect(Number(persistedReviewsCount.rows[0].total)).toBe(0);
+    await expect(fs.access(absolutePath)).rejects.toThrow();
+  });
+
+  it("DELETE /tax/documents/:id retorna 404 para documento de outro usuario", async () => {
+    const tokenA = await registerAndLogin("tax-documents-delete-a@test.dev");
+    const tokenB = await registerAndLogin("tax-documents-delete-b@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from("%PDF-1.4\ndelete-ownership", "utf8"), {
+        filename: "delete-ownership.pdf",
+        contentType: "application/pdf",
+      });
+
+    expect(uploadResponse.status).toBe(201);
+
+    const deleteResponse = await request(app)
+      .delete(`/tax/documents/${uploadResponse.body.document.id}`)
+      .set("Authorization", `Bearer ${tokenB}`);
+
+    expectErrorResponseWithRequestId(deleteResponse, 404, "Documento fiscal nao encontrado.");
+  });
+
+  it("DELETE /tax/documents/:id segue com sucesso quando o arquivo fisico ja nao existe", async () => {
+    const token = await registerAndLogin("tax-documents-delete-missing-file@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from("%PDF-1.4\nmissing-file", "utf8"), {
+        filename: "missing-file.pdf",
+        contentType: "application/pdf",
+      });
+
+    expect(uploadResponse.status).toBe(201);
+
+    const documentId = uploadResponse.body.document.id;
+    const storageResult = await dbQuery(
+      `SELECT storage_key
+       FROM tax_documents
+       WHERE id = $1`,
+      [documentId],
+    );
+    await fs.rm(resolveTaxDocumentAbsolutePath(storageResult.rows[0].storage_key), {
+      force: true,
+    });
+
+    const deleteResponse = await request(app)
+      .delete(`/tax/documents/${documentId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(deleteResponse.status).toBe(200);
+    expect(deleteResponse.body).toEqual({
+      deletedDocumentId: documentId,
+      deletedFactsCount: 0,
+    });
   });
 
   it("POST /tax/documents/:id/reprocess classifica, extrai e normaliza comprovante do empregador", async () => {

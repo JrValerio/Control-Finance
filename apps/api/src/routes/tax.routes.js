@@ -5,6 +5,7 @@ import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { getTaxBootstrapByUser } from "../services/tax-bootstrap.service.js";
 import {
   createTaxDocumentForUser,
+  deleteTaxDocumentByIdForUser,
   getTaxDocumentByIdForUser,
   listTaxDocumentsByUser,
 } from "../services/tax-documents.service.js";
@@ -118,6 +119,15 @@ router.get("/documents/:id", async (req, res, next) => {
   try {
     const document = await getTaxDocumentByIdForUser(req.user.id, req.params.id);
     res.status(200).json(document);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/documents/:id", async (req, res, next) => {
+  try {
+    const result = await deleteTaxDocumentByIdForUser(req.user.id, req.params.id);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }
