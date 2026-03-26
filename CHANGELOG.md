@@ -2,6 +2,72 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.31.0] - 2026-03-26
+
+### Title
+
+v1.31.0 - Central do Leão (IRPF MVP)
+
+### Added
+
+#### Central do Leão API (PR #290)
+
+- Novo domínio fiscal isolado em `/tax`
+- Migrations `100` a `105` para:
+  - `tax_documents`
+  - `tax_document_extractions`
+  - `tax_facts`
+  - `tax_reviews`
+  - `tax_rule_sets`
+  - `tax_summaries`
+- Pipeline fiscal completo no backend:
+  - upload de documentos
+  - classificação
+  - extração
+  - normalização em fatos fiscais
+  - review queue
+  - obrigatoriedade por exercício
+  - resumo anual snapshotado
+  - lifecycle documental (retry/delete)
+- Export oficial do dossiê fiscal:
+  - `GET /tax/export/:taxYear?format=json`
+  - `GET /tax/export/:taxYear?format=csv`
+- Manifesto mínimo no export com:
+  - `summarySnapshotVersion`
+  - `factsIncluded`
+  - `engineVersion`
+  - `dataHash`
+- Storage documental fiscal com:
+  - `TAX_DOCUMENTS_STORAGE_DIR`
+  - `TAX_DOCUMENT_MAX_FILE_SIZE_BYTES`
+
+#### Central do Leão Web (PR #290)
+
+- Nova área protegida:
+  - `/app/tax`
+  - `/app/tax/:taxYear`
+- Dashboard fiscal com:
+  - obrigatoriedade
+  - warnings
+  - snapshot anual
+  - fila de revisão
+- Upload fiscal dentro da `TaxPage`
+- Reprocessamento, exclusão e rebuild automático do summary após ações documentais
+- Download oficial de `JSON` e `CSV` via backend, substituindo o export montado localmente no frontend
+
+### Changed
+
+- A trilha fiscal passou a usar um contrato oficial de export no backend, sem side effect implícito de rebuild
+- O produto agora inclui uma frente explícita de preparação do IRPF, com guardrail claro: organiza e prepara, mas não transmite DIRPF
+
+### Quality
+
+- `npm test` na raiz verde
+- `npm run lint` na raiz verde
+- `npm run build` na raiz verde
+- API: `695/695` testes passando
+- Web: `291/291` testes passando
+
 ## [1.30.0] - 2026-03-25
 
 **Especialista IA + Metas de Poupança + Dashboard executivo**
