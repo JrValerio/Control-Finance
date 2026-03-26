@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   incomeSourcesService,
   type IncomeSourceWithDeductions,
+  type IncomeStatement,
 } from "../services/incomeSources.service";
 import { getApiErrorMessage } from "../utils/apiError";
 
@@ -15,13 +16,18 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   prefill?: IncomeStatementPrefill | null;
-  onCreated?: () => void;
+  /** When provided, automatically links the created statement to this transaction. */
+  transactionId?: number | null;
+  onCreated?: (statement: IncomeStatement) => void;
 }
+
+type LinkStatus = "idle" | "linking" | "linked" | "link_failed";
 
 export default function IncomeStatementQuickModal({
   isOpen,
   onClose,
   prefill,
+  transactionId,
   onCreated,
 }: Props) {
   const [sources, setSources] = useState<IncomeSourceWithDeductions[]>([]);
@@ -32,7 +38,9 @@ export default function IncomeStatementQuickModal({
   const [paymentDate, setPaymentDate] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [createdStatement, setCreatedStatement] = useState<IncomeStatement | null>(null);
+  const [linkStatus, setLinkStatus] = useState<LinkStatus>("idle");
+  const [linkError, setLinkError] = useState("");
 
   // Reset + fetch sources on open
   useEffect(() => {
@@ -42,12 +50,13 @@ export default function IncomeStatementQuickModal({
       setNetAmount("");
       setPaymentDate("");
       setErrorMessage("");
-      setSuccess(false);
+      setCreatedStatement(null);
+      setLinkStatus("idle");
+      setLinkError("");
       setSources([]);
       return;
     }
 
-    // Apply prefill
     setReferenceMonth(prefill?.referenceMonth ?? "");
     setNetAmount(prefill?.netAmount != null ? String(prefill.netAmount) : "");
     setPaymentDate(prefill?.paymentDate ?? "");
@@ -73,12 +82,10 @@ export default function IncomeStatementQuickModal({
       setErrorMessage("Selecione uma fonte de renda.");
       return;
     }
-
     if (!referenceMonth.trim()) {
       setErrorMessage("Informe a competência.");
       return;
     }
-
     const parsedNet = Number(netAmount);
     if (!Number.isFinite(parsedNet) || parsedNet <= 0) {
       setErrorMessage("Informe um valor líquido válido.");
@@ -88,13 +95,28 @@ export default function IncomeStatementQuickModal({
     setIsSubmitting(true);
     setErrorMessage("");
     try {
-      await incomeSourcesService.createStatement(parsedSourceId, {
+      const { statement } = await incomeSourcesService.createStatement(parsedSourceId, {
         referenceMonth: referenceMonth.trim(),
         netAmount: parsedNet,
         paymentDate: paymentDate.trim() || null,
       });
-      setSuccess(true);
-      onCreated?.();
+
+      setCreatedStatement(statement);
+      onCreated?.(statement);
+
+      // Auto-link if transactionId was supplied
+      if (transactionId) {
+        setLinkStatus("linking");
+        try {
+          await incomeSourcesService.linkTransaction(statement.id, transactionId);
+          setLinkStatus("linked");
+        } catch (linkErr) {
+          setLinkStatus("link_failed");
+          setLinkError(
+            getApiErrorMessage(linkErr, "Não foi possível vincular à transação importada."),
+          );
+        }
+      }
     } catch (err) {
       setErrorMessage(getApiErrorMessage(err, "Não foi possível registrar o lançamento."));
     } finally {
@@ -103,6 +125,8 @@ export default function IncomeStatementQuickModal({
   };
 
   if (!isOpen) return null;
+
+  const success = createdStatement !== null;
 
   return (
     <div
@@ -136,14 +160,43 @@ export default function IncomeStatementQuickModal({
         </div>
 
         {success ? (
-          <div className="rounded border border-green-200 bg-green-50 px-3 py-3 dark:border-green-800 dark:bg-green-950/40">
-            <p className="mb-3 text-sm font-semibold text-green-700 dark:text-green-400">
-              Lançamento registrado com sucesso.
-            </p>
+          <div className="space-y-2">
+            <div className="rounded border border-green-200 bg-green-50 px-3 py-3 dark:border-green-800 dark:bg-green-950/40">
+              <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                Lançamento registrado com sucesso.
+              </p>
+
+              {linkStatus === "linking" && (
+                <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                  Vinculando à transação importada...
+                </p>
+              )}
+              {linkStatus === "linked" && (
+                <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
+                  Vínculo com a transação importada confirmado.
+                </p>
+              )}
+            </div>
+
+            {linkStatus === "link_failed" && (
+              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                  Histórico registrado, mas o vínculo com a transação importada não foi concluído.
+                </p>
+                {linkError && (
+                  <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{linkError}</p>
+                )}
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Você pode vincular manualmente pelo histórico de renda.
+                </p>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={onClose}
-              className="rounded border border-green-400 bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-200 dark:border-green-700 dark:bg-green-900/40 dark:text-green-300"
+              disabled={linkStatus === "linking"}
+              className="rounded border border-green-400 bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-green-700 dark:bg-green-900/40 dark:text-green-300"
             >
               Fechar
             </button>
