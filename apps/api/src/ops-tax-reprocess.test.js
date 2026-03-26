@@ -121,15 +121,15 @@ describe("ops tax legacy reprocess", () => {
     const token = await registerAndLogin(email);
     const userId = await getUserIdByEmail(email);
 
+    const uploadResponse = await uploadInssAnnualDocument(token, "inss-legacy-dry-run.csv");
+
+    expect(uploadResponse.status).toBe(201);
+
     await dbQuery(
       `INSERT INTO user_profiles (user_id, taxpayer_cpf)
        VALUES ($1, '52998224725')`,
       [userId],
     );
-
-    const uploadResponse = await uploadInssAnnualDocument(token, "inss-legacy-dry-run.csv");
-
-    expect(uploadResponse.status).toBe(201);
 
     const response = await request(app)
       .post("/ops/tax-documents/reprocess-legacy")
