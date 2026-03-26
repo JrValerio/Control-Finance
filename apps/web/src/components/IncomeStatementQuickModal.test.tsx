@@ -31,6 +31,8 @@ const mockStatement = {
   referenceMonth: "2026-02",
   netAmount: 1412,
   totalDeductions: 0,
+  grossAmount: null,
+  details: null,
   paymentDate: null,
   status: "draft" as const,
   postedTransactionId: null,

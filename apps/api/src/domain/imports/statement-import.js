@@ -540,6 +540,13 @@ export const extractInssSuggestion = (text) => {
   const grossMatch = block.match(/101\s+valor total de mr do periodo\s+r\$\s*([\d.,]+)/i);
   const grossAmount = grossMatch ? parseSignedAmount(grossMatch[1]) : null;
 
+  // Structured deductions: consigned loans (rubrics 216/217) and card (rubric 268)
+  const loansTotal = parseRubricaTotal(block, /(?:216|217)\s+.*?r\$\s*([\d.,]+)/gi);
+  const cardTotal = parseRubricaTotal(block, /268\s+.*?r\$\s*([\d.,]+)/gi);
+  const deductions = [];
+  if (loansTotal > 0) deductions.push({ label: "emprestimo_consignado", amount: loansTotal });
+  if (cardTotal > 0) deductions.push({ label: "cartao_rmc", amount: cardTotal });
+
   return {
     type: "profile",
     benefitId,
@@ -548,6 +555,7 @@ export const extractInssSuggestion = (text) => {
     paymentDate,
     netAmount: Math.abs(netAmount),
     grossAmount: grossAmount !== null ? Math.abs(grossAmount) : null,
+    deductions,
   };
 };
 

@@ -20,6 +20,7 @@ Espécie: 21 - PENSÃO POR MORTE PREVIDENCIÁRIA
 07/04/2026
 101 VALOR TOTAL DE MR DO PERIODO R$ 4.958,67
 216 EMPRESTIMO CONSIGNADO R$ 1.200,00
+268 CARTAO RMC R$ 955,15
 `.trim();
 
 const INSS_WITHOUT_GROSS = `
@@ -70,6 +71,19 @@ describe("extractInssSuggestion", () => {
   it("tolera NB sem pontuacao", () => {
     const result = extractInssSuggestion(INSS_WITHOUT_GROSS);
     expect(result.benefitId).toMatch(/42/);
+  });
+
+  it("extrai deductions estruturadas das rubricas 216 e 268", () => {
+    const result = extractInssSuggestion(INSS_SAMPLE);
+    expect(Array.isArray(result.deductions)).toBe(true);
+    expect(result.deductions).toHaveLength(2);
+    expect(result.deductions[0]).toMatchObject({ label: "emprestimo_consignado", amount: 1200 });
+    expect(result.deductions[1]).toMatchObject({ label: "cartao_rmc", amount: 955.15 });
+  });
+
+  it("retorna deductions vazio quando nao ha rubricas de desconto", () => {
+    const result = extractInssSuggestion(INSS_WITHOUT_GROSS);
+    expect(result.deductions).toEqual([]);
   });
 });
 
