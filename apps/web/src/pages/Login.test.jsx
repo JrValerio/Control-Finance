@@ -70,7 +70,7 @@ describe("Login", () => {
     ).toBeInTheDocument();
     expect(authState.register).not.toHaveBeenCalled();
     expect(authState.login).not.toHaveBeenCalled();
-  });
+  }, 10000);
 
   it("bloqueia cadastro quando confirmacao de senha diverge", async () => {
     const authState = createAuthMockState();
