@@ -1,7 +1,7 @@
 import { dbQuery } from "../db/index.js";
 import { getPendingBillsDueByDate } from "./bills.service.js";
 
-const ENGINE_VERSION = "v1";
+const ENGINE_VERSION = "v2";
 
 const createError = (status, message) => {
   const error = new Error(message);
@@ -71,6 +71,8 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
   const mStart = monthStartStr(now);
   const mEnd = monthEndStr(now);
   const todayDay = now.getUTCDate();
+  const todayStr = now.toISOString().slice(0, 10);
+  const currentMonth = mStart.slice(0, 7); // 'YYYY-MM'
   const daysRemaining = calcDaysRemaining(now);
 
   // 1. Profile (salary + payday)
@@ -113,10 +115,41 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
   const total60d = Number(dailyResult.rows[0].total_60d);
   const dailyAvgSpending = total60d / 60;
 
-  // 4. Expected income for rest of month:
-  //    Add salary only if payday is still upcoming this month
-  const incomeAdjustment =
-    salaryMonthly != null && payday != null && payday > todayDay
+  // 4a. income_expected — competence-based: all statements for reference_month = current month
+  const stmtExpectedResult = await dbQuery(
+    `SELECT COALESCE(SUM(st.net_amount), 0) AS total
+     FROM income_statements st
+     JOIN income_sources s ON s.id = st.income_source_id
+     WHERE s.user_id = $1
+       AND st.reference_month = $2`,
+    [uid, currentMonth],
+  );
+  const statementsExpected = Number(stmtExpectedResult.rows[0].total);
+
+  // 4b. incomeAdjustment — cash-flow-based: draft statements whose payment_date
+  //     is still upcoming within the current month (posted ones already live in transactions)
+  const stmtCashResult = await dbQuery(
+    `SELECT COALESCE(SUM(st.net_amount), 0) AS total
+     FROM income_statements st
+     JOIN income_sources s ON s.id = st.income_source_id
+     WHERE s.user_id = $1
+       AND st.status = 'draft'
+       AND st.payment_date > $2
+       AND st.payment_date <= $3`,
+    [uid, todayStr, mEnd],
+  );
+  const statementsCashPending = Number(stmtCashResult.rows[0].total);
+
+  // 4c. Resolve incomeExpected and incomeAdjustment.
+  //     Statements win over salary; salary is fallback only.
+  //     Posted statements are never added to incomeAdjustment (already in incomeToDate).
+  const hasStatementsThisMonth = statementsExpected > 0;
+  const incomeExpected = hasStatementsThisMonth
+    ? statementsExpected
+    : salaryMonthly;
+  const incomeAdjustment = hasStatementsThisMonth
+    ? statementsCashPending
+    : salaryMonthly != null && payday != null && payday > todayDay
       ? salaryMonthly
       : 0;
 
@@ -164,7 +197,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
        flip_detected      = EXCLUDED.flip_detected,
        flip_direction     = EXCLUDED.flip_direction,
        generated_at       = EXCLUDED.generated_at`,
-    [uid, mStart, ENGINE_VERSION, pb, salaryMonthly, spendingToDate.toFixed(2), da, daysRemaining, flipDetected, flipDirection],
+    [uid, mStart, ENGINE_VERSION, pb, incomeExpected, spendingToDate.toFixed(2), da, daysRemaining, flipDetected, flipDirection],
   );
 
   const monthEnd = monthEndStr(now);
@@ -175,7 +208,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
     month: mStart.slice(0, 7),
     engineVersion: ENGINE_VERSION,
     projectedBalance: pb,
-    incomeExpected: salaryMonthly,
+    incomeExpected,
     spendingToDate: Number(spendingToDate.toFixed(2)),
     dailyAvgSpending: da,
     daysRemaining,
