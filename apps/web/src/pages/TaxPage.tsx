@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import TaxUploadModal, { type TaxUploadStage } from "../components/TaxUploadModal";
+import { profileService } from "../services/profile.service";
 import {
   taxService,
   type TaxDocument,
@@ -68,10 +69,14 @@ const EMPTY_OBLIGATION: TaxObligation = {
     annualTaxableIncome: 0,
     annualExemptIncome: 0,
     annualExclusiveIncome: 0,
+    annualWithheldTax: 0,
+    totalLegalDeductions: 0,
     annualCombinedExemptAndExclusiveIncome: 0,
     totalAssetBalance: 0,
   },
   approvedFactsCount: 0,
+  taxpayerCpfConfigured: false,
+  excludedFactsCount: 0,
 };
 
 const EMPTY_DOCUMENTS_PAGE: TaxDocumentsListResult = {
@@ -154,6 +159,29 @@ const formatDateTime = (value: string | null) => {
   });
 };
 
+const normalizeDocumentNumber = (value: unknown) => String(value || "").replace(/\D/g, "");
+
+const formatCpf = (value: string | null) => {
+  const digits = normalizeDocumentNumber(value);
+
+  if (digits.length !== 11) {
+    return value || "CPF não informado";
+  }
+
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+};
+
+const resolveFactOwnerDocument = (fact: TaxFact) => {
+  const metadata = fact.metadata || {};
+
+  return normalizeDocumentNumber(
+    metadata.beneficiaryDocument ||
+      metadata.customerDocument ||
+      metadata.studentDocument ||
+      metadata.ownerDocument,
+  );
+};
+
 const FactSummaryCard = ({
   title,
   value,
@@ -193,6 +221,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     pageSize: DEFAULT_FACTS_PAGE_SIZE,
     total: 0,
   });
+  const [taxpayerCpf, setTaxpayerCpf] = useState<string | null>(null);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [isRebuildingSummary, setIsRebuildingSummary] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<"json" | "csv" | null>(null);
@@ -222,7 +251,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     setIsLoadingPage(true);
     setPageError("");
 
-    const [summaryResult, obligationResult, documentsResult, factsResult] = await Promise.allSettled([
+    const [summaryResult, obligationResult, documentsResult, factsResult, profileResult] = await Promise.allSettled([
       taxService.getSummary(taxYear),
       taxService.getObligation(taxYear),
       taxService.listDocuments({
@@ -234,6 +263,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
         reviewStatus: "pending",
         pageSize: DEFAULT_FACTS_PAGE_SIZE,
       }),
+      profileService.getMe(),
     ]);
 
     const nextErrors: string[] = [];
@@ -288,6 +318,12 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       nextErrors.push(
         getApiErrorMessage(documentsResult.reason, "Não foi possível carregar os documentos do exercício."),
       );
+    }
+
+    if (profileResult.status === "fulfilled") {
+      setTaxpayerCpf(profileResult.value.profile?.taxpayerCpf ?? null);
+    } else {
+      setTaxpayerCpf(null);
     }
 
     setPageError(nextErrors[0] || "");
@@ -570,6 +606,47 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
 
   const headerCalendarYear = summary.calendarYear || obligation.calendarYear || taxYear - 1;
   const methodLabel = summary.bestMethod ? METHOD_LABELS[summary.bestMethod] : "Ainda não definido";
+  const liveTaxableIncome = obligation.totals.annualTaxableIncome;
+  const liveExemptIncome = obligation.totals.annualExemptIncome;
+  const liveExclusiveIncome = obligation.totals.annualExclusiveIncome;
+  const liveWithheldTax = obligation.totals.annualWithheldTax;
+  const liveLegalDeductions = obligation.totals.totalLegalDeductions;
+  const displayAnnualTaxableIncome =
+    summary.status === "generated" ? summary.annualTaxableIncome : liveTaxableIncome;
+  const displayAnnualExemptIncome =
+    summary.status === "generated" ? summary.annualExemptIncome : liveExemptIncome;
+  const displayAnnualExclusiveIncome =
+    summary.status === "generated" ? summary.annualExclusiveIncome : liveExclusiveIncome;
+  const displayAnnualWithheldTax =
+    summary.status === "generated" ? summary.annualWithheldTax : liveWithheldTax;
+  const displayLegalDeductions =
+    summary.status === "generated" ? summary.totalLegalDeductions : liveLegalDeductions;
+  const excludedApprovedFactsCount = Math.max(
+    summary.sourceCounts.factsApproved - obligation.approvedFactsCount,
+    0,
+  );
+  const factWarnings = [...summary.warnings];
+
+  if (!factWarnings.some((warning) => warning.code === "TAXPAYER_CPF_MISMATCH_EXCLUDED") &&
+      excludedApprovedFactsCount > 0) {
+    factWarnings.push({
+      code: "TAXPAYER_CPF_MISMATCH_EXCLUDED",
+      message:
+        excludedApprovedFactsCount === 1
+          ? "Há 1 fato aprovado com CPF diferente do titular cadastrado e ele ficou fora do cálculo oficial."
+          : `Há ${excludedApprovedFactsCount} fatos aprovados com CPF diferente do titular cadastrado e eles ficaram fora do cálculo oficial.`,
+    });
+  }
+
+  if (!factWarnings.some((warning) => warning.code === "TAXPAYER_CPF_NOT_CONFIGURED") && !taxpayerCpf) {
+    factWarnings.push({
+      code: "TAXPAYER_CPF_NOT_CONFIGURED",
+      message:
+        "Cadastre o CPF do titular em Configurações para a Central do Leão conseguir conferir a titularidade dos informes automaticamente.",
+    });
+  }
+
+  const showNoObligationInfo = !obligation.mustDeclare;
 
   return (
     <div className="min-h-screen bg-cf-bg-page px-4 py-6 sm:px-6">
@@ -661,22 +738,22 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
         <div className="grid gap-4 lg:grid-cols-4">
           <FactSummaryCard
             title="Obrigatoriedade"
-            value={obligation.mustDeclare ? "Obrigatório declarar" : "Sem gatilho objetivo"}
+            value={obligation.mustDeclare ? "Obrigatório declarar" : "Sem obrigatoriedade hoje"}
             helper={
               obligation.mustDeclare
                 ? `${obligation.reasons.length} motivo(s) ativo(s) com base em fatos revisados`
-                : "Só fatos approved/corrected entram aqui"
+                : "Mesmo isento, o espelho do exercício continua disponível"
             }
           />
           <FactSummaryCard
             title="Rendimentos Tributáveis"
-            value={formatCurrency(obligation.totals.annualTaxableIncome)}
+            value={formatCurrency(displayAnnualTaxableIncome)}
             helper="Base considerada para o gatilho principal"
           />
           <FactSummaryCard
             title="IRRF Acumulado"
-            value={formatCurrency(summary.annualWithheldTax)}
-            helper="Valor separado do imposto pela tabela"
+            value={formatCurrency(displayAnnualWithheldTax)}
+            helper="Valor separado do imposto pela tabela, mesmo abaixo do limite"
           />
           <FactSummaryCard
             title="Método Sugerido"
@@ -688,6 +765,15 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
             }
           />
         </div>
+
+        {showNoObligationInfo ? (
+          <section className="mt-4 rounded border border-sky-200 bg-sky-50 p-5">
+            <h2 className="text-lg font-bold text-sky-900">Sua situação hoje</h2>
+            <p className="mt-2 text-sm text-sky-900">
+              Pelos fatos revisados até agora, você está sem obrigatoriedade objetiva no exercício {taxYear}. Ainda assim, a Central do Leão continua mostrando seu espelho fiscal com valores tributáveis, isentos, exclusivos e IRRF para conferência.
+            </p>
+          </section>
+        ) : null}
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
           <section className="rounded border border-cf-border bg-cf-surface p-5">
@@ -710,13 +796,18 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                 helper="Sem compensar IRRF"
               />
               <FactSummaryCard
+                title="Rendimentos Isentos"
+                value={formatCurrency(displayAnnualExemptIncome)}
+                helper="Ex.: aposentadoria 65+, parcelas isentas e afins"
+              />
+              <FactSummaryCard
                 title="Exclusivos na Fonte"
-                value={formatCurrency(summary.annualExclusiveIncome)}
+                value={formatCurrency(displayAnnualExclusiveIncome)}
                 helper="Ex.: 13º e aplicações"
               />
               <FactSummaryCard
                 title="Deduções Legais"
-                value={formatCurrency(summary.totalLegalDeductions)}
+                value={formatCurrency(displayLegalDeductions)}
                 helper="Médicas e instrução já revisadas"
               />
               <FactSummaryCard
@@ -730,9 +821,13 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                 helper="Arquivos vinculados ao exercício"
               />
               <FactSummaryCard
-                title="Fatos Aprovados"
-                value={String(summary.sourceCounts.factsApproved)}
-                helper="Base que entra em obrigação e summary"
+                title="Fatos no Cálculo"
+                value={String(obligation.approvedFactsCount)}
+                helper={
+                  excludedApprovedFactsCount > 0
+                    ? `${excludedApprovedFactsCount} aprovado(s) ficaram fora por CPF divergente`
+                    : "Base que entra em obrigação e summary"
+                }
               />
             </div>
           </section>
@@ -768,7 +863,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               <p className="text-xs font-semibold uppercase text-cf-text-secondary">Motivos ativos</p>
               {obligation.reasons.length === 0 ? (
                 <p className="mt-2 text-sm text-cf-text-secondary">
-                  Ainda não há gatilho objetivo com base nos fatos revisados.
+                  Pelos fatos revisados até agora, você continua abaixo dos limites objetivos do exercício.
                 </p>
               ) : (
                 <ul className="mt-2 space-y-2">
@@ -783,11 +878,11 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
           </section>
         </div>
 
-        {summary.warnings.length > 0 ? (
+        {factWarnings.length > 0 ? (
           <section className="mt-4 rounded border border-amber-200 bg-amber-50 p-5">
-            <h2 className="text-lg font-bold text-amber-900">Warnings fiscais</h2>
+            <h2 className="text-lg font-bold text-amber-900">Alertas e observações fiscais</h2>
             <div className="mt-3 space-y-2">
-              {summary.warnings.map((warning) => (
+              {factWarnings.map((warning) => (
                 <div
                   key={warning.code}
                   className="rounded border border-amber-200 bg-white/60 px-3 py-2 text-sm text-amber-900"
@@ -947,84 +1042,109 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               </p>
             ) : (
               factsPage.items.map((fact) => (
-                <div key={fact.id} className="rounded border border-cf-border bg-cf-bg-subtle p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-cf-border bg-cf-surface px-2 py-0.5 text-xs font-semibold text-cf-text-secondary">
-                          {FACT_TYPE_LABELS[fact.factType] || fact.factType}
-                        </span>
-                        <span className="text-xs text-cf-text-secondary">#{fact.id}</span>
-                        {fact.conflictCode ? (
-                          <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                            {fact.conflictCode}
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-2 text-lg font-bold text-cf-text-primary">
-                        {formatCurrency(fact.amount)}
-                      </p>
-                      <p className="mt-1 text-sm text-cf-text-primary">
-                        {fact.payerName || "Fonte pagadora não identificada"}
-                      </p>
-                      <div className="mt-2 flex flex-wrap gap-3 text-xs text-cf-text-secondary">
-                        {fact.subcategory ? <span>Subcategoria: {fact.subcategory}</span> : null}
-                        {fact.referencePeriod ? <span>Período: {fact.referencePeriod}</span> : null}
-                        {fact.sourceDocument?.originalFileName ? (
-                          <span>Documento: {fact.sourceDocument.originalFileName}</span>
-                        ) : null}
-                      </div>
-                      {fact.conflictMessage ? (
-                        <p className="mt-2 text-xs text-amber-800">{fact.conflictMessage}</p>
-                      ) : null}
-                    </div>
+                (() => {
+                  const ownerDocument = resolveFactOwnerDocument(fact);
+                  const hasTaxpayerCpf = Boolean(taxpayerCpf);
+                  const hasOwnerDocument = Boolean(ownerDocument);
+                  const ownershipMismatch =
+                    hasTaxpayerCpf &&
+                    hasOwnerDocument &&
+                    normalizeDocumentNumber(taxpayerCpf) !== ownerDocument;
 
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void reviewFact(
-                            fact.id,
-                            {
-                              action: "approve",
-                              note: "Aprovado pela Central do Leão.",
-                            },
-                            "Fato fiscal aprovado.",
-                          )
-                        }
-                        disabled={processingFactId === fact.id}
-                        className="rounded border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Aprovar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenCorrection(fact)}
-                        disabled={processingFactId === fact.id}
-                        className="rounded border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Corrigir
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          void reviewFact(
-                            fact.id,
-                            {
-                              action: "reject",
-                              note: "Rejeitado pela Central do Leão.",
-                            },
-                            "Fato fiscal rejeitado.",
-                          )
-                        }
-                        disabled={processingFactId === fact.id}
-                        className="rounded border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Rejeitar
-                      </button>
+                  return (
+                    <div key={fact.id} className="rounded border border-cf-border bg-cf-bg-subtle p-4">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-cf-border bg-cf-surface px-2 py-0.5 text-xs font-semibold text-cf-text-secondary">
+                              {FACT_TYPE_LABELS[fact.factType] || fact.factType}
+                            </span>
+                            <span className="text-xs text-cf-text-secondary">#{fact.id}</span>
+                            {fact.conflictCode ? (
+                              <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                                {fact.conflictCode}
+                              </span>
+                            ) : null}
+                            {ownershipMismatch ? (
+                              <span className="rounded-full border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                                CPF divergente
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-2 text-lg font-bold text-cf-text-primary">
+                            {formatCurrency(fact.amount)}
+                          </p>
+                          <p className="mt-1 text-sm text-cf-text-primary">
+                            {fact.payerName || "Fonte pagadora não identificada"}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-3 text-xs text-cf-text-secondary">
+                            {fact.subcategory ? <span>Subcategoria: {fact.subcategory}</span> : null}
+                            {fact.referencePeriod ? <span>Período: {fact.referencePeriod}</span> : null}
+                            {fact.sourceDocument?.originalFileName ? (
+                              <span>Documento: {fact.sourceDocument.originalFileName}</span>
+                            ) : null}
+                            {hasOwnerDocument ? (
+                              <span>Titular do informe: {formatCpf(ownerDocument)}</span>
+                            ) : null}
+                          </div>
+                          {ownershipMismatch ? (
+                            <p className="mt-2 text-xs text-red-800">
+                              Este fato pertence a um CPF diferente do titular cadastrado ({formatCpf(taxpayerCpf)}). Mesmo aprovado, ele fica fora do cálculo oficial do IRPF até ser corrigido ou rejeitado.
+                            </p>
+                          ) : null}
+                          {fact.conflictMessage ? (
+                            <p className="mt-2 text-xs text-amber-800">{fact.conflictMessage}</p>
+                          ) : null}
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void reviewFact(
+                                fact.id,
+                                {
+                                  action: "approve",
+                                  note: "Aprovado pela Central do Leão.",
+                                },
+                                "Fato fiscal aprovado.",
+                              )
+                            }
+                            disabled={processingFactId === fact.id}
+                            className="rounded border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Aprovar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCorrection(fact)}
+                            disabled={processingFactId === fact.id}
+                            className="rounded border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Corrigir
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void reviewFact(
+                                fact.id,
+                                {
+                                  action: "reject",
+                                  note: "Rejeitado pela Central do Leão.",
+                                },
+                                "Fato fiscal rejeitado.",
+                              )
+                            }
+                            disabled={processingFactId === fact.id}
+                            className="rounded border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Rejeitar
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()
               ))
             )}
           </div>

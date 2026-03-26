@@ -100,10 +100,14 @@ export interface TaxObligation {
     annualTaxableIncome: number;
     annualExemptIncome: number;
     annualExclusiveIncome: number;
+    annualWithheldTax: number;
+    totalLegalDeductions: number;
     annualCombinedExemptAndExclusiveIncome: number;
     totalAssetBalance: number;
   };
   approvedFactsCount: number;
+  taxpayerCpfConfigured?: boolean;
+  excludedFactsCount?: number;
 }
 
 export interface TaxFact {
@@ -385,12 +389,16 @@ const normalizeObligation = (value: unknown): TaxObligation => {
       annualTaxableIncome: normalizeNumber(totals.annualTaxableIncome),
       annualExemptIncome: normalizeNumber(totals.annualExemptIncome),
       annualExclusiveIncome: normalizeNumber(totals.annualExclusiveIncome),
+      annualWithheldTax: normalizeNumber(totals.annualWithheldTax),
+      totalLegalDeductions: normalizeNumber(totals.totalLegalDeductions),
       annualCombinedExemptAndExclusiveIncome: normalizeNumber(
         totals.annualCombinedExemptAndExclusiveIncome,
       ),
       totalAssetBalance: normalizeNumber(totals.totalAssetBalance),
     },
     approvedFactsCount: normalizeNumber(raw.approvedFactsCount),
+    taxpayerCpfConfigured: Boolean(raw.taxpayerCpfConfigured),
+    excludedFactsCount: normalizeNumber(raw.excludedFactsCount),
   };
 };
 
