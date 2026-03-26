@@ -2061,6 +2061,70 @@ describe("Tax API foundation", () => {
     });
   });
 
+  it("GET /tax/export/:taxYear permite snapshot vazio quando todos os fatos aprovados ficaram fora por CPF divergente", async () => {
+    const email = "tax-export-empty-mismatch@test.dev";
+    const token = await registerAndLogin(email);
+    const userResult = await dbQuery(
+      `SELECT id
+       FROM users
+       WHERE email = $1`,
+      [email],
+    );
+    const userId = Number(userResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO tax_summaries (
+         user_id,
+         tax_year,
+         snapshot_version,
+         summary_json,
+         source_counts_json
+       )
+       VALUES ($1, 2026, 1, $2::jsonb, $3::jsonb)`,
+      [
+        userId,
+        JSON.stringify({
+          annualTaxableIncome: 0,
+          annualExclusiveIncome: 0,
+          annualWithheldTax: 0,
+          warnings: [
+            {
+              code: "TAXPAYER_CPF_MISMATCH_EXCLUDED",
+              message:
+                "Ha 3 fatos revisados com CPF divergente do titular cadastrado e eles ficaram fora do resumo anual.",
+            },
+          ],
+        }),
+        JSON.stringify({
+          documents: 1,
+          factsPending: 0,
+          factsApproved: 3,
+        }),
+      ],
+    );
+
+    const response = await request(app)
+      .get("/tax/export/2026?format=json")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    const payload = JSON.parse(response.text);
+    expect(payload.manifest.factsIncluded).toBe(0);
+    expect(payload.summary.sourceCounts).toMatchObject({
+      documents: 1,
+      factsPending: 0,
+      factsApproved: 3,
+    });
+    expect(payload.summary.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "TAXPAYER_CPF_MISMATCH_EXCLUDED",
+        }),
+      ]),
+    );
+    expect(payload.facts).toEqual([]);
+  });
+
   it("GET /tax/export/:taxYear baixa dossie JSON oficial com manifesto e facts revisados", async () => {
     const token = await registerAndLogin("tax-export-json@test.dev");
     const uploadResponse = await request(app)
