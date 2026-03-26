@@ -17,6 +17,7 @@ vi.mock("../services/tax.service", () => ({
     listDocuments: vi.fn(),
     uploadDocument: vi.fn(),
     reprocessDocument: vi.fn(),
+    deleteDocument: vi.fn(),
     getSummary: vi.fn(),
     rebuildSummary: vi.fn(),
     getObligation: vi.fn(),
@@ -164,6 +165,10 @@ describe("TaxPage", () => {
         },
       }),
     );
+    vi.mocked(taxService.deleteDocument).mockResolvedValue({
+      deletedDocumentId: 1,
+      deletedFactsCount: 1,
+    });
     vi.mocked(taxService.getSummary).mockResolvedValue(buildSummary());
     vi.mocked(taxService.getObligation).mockResolvedValue(buildObligation());
     vi.mocked(taxService.listFacts).mockResolvedValue({
@@ -299,6 +304,10 @@ describe("TaxPage", () => {
       expect(taxService.reprocessDocument).toHaveBeenCalledWith(55);
     });
 
+    await waitFor(() => {
+      expect(taxService.rebuildSummary).toHaveBeenCalledWith(2026);
+    });
+
     expect(
       (
         await screen.findAllByText(
@@ -365,5 +374,93 @@ describe("TaxPage", () => {
       ),
     ).toBeInTheDocument();
     expect(await screen.findByText("falhou.pdf")).toBeInTheDocument();
+    expect(taxService.rebuildSummary).not.toHaveBeenCalled();
+  });
+
+  it("permite tentar novamente um documento com falha e rebuilda o resumo", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(taxService.listDocuments).mockResolvedValue({
+      items: [
+        buildDocument({
+          id: 44,
+          originalFileName: "falha-retry.pdf",
+          processingStatus: "failed",
+        }),
+      ],
+      page: 1,
+      pageSize: 6,
+      total: 1,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("falha-retry.pdf")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Tentar novamente falha-retry.pdf" }));
+
+    await waitFor(() => {
+      expect(taxService.reprocessDocument).toHaveBeenCalledWith(44);
+    });
+
+    await waitFor(() => {
+      expect(taxService.rebuildSummary).toHaveBeenCalledWith(2026);
+    });
+
+    expect(
+      await screen.findByText(
+        "Documento processado novamente. Se houver fatos extraídos, eles já aparecem na fila de revisão.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("exclui documento, confirma a ação e rebuilda o resumo", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    vi.mocked(taxService.listDocuments).mockResolvedValue({
+      items: [
+        buildDocument({
+          id: 18,
+          originalFileName: "documento-errado.pdf",
+          processingStatus: "uploaded",
+        }),
+      ],
+      page: 1,
+      pageSize: 6,
+      total: 1,
+    });
+    vi.mocked(taxService.deleteDocument).mockResolvedValueOnce({
+      deletedDocumentId: 18,
+      deletedFactsCount: 2,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("documento-errado.pdf")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Excluir documento-errado.pdf" }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      "Excluir documento? Os fatos fiscais extraídos deste documento também serão apagados.",
+    );
+
+    await waitFor(() => {
+      expect(taxService.deleteDocument).toHaveBeenCalledWith(18);
+    });
+
+    await waitFor(() => {
+      expect(taxService.rebuildSummary).toHaveBeenCalledWith(2026);
+    });
+
+    expect(
+      await screen.findByText("Documento excluído. 2 fato(s) fiscal(is) vinculado(s) foram removidos."),
+    ).toBeInTheDocument();
+
+    confirmSpy.mockRestore();
   });
 });

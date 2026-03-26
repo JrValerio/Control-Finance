@@ -253,6 +253,8 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [isRebuildingSummary, setIsRebuildingSummary] = useState(false);
   const [processingFactId, setProcessingFactId] = useState<number | null>(null);
+  const [processingDocumentId, setProcessingDocumentId] = useState<number | null>(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null);
   const [isBulkApproving, setIsBulkApproving] = useState(false);
   const [pageError, setPageError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -358,6 +360,25 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     };
   }, [loadPageData]);
 
+  const refreshAfterDocumentLifecycle = useCallback(async () => {
+    let rebuildErrorMessage = "";
+
+    try {
+      await taxService.rebuildSummary(taxYear);
+    } catch (error) {
+      rebuildErrorMessage = getApiErrorMessage(
+        error,
+        "Não foi possível atualizar o resumo fiscal após a ação documental.",
+      );
+    }
+
+    await loadPageData();
+
+    if (rebuildErrorMessage) {
+      setPageError((currentError) => currentError || rebuildErrorMessage);
+    }
+  }, [loadPageData, taxYear]);
+
   const resetUploadFlow = useCallback(() => {
     setUploadStage("idle");
     setUploadStatusMessage("");
@@ -403,7 +424,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
 
       try {
         await taxService.reprocessDocument(uploadedDocument.id);
-        await loadPageData();
+        await refreshAfterDocumentLifecycle();
 
         const successLabel =
           "Documento enviado e processado. Se houver fatos extraídos, eles já aparecem na fila de revisão.";
@@ -428,6 +449,52 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       setUploadErrorMessage(
         getApiErrorMessage(uploadError, "Não foi possível enviar o documento fiscal."),
       );
+    }
+  };
+
+  const handleRetryDocument = async (document: TaxDocument) => {
+    setProcessingDocumentId(document.id);
+    setPageError("");
+
+    try {
+      await taxService.reprocessDocument(document.id);
+      await refreshAfterDocumentLifecycle();
+      showSuccess("Documento processado novamente. Se houver fatos extraídos, eles já aparecem na fila de revisão.");
+    } catch (error) {
+      await loadPageData();
+      setPageError(getApiErrorMessage(error, "Não foi possível processar novamente o documento."));
+    } finally {
+      setProcessingDocumentId(null);
+    }
+  };
+
+  const handleDeleteDocument = async (document: TaxDocument) => {
+    const shouldDelete =
+      typeof window === "undefined" || typeof window.confirm !== "function"
+        ? true
+        : window.confirm(
+            "Excluir documento? Os fatos fiscais extraídos deste documento também serão apagados.",
+          );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setDeletingDocumentId(document.id);
+    setPageError("");
+
+    try {
+      const result = await taxService.deleteDocument(document.id);
+      await refreshAfterDocumentLifecycle();
+      showSuccess(
+        result.deletedFactsCount > 0
+          ? `Documento excluído. ${result.deletedFactsCount} fato(s) fiscal(is) vinculado(s) foram removidos.`
+          : "Documento excluído.",
+      );
+    } catch (error) {
+      setPageError(getApiErrorMessage(error, "Não foi possível excluir o documento."));
+    } finally {
+      setDeletingDocumentId(null);
     }
   };
 
@@ -823,6 +890,12 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                   "border-cf-border bg-cf-bg-subtle text-cf-text-secondary";
                 const documentTypeLabel =
                   DOCUMENT_TYPE_LABELS[document.documentType] || document.documentType;
+                const canRetry =
+                  document.processingStatus === "failed" ||
+                  document.processingStatus === "uploaded";
+                const isRetryingDocument = processingDocumentId === document.id;
+                const isDeletingDocument = deletingDocumentId === document.id;
+                const isDocumentBusy = isRetryingDocument || isDeletingDocument;
 
                 return (
                   <div
@@ -855,6 +928,29 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                             Observação: {document.sourceHint}
                           </p>
                         ) : null}
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                        {canRetry ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleRetryDocument(document)}
+                            disabled={isDocumentBusy}
+                            aria-label={`Tentar novamente ${document.originalFileName}`}
+                            className="rounded border border-brand-1 px-3 py-2 text-sm font-semibold text-brand-1 hover:bg-brand-1/10 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isRetryingDocument ? "Processando..." : "Tentar novamente"}
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteDocument(document)}
+                          disabled={isDocumentBusy}
+                          aria-label={`Excluir ${document.originalFileName}`}
+                          className="rounded border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {isDeletingDocument ? "Excluindo..." : "Excluir"}
+                        </button>
                       </div>
                     </div>
                   </div>

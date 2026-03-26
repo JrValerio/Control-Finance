@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { dbQuery } from "../db/index.js";
+import { dbQuery, withDbTransaction } from "../db/index.js";
 import {
   createTaxError,
   normalizeOptionalDocumentProcessingStatus,
@@ -8,6 +8,7 @@ import {
   normalizeTaxYear,
   toISOStringOrNull,
 } from "../domain/tax/tax.validation.js";
+import { logWarn } from "../observability/logger.js";
 import {
   deleteStoredTaxDocument,
   saveTaxDocumentBuffer,
@@ -77,6 +78,33 @@ const normalizeOptionalText = (value, { maxLength, fieldName }) => {
   }
 
   return normalizedValue;
+};
+
+const TAX_DOCUMENT_SELECT_COLUMNS = `
+  id,
+  tax_year,
+  original_file_name,
+  mime_type,
+  byte_size,
+  sha256,
+  document_type,
+  processing_status,
+  source_label,
+  source_hint,
+  storage_key,
+  uploaded_at`;
+
+const findTaxDocumentRowByIdForUser = async (client, userId, documentId) => {
+  const result = await client.query(
+    `SELECT ${TAX_DOCUMENT_SELECT_COLUMNS}
+     FROM tax_documents
+     WHERE id = $1
+       AND user_id = $2
+     LIMIT 1`,
+    [documentId, userId],
+  );
+
+  return result.rows[0] || null;
 };
 
 export const listTaxDocumentsByUser = async (userId, query = {}) => {
@@ -237,26 +265,11 @@ export const createTaxDocumentForUser = async (userId, payload = {}, file) => {
 export const getTaxDocumentByIdForUser = async (userId, documentId) => {
   const normalizedUserId = normalizeTaxUserId(userId);
   const normalizedDocumentId = normalizeDocumentId(documentId);
-  const documentResult = await dbQuery(
-    `SELECT
-       id,
-       tax_year,
-       original_file_name,
-       mime_type,
-       byte_size,
-       sha256,
-       document_type,
-       processing_status,
-       source_label,
-       source_hint,
-       uploaded_at
-     FROM tax_documents
-     WHERE id = $1
-       AND user_id = $2
-     LIMIT 1`,
-    [normalizedDocumentId, normalizedUserId],
+  const document = await findTaxDocumentRowByIdForUser(
+    { query: dbQuery },
+    normalizedUserId,
+    normalizedDocumentId,
   );
-  const document = documentResult.rows[0];
 
   if (!document) {
     throw createTaxError(404, "Documento fiscal nao encontrado.");
@@ -282,5 +295,66 @@ export const getTaxDocumentByIdForUser = async (userId, documentId) => {
       ...mapTaxDocumentDetail(document),
       latestExtraction: mapLatestExtraction(extractionResult.rows[0] || null),
     },
+  };
+};
+
+export const deleteTaxDocumentByIdForUser = async (userId, documentId) => {
+  const normalizedUserId = normalizeTaxUserId(userId);
+  const normalizedDocumentId = normalizeDocumentId(documentId);
+
+  const deletedDocument = await withDbTransaction(async (client) => {
+    const existingDocument = await findTaxDocumentRowByIdForUser(
+      client,
+      normalizedUserId,
+      normalizedDocumentId,
+    );
+
+    if (!existingDocument) {
+      throw createTaxError(404, "Documento fiscal nao encontrado.");
+    }
+
+    const deletedFactsResult = await client.query(
+      `DELETE FROM tax_facts
+       WHERE user_id = $1
+         AND source_document_id = $2
+       RETURNING id`,
+      [normalizedUserId, normalizedDocumentId],
+    );
+
+    const deletedDocumentResult = await client.query(
+      `DELETE FROM tax_documents
+       WHERE id = $1
+         AND user_id = $2
+       RETURNING id, storage_key`,
+      [normalizedDocumentId, normalizedUserId],
+    );
+
+    if (!deletedDocumentResult.rows[0]) {
+      throw createTaxError(404, "Documento fiscal nao encontrado.");
+    }
+
+    return {
+      deletedDocumentId: Number(deletedDocumentResult.rows[0].id),
+      deletedFactsCount: deletedFactsResult.rows.length,
+      storageKey: deletedDocumentResult.rows[0].storage_key,
+    };
+  });
+
+  try {
+    await deleteStoredTaxDocument(deletedDocument.storageKey);
+  } catch (error) {
+    logWarn({
+      event: "tax_documents.storage_cleanup_failed",
+      message: "Failed to remove stored tax document after metadata deletion.",
+      userId: normalizedUserId,
+      documentId: normalizedDocumentId,
+      storageKey: deletedDocument.storageKey,
+      error: error?.message || "unknown_storage_cleanup_error",
+    });
+  }
+
+  return {
+    deletedDocumentId: deletedDocument.deletedDocumentId,
+    deletedFactsCount: deletedDocument.deletedFactsCount,
   };
 };

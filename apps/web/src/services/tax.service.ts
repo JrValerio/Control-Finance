@@ -43,6 +43,11 @@ export interface TaxDocumentsListResult {
   total: number;
 }
 
+export interface TaxDocumentDeleteResult {
+  deletedDocumentId: number;
+  deletedFactsCount: number;
+}
+
 export interface TaxSummaryWarning {
   code: string;
   message: string;
@@ -439,6 +444,16 @@ export const taxService = {
   ): Promise<TaxDocumentDetail> => {
     const { data } = await api.post(`/tax/documents/${documentId}/reprocess`, payload);
     return normalizeTaxDocumentDetail(normalizeObject(data).document);
+  },
+
+  deleteDocument: async (documentId: number): Promise<TaxDocumentDeleteResult> => {
+    const { data } = await api.delete(`/tax/documents/${documentId}`);
+    const raw = normalizeObject(data);
+
+    return {
+      deletedDocumentId: normalizeNumber(raw.deletedDocumentId),
+      deletedFactsCount: normalizeNumber(raw.deletedFactsCount),
+    };
   },
 
   getSummary: async (taxYear: number): Promise<TaxSummary> => {

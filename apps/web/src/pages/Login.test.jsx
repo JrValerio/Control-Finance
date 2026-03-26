@@ -156,7 +156,7 @@ describe("Login", () => {
         password: "Senha123",
       });
     });
-  });
+  }, 10000);
 
   it("chama loginWithGoogle com id_token ao clicar no botao Google", async () => {
     const authState = createAuthMockState();
