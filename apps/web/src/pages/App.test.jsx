@@ -331,6 +331,18 @@ describe("App", () => {
     });
   });
 
+  it("abre a Central do Leão pelo atalho do dashboard", async () => {
+    const user = userEvent.setup();
+    const onOpenTax = vi.fn();
+
+    render(<App onOpenTax={onOpenTax} />);
+
+    await screen.findByText("Resumo financeiro");
+    await user.click(screen.getByRole("button", { name: "Central do Leão" }));
+
+    expect(onOpenTax).toHaveBeenCalledTimes(1);
+  });
+
   it("carrega transacoes paginadas da API ao iniciar", async () => {
     transactionsService.listPage.mockResolvedValueOnce(
       buildPageResponse(
