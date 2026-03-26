@@ -234,6 +234,72 @@ const parseCustomerInfo = (lineEntries) => {
   };
 };
 
+const extractMoneyValuesFromLine = (value) => {
+  const matches = String(value || "").match(/\d[\d.]*,\d{2}/g) || [];
+
+  return matches
+    .map((match) => parseSignedAmount(match))
+    .filter((amount) => amount !== null);
+};
+
+const isMoneyOnlyLine = (value) => /^\d[\d.]*,\d{2}$/.test(String(value || "").trim());
+
+const extractAmountFromMatchingLineEntries = (lineEntries, matcher) => {
+  for (let index = 0; index < lineEntries.length; index += 1) {
+    const entry = lineEntries[index];
+
+    if (!matcher.test(entry.normalized)) {
+      continue;
+    }
+
+    const sameLineAmounts = extractMoneyValuesFromLine(entry.raw);
+
+    if (sameLineAmounts.length > 0) {
+      return Math.abs(sameLineAmounts[sameLineAmounts.length - 1]);
+    }
+
+    const previousRaw = lineEntries[index - 1]?.raw;
+    const nextRaw = lineEntries[index + 1]?.raw;
+    const nextLineAmounts = extractMoneyValuesFromLine(nextRaw);
+
+    if (nextLineAmounts.length > 0) {
+      return Math.abs(nextLineAmounts[nextLineAmounts.length - 1]);
+    }
+
+    if (isMoneyOnlyLine(previousRaw)) {
+      return Math.abs(parseSignedAmount(previousRaw));
+    }
+
+    if (isMoneyOnlyLine(nextRaw)) {
+      return Math.abs(parseSignedAmount(nextRaw));
+    }
+  }
+
+  return null;
+};
+
+const findNextRawLineByMatcher = (lineEntries, startIndex, matcher) => {
+  for (let index = Math.max(startIndex, 0); index < lineEntries.length; index += 1) {
+    if (matcher.test(lineEntries[index].normalized)) {
+      return lineEntries[index].raw;
+    }
+  }
+
+  return null;
+};
+
+const findNextValueAfterLabel = (lineEntries, startIndex, matcher) => {
+  const labelIndex = lineEntries.findIndex(
+    (entry, index) => index >= Math.max(startIndex, 0) && matcher.test(entry.normalized),
+  );
+
+  if (labelIndex < 0) {
+    return null;
+  }
+
+  return lineEntries[labelIndex + 1]?.raw?.trim() || null;
+};
+
 const extractAnnualInssIncomeReport = (text) => {
   const normalizedText = normalizeText(text);
   const collapsedText = normalizedText.replace(/\s+/g, " ");
@@ -246,6 +312,9 @@ const extractAnnualInssIncomeReport = (text) => {
   }
 
   const lineEntries = getLineEntries(text);
+  const beneficiarySectionIndex = lineEntries.findIndex((entry) =>
+    entry.normalized.includes("2 - pessoa fisica beneficiaria"),
+  );
   const payerLine = lineEntries.find((entry) =>
     /\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/.test(entry.raw),
   );
@@ -261,6 +330,40 @@ const extractAnnualInssIncomeReport = (text) => {
     /(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\s+(.+?)\s+(\d{8,})$/,
   );
   const natureMatch = natureLine?.raw.match(/^(\d{4})[-–](.+)$/);
+  const payerDocumentFallback = findNextValueAfterLabel(
+    lineEntries,
+    0,
+    /^cnpj\/cpf:$/i,
+  );
+  const payerNameFallback = findNextValueAfterLabel(
+    lineEntries,
+    0,
+    /^nome da empresa\/nome completo:$/i,
+  );
+  const beneficiaryDocumentFallback = findNextValueAfterLabel(
+    lineEntries,
+    beneficiarySectionIndex,
+    /^cpf:$/i,
+  );
+  const beneficiaryNameFallback = findNextValueAfterLabel(
+    lineEntries,
+    beneficiarySectionIndex,
+    /^nome completo:$/i,
+  );
+  const benefitNumberFallback = findNextValueAfterLabel(
+    lineEntries,
+    beneficiarySectionIndex,
+    /^numero do beneficio:$/i,
+  );
+  const incomeNatureFallback = findNextValueAfterLabel(
+    lineEntries,
+    beneficiarySectionIndex,
+    /^natureza do rendimento:$/i,
+  );
+  const incomeNatureFallbackMatch = incomeNatureFallback?.match(/^(\d{4})\s*[-–]\s*(.+)$/);
+  const extractAnnualInssAmount = (patterns, lineMatcher) =>
+    extractAmountByPatterns(normalizedText, patterns) ??
+    extractAmountFromMatchingLineEntries(lineEntries, lineMatcher);
 
   return {
     extractorName: "income-report-inss",
@@ -268,40 +371,70 @@ const extractAnnualInssIncomeReport = (text) => {
     payload: {
       reportProfile: "annual",
       reportYear: extractCalendarYear(text),
-      payerName: payerMatch?.[2]?.trim() || "INSS",
-      payerDocument: payerMatch?.[1]?.trim() || null,
-      beneficiaryName: beneficiaryMatch?.[2]?.trim() || null,
-      beneficiaryDocument: beneficiaryMatch?.[1]?.trim() || null,
-      benefitNumber: beneficiaryMatch?.[3]?.trim() || null,
-      incomeNatureCode: natureMatch?.[1]?.trim() || null,
-      incomeNatureDescription: natureMatch?.[2]?.trim() || null,
-      taxableIncome: extractAmountByPatterns(normalizedText, [
+      payerName: payerMatch?.[2]?.trim() || payerNameFallback || "INSS",
+      payerDocument: payerMatch?.[1]?.trim() || payerDocumentFallback || null,
+      beneficiaryName: beneficiaryMatch?.[2]?.trim() || beneficiaryNameFallback || null,
+      beneficiaryDocument:
+        beneficiaryMatch?.[1]?.trim() || beneficiaryDocumentFallback || null,
+      benefitNumber: beneficiaryMatch?.[3]?.trim() || benefitNumberFallback || null,
+      incomeNatureCode:
+        natureMatch?.[1]?.trim() || incomeNatureFallbackMatch?.[1]?.trim() || null,
+      incomeNatureDescription:
+        natureMatch?.[2]?.trim() || incomeNatureFallbackMatch?.[2]?.trim() || null,
+      taxableIncome: extractAnnualInssAmount(
+        [
         /1\.\s*total dos rendimentos \(inclusive ferias\)\s+([\d.]*,\d{2})/i,
-      ]),
-      officialSocialSecurity: extractAmountByPatterns(normalizedText, [
+      ],
+        /1\s*-\s*total de rendimentos \(inclusive ferias\)$/i,
+      ),
+      officialSocialSecurity: extractAnnualInssAmount(
+        [
         /2\.\s*contribuicao previdenciaria oficial\s+([\d.]*,\d{2})/i,
-      ]),
-      privatePensionOrFapi: extractAmountByPatterns(normalizedText, [
+      ],
+        /2\s*-\s*contribuicao previdenciaria oficial$/i,
+      ),
+      privatePensionOrFapi: extractAnnualInssAmount(
+        [
         /3\.\s*contribuicoes a entidades de previdencia complementar.*?\s+([\d.]*,\d{2})/i,
-      ]),
-      alimony: extractAmountByPatterns(normalizedText, [
+      ],
+        /3\s*-\s*contribuic(?:ao|oes).+fapi\)$/i,
+      ),
+      alimony: extractAnnualInssAmount(
+        [
         /4\.\s*pensao alimenticia.*?\s+([\d.]*,\d{2})/i,
-      ]),
-      withheldTax: extractAmountByPatterns(normalizedText, [
+      ],
+        /4\s*-\s*pensao alimenticia/i,
+      ),
+      withheldTax: extractAnnualInssAmount(
+        [
         /5\.\s*imposto sobre a renda retido na fonte\s+([\d.]*,\d{2})/i,
-      ]),
-      retirement65PlusExempt: extractAmountByPatterns(normalizedText, [
+      ],
+        /5\s*-\s*imposto retido na fonte$/i,
+      ),
+      retirement65PlusExempt: extractAnnualInssAmount(
+        [
         /1\.\s*parcela isenta dos proventos de aposentadoria.*?\s+([\d.]*,\d{2})/i,
-      ]),
-      retirement65PlusThirteenthExempt: extractAmountByPatterns(normalizedText, [
+      ],
+        /1\s*-\s*parcela isenta dos proventos de aposentadoria/i,
+      ),
+      retirement65PlusThirteenthExempt: extractAnnualInssAmount(
+        [
         /2\.\s*parcela isenta do 13o salario.*?\s+([\d.]*,\d{2})/i,
-      ]),
-      thirteenthSalary: extractAmountByPatterns(normalizedText, [
+      ],
+        /2\.\s*parcela isenta do 13o salario/i,
+      ),
+      thirteenthSalary: extractAnnualInssAmount(
+        [
         /1\.\s*decimo terceiro salario\s+([\d.]*,\d{2})/i,
-      ]),
-      thirteenthWithheldTax: extractAmountByPatterns(normalizedText, [
+      ],
+        /1\s*-\s*decimo terceiro salario$/i,
+      ),
+      thirteenthWithheldTax: extractAnnualInssAmount(
+        [
         /2\.\s*imposto sobre a renda retido na fonte sobre 13o salario\s+([\d.]*,\d{2})/i,
-      ]),
+      ],
+        /2\s*-\s*imposto sobre a renda retida? na fonte sobre o 13o salario$/i,
+      ),
       annualSimplifiedDiscount: extractAmountByPatterns(normalizedText, [
         /desconto simplificado.*?valor anual r\$\s*([\d.]*,\d{2})/i,
       ]),

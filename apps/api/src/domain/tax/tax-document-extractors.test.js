@@ -82,6 +82,65 @@ describe("tax document extractors", () => {
     expect(result.payload.thirteenthSalary).toBe(2868.57);
   });
 
+  it("extrai payload anual do INSS no layout com valores antes do rotulo", () => {
+    const result = runTaxExtractorForDocument({
+      documentType: "income_report_inss",
+      text: [
+        "Ministerio da Fazenda - Secretaria da Receita",
+        "Federal do Brasil - Imposto sobre a Renda da",
+        "Pessoa Fisica - Exercicio 2026",
+        "Comprovante de Rendimentos Pagos e de",
+        "Imposto sobre a Renda Retido na Fonte",
+        "Ano-Calendario 2025",
+        "1 - Fonte Pagadora Pessoa Fisica ou Juridica",
+        "CNPJ/CPF:",
+        "16.727.230/0001-97",
+        "Nome da Empresa/Nome Completo:",
+        "Fundo do Regime Geral de Previdencia Social - FRGPS",
+        "2 - Pessoa Fisica Beneficiaria dos Rendimentos",
+        "CPF:",
+        "433.427.604-00",
+        "Nome Completo:",
+        "MARIA EDLEUSA MONSAO DA SILVA",
+        "Numero do Beneficio:",
+        "177.682.989-9",
+        "Natureza do Rendimento:",
+        "3533 - Proventos de Aposentadoria, Reserva, Reforma ou Pensao Pagos pela Previdencia",
+        "3 - Rendimentos Tributaveis, Deducoes e Imposto Retido na Fonte: Valores em Reais",
+        "0,00  3 - Contribuicao a Previdencia Privada e ao Fundo de Aposentadoria Programada Individual (FAPI)",
+        "0,00  2 - Contribuicao Previdenciaria Oficial",
+        "34287,13  1 - Total de Rendimentos (inclusive ferias)",
+        "13,36  5 - Imposto Retido na Fonte",
+        "0,00  4 - Pensao Alimenticia (Informar o beneficiario no quadro 7)",
+        "4 - Rendimentos Isentos e Nao Tributaveis",
+        "22847,76",
+        "1 - Parcela Isenta dos Proventos de Aposentadoria, Reserva, Reforma e Pensao (65 anos ou mais),",
+        "exceto a parcela isenta do 13o (decimo terceiro) salario.",
+        "2. Parcela isenta do 13o salario de aposentadoria, reserva remunerada, reforma e pensao (65 anos",
+        "ou mais). 1903,98",
+        "5 - Rendimentos Sujeitos a Tributacao Exclusiva (rendimento liquido)",
+        "0,00  2 - Imposto sobre a renda retida na fonte sobre o 13o salario",
+        "2868,57  1 - Decimo Terceiro Salario",
+        "7 - Informacoes Complementares",
+        "1- Desconto Simplificado (MP n. 1.171/2023) - Valor anual R$ 7.074,40. Valor de 13o R$ 607,20",
+      ].join("\n"),
+    });
+
+    expect(result.extractorName).toBe("income-report-inss");
+    expect(result.payload.reportProfile).toBe("annual");
+    expect(result.payload.reportYear).toBe(2025);
+    expect(result.payload.payerDocument).toBe("16.727.230/0001-97");
+    expect(result.payload.beneficiaryDocument).toBe("433.427.604-00");
+    expect(result.payload.benefitNumber).toBe("177.682.989-9");
+    expect(result.payload.incomeNatureCode).toBe("3533");
+    expect(result.payload.taxableIncome).toBe(34287.13);
+    expect(result.payload.withheldTax).toBe(13.36);
+    expect(result.payload.retirement65PlusExempt).toBe(22847.76);
+    expect(result.payload.retirement65PlusThirteenthExempt).toBe(1903.98);
+    expect(result.payload.thirteenthSalary).toBe(2868.57);
+    expect(result.payload.thirteenthWithheldTax).toBe(0);
+  });
+
   it("extrai sugestao estruturada do INSS", () => {
     const result = runTaxExtractorForDocument({
       documentType: "income_report_inss",
