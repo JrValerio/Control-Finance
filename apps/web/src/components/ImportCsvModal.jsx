@@ -102,6 +102,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     return (dryRunResult?.summary?.duplicateRows || 0) > 0;
   }, [dryRunResult]);
 
+  const hasConflicts = useMemo(() => {
+    return (dryRunResult?.summary?.conflictRows || 0) > 0;
+  }, [dryRunResult]);
+
   const documentTypeBadge = useMemo(() => {
     switch (dryRunResult?.documentType) {
       case "bank_statement":
@@ -596,7 +600,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
               </div>
             ) : null}
 
-            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-7">
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Total</p>
                 <p className="text-sm font-semibold text-cf-text-primary">{dryRunResult.summary.totalRows}</p>
@@ -612,6 +616,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
               <div className={`rounded border px-3 py-2 ${hasDuplicates ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40" : "border-cf-border bg-cf-bg-subtle"}`}>
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Duplicadas</p>
                 <p className={`text-sm font-semibold ${hasDuplicates ? "text-red-600 dark:text-red-400" : "text-cf-text-primary"}`}>{dryRunResult.summary.duplicateRows ?? 0}</p>
+              </div>
+              <div className={`rounded border px-3 py-2 ${hasConflicts ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40" : "border-cf-border bg-cf-bg-subtle"}`}>
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Conflitos</p>
+                <p className={`text-sm font-semibold ${hasConflicts ? "text-amber-700 dark:text-amber-400" : "text-cf-text-primary"}`}>{dryRunResult.summary.conflictRows ?? 0}</p>
               </div>
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Entradas</p>
@@ -713,6 +721,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                                 ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
                                 : row.status === "duplicate"
                                   ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                                  : row.status === "conflict"
+                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
                                   : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
                             }`}
                           >
@@ -720,10 +730,12 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                               ? "Valida"
                               : row.status === "duplicate"
                                 ? "Duplicada"
+                                : row.status === "conflict"
+                                  ? "Conflito"
                                 : "Invalida"}
                           </span>
-                          {row.status === "duplicate" && (
-                            <span className="ml-1.5 text-xs text-cf-text-secondary">já existe</span>
+                          {(row.status === "duplicate" || row.status === "conflict") && row.statusDetail && (
+                            <span className="ml-1.5 text-xs text-cf-text-secondary">{row.statusDetail}</span>
                           )}
                         </td>
                         <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
@@ -809,6 +821,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                         <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
                           {row.errors.length > 0
                             ? row.errors.map((error) => error.message).join(" | ")
+                            : row.statusDetail
+                              ? row.statusDetail
                             : "-"}
                         </td>
                       </tr>

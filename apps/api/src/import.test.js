@@ -457,6 +457,7 @@ describe("transaction imports", () => {
       validRows: 2,
       invalidRows: 0,
       duplicateRows: 0,
+      conflictRows: 0,
       income: 2812.99,
       expense: 15.98,
     });
@@ -491,6 +492,7 @@ describe("transaction imports", () => {
       validRows: 2,
       invalidRows: 0,
       duplicateRows: 0,
+      conflictRows: 0,
       income: 2812.99,
       expense: 15.98,
     });
@@ -615,6 +617,7 @@ describe("transaction imports", () => {
       validRows: 2,
       invalidRows: 2,
       duplicateRows: 0,
+      conflictRows: 0,
       income: 1000,
       expense: 220.5,
     });
@@ -737,6 +740,7 @@ describe("transaction imports", () => {
       validRows: 0,
       invalidRows: 2,
       duplicateRows: 0,
+      conflictRows: 0,
       income: 0,
       expense: 0,
     });
@@ -1026,6 +1030,87 @@ describe("transaction imports", () => {
     expect(second.body.summary.duplicateRows).toBe(1);
     expect(second.body.rows[0].status).toBe("duplicate");
     expect(second.body.rows[0].normalized).toBeNull();
+  });
+
+  it("POST /transactions/import/dry-run marca conflito quando credito bancario bate com historico de renda", async () => {
+    const email = "import-income-conflict@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    await makeProUser(email);
+
+    const sourceResponse = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "INSS Beneficio",
+      });
+
+    expect(sourceResponse.status).toBe(201);
+
+    const statementResponse = await request(app)
+      .post(`/income-sources/${sourceResponse.body.id}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-03",
+        netAmount: 1412,
+        paymentDate: "2026-03-05",
+      });
+
+    expect(statementResponse.status).toBe(201);
+
+    const csv = csvFile(
+      [
+        "date,type,value,description,notes,category",
+        "2026-03-06,Entrada,1412,CREDITO BENEFICIO INSS,,",
+      ].join("\n"),
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary).toEqual({
+      totalRows: 1,
+      validRows: 0,
+      invalidRows: 0,
+      duplicateRows: 0,
+      conflictRows: 1,
+      income: 0,
+      expense: 0,
+    });
+    expect(response.body.rows[0]).toMatchObject({
+      line: 2,
+      status: "conflict",
+      normalized: null,
+      statusDetail: "INSS Beneficio ja registrado no historico de renda (2026-03, 2026-03-05).",
+      conflict: {
+        type: "income_statement",
+        statementId: statementResponse.body.statement.id,
+        sourceName: "INSS Beneficio",
+        referenceMonth: "2026-03",
+        paymentDate: "2026-03-05",
+        netAmount: 1412,
+        status: "draft",
+        postedTransactionId: null,
+      },
+    });
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: response.body.importId });
+
+    expect(commitResponse.status).toBe(200);
+    expect(commitResponse.body.imported).toBe(0);
+
+    const userId = await getUserIdByEmail(email);
+    const transactionCountResult = await dbQuery(
+      `SELECT COUNT(*)::int AS count FROM transactions WHERE user_id = $1`,
+      [userId],
+    );
+
+    expect(Number(transactionCountResult.rows[0].count)).toBe(0);
   });
 
   it("POST /transactions/import/commit nao insere duplicatas mesmo se sessao foi criada antes do primeiro commit", async () => {
