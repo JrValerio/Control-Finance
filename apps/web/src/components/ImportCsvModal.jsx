@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { transactionsService } from "../services/transactions.service";
 import { profileService } from "../services/profile.service";
+import { forecastService } from "../services/forecast.service";
 import { categoriesService } from "../services/categories.service";
 import { formatCurrency } from "../utils/formatCurrency";
 import { getApiErrorMessage } from "../utils/apiError";
@@ -19,6 +20,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   const [showProfileConfirm, setShowProfileConfirm] = useState(false);
   const [isApplyingProfile, setIsApplyingProfile] = useState(false);
   const [profileApplied, setProfileApplied] = useState(false);
+  const [profileSuggestionDismissed, setProfileSuggestionDismissed] = useState(false);
+  const [planningUpdateError, setPlanningUpdateError] = useState("");
   const [categories, setCategories] = useState([]);
   // categoryOverrides: Record<line, categoryId | null>
   const [categoryOverrides, setCategoryOverrides] = useState({});
@@ -53,6 +56,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setShowProfileConfirm(false);
     setIsApplyingProfile(false);
     setProfileApplied(false);
+    setProfileSuggestionDismissed(false);
+    setPlanningUpdateError("");
     setCategoryOverrides({});
     setInlineCreate(null);
     setInlineCreateName("");
@@ -211,9 +216,21 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     if (!profilePatch) return;
     setIsApplyingProfile(true);
     setErrorMessage("");
+    setPlanningUpdateError("");
     try {
       await profileService.updateProfile(profilePatch);
+      try {
+        await forecastService.recompute();
+      } catch (forecastError) {
+        setPlanningUpdateError(
+          getApiErrorMessage(
+            forecastError,
+            "Perfil atualizado, mas nao foi possivel atualizar o planejamento agora.",
+          ),
+        );
+      }
       setProfileApplied(true);
+      setProfileSuggestionDismissed(false);
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Não foi possível atualizar o perfil."));
     } finally {
@@ -517,11 +534,30 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                     <li key={line} className="text-xs text-blue-700 dark:text-blue-300">{line}</li>
                   ))}
                 </ul>
-                {suggestionCard.kind === "profile" && profilePatch && !profileApplied ? (
+                {suggestionCard.kind === "profile" && !incomeStatementCreated ? (
+                  <p className="mb-2 text-xs text-blue-700 dark:text-blue-300">
+                    Depois de usar este documento na sua renda, o app pode sugerir uma atualizacao
+                    do perfil financeiro e do planejamento.
+                  </p>
+                ) : null}
+                {suggestionCard.kind === "profile" && !incomeStatementCreated ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsIncomeModalOpen(true)}
+                    className="mt-1 rounded border border-blue-400 bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/40"
+                  >
+                    Usar este documento na minha renda
+                  </button>
+                ) : null}
+                {suggestionCard.kind === "profile" &&
+                incomeStatementCreated &&
+                profilePatch &&
+                !profileApplied &&
+                !profileSuggestionDismissed ? (
                   showProfileConfirm ? (
                     <div className="mt-2 rounded border border-blue-300 bg-blue-100 px-3 py-2 dark:border-blue-700 dark:bg-blue-900/40">
                       <p className="mb-2 text-xs font-semibold text-blue-800 dark:text-blue-200">
-                        Confirmar atualização do perfil?
+                        Confirmar atualização do perfil e do planejamento?
                       </p>
                       <ul className="mb-3 space-y-0.5">
                         {profilePatch.salary_monthly != null && (
@@ -550,38 +586,61 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                           disabled={isApplyingProfile}
                           className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-300 disabled:opacity-60"
                         >
-                          Cancelar
+                          Revisar depois
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowProfileConfirm(true)}
-                      className="mt-1 rounded border border-blue-400 bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/40"
-                    >
-                      Atualizar perfil com esses dados
-                    </button>
+                    <div className="mt-2 rounded border border-blue-300 bg-blue-100 px-3 py-2 dark:border-blue-700 dark:bg-blue-900/40">
+                      <p className="mb-2 text-xs font-semibold text-blue-800 dark:text-blue-200">
+                        Renda estruturada confirmada. Deseja atualizar seu perfil e o planejamento
+                        com esses dados?
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowProfileConfirm(true)}
+                          className="rounded border border-blue-400 bg-blue-600 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-700 dark:border-blue-500"
+                        >
+                          Atualizar perfil e planejamento
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setProfileSuggestionDismissed(true);
+                            setShowProfileConfirm(false);
+                          }}
+                          className="rounded border border-blue-300 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:text-blue-300"
+                        >
+                          Ignorar
+                        </button>
+                      </div>
+                    </div>
                   )
                 ) : null}
                 {suggestionCard.kind === "profile" && profileApplied ? (
-                  <p className="mt-1 text-xs font-semibold text-green-600 dark:text-green-400">
-                    Perfil atualizado com sucesso.
-                  </p>
-                ) : null}
-                {suggestionCard.kind === "profile" && !incomeStatementCreated ? (
-                  <button
-                    type="button"
-                    onClick={() => setIsIncomeModalOpen(true)}
-                    className="mt-1 rounded border border-blue-400 bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/40"
-                  >
-                    Usar este documento na minha renda
-                  </button>
+                  <div className="mt-1 space-y-1">
+                    <p className="text-xs font-semibold text-green-600 dark:text-green-400">
+                      Perfil e planejamento atualizados com sucesso.
+                    </p>
+                    {planningUpdateError ? (
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                        {planningUpdateError}
+                      </p>
+                    ) : null}
+                  </div>
                 ) : null}
                 {suggestionCard.kind === "profile" && incomeStatementCreated ? (
-                  <p className="mt-1 text-xs font-semibold text-green-600 dark:text-green-400">
-                    Lançamento registrado no histórico de renda.
-                  </p>
+                  <div className="mt-1 space-y-1">
+                    <p className="text-xs font-semibold text-green-600 dark:text-green-400">
+                      Lancamento registrado no historico de renda.
+                    </p>
+                    {profileSuggestionDismissed && !profileApplied ? (
+                      <p className="text-xs font-medium text-cf-text-secondary">
+                        Sugestao de atualizacao ignorada por enquanto.
+                      </p>
+                    ) : null}
+                  </div>
                 ) : null}
                 {suggestionCard.kind === "bill" && !billCreated ? (
                   <button
