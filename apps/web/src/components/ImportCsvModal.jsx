@@ -188,6 +188,14 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     };
   }, [dryRunResult]);
 
+  // First Entrada transaction created by the last commit — used for auto-link
+  const incomeTransactionId = useMemo(() => {
+    const txs = lastCommitResult?.createdTransactions;
+    if (!Array.isArray(txs)) return null;
+    return txs.find((tx) => tx.type === "Entrada")?.id ?? null;
+  }, [lastCommitResult]);
+
+
   const handleApplyProfile = async () => {
     if (!profilePatch) return;
     setIsApplyingProfile(true);
@@ -822,6 +830,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
         isOpen={isIncomeModalOpen}
         onClose={() => setIsIncomeModalOpen(false)}
         prefill={incomePrefill}
+        transactionId={incomeTransactionId}
         onCreated={() => {
           setIsIncomeModalOpen(false);
           setIncomeStatementCreated(true);
