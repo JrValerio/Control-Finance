@@ -7,6 +7,17 @@ const DUPLICATE_FACT_CONFLICT_CODE = "TAX_FACT_DUPLICATE";
 const buildDuplicateConflictMessage = () =>
   "Fato potencialmente duplicado com outro documento fiscal do usuario.";
 
+const buildFactIdentityKey = (fact) =>
+  [
+    String(fact.dedupeKey || fact.dedupe_key || ""),
+    String(fact.dedupeStrength || fact.dedupe_strength || ""),
+    String(fact.factType || fact.fact_type || ""),
+    String(fact.subcategory || ""),
+    Number(fact.amount || 0).toFixed(2),
+    String(fact.referencePeriod || fact.reference_period || ""),
+    String(fact.conflictCode || fact.conflict_code || ""),
+  ].join("|");
+
 const buildExistingStrongFactsQuery = (dedupeKeys) => {
   const placeholders = dedupeKeys.map((_, index) => `$${index + 2}`).join(", ");
 
@@ -88,10 +99,35 @@ const buildConflictFact = (fact, existingStrongFact) => ({
   },
 });
 
+const applyPreviousReviewState = (fact, previousFactsByIdentity) => {
+  const previousFact = previousFactsByIdentity.get(buildFactIdentityKey(fact));
+
+  if (!previousFact) {
+    return fact;
+  }
+
+  return {
+    ...fact,
+    reviewStatus: previousFact.review_status,
+  };
+};
+
+export const buildNormalizedFactsFromExtraction = ({
+  userId,
+  document,
+  extraction,
+}) =>
+  normalizeTaxExtractionToFacts({
+    userId,
+    document,
+    extraction,
+  });
+
 export const normalizeProcessedTaxDocument = async ({
   userId,
   document,
   extraction,
+  precomputedFacts = null,
 }) => {
   const normalizedUserId = normalizeTaxUserId(userId);
 
@@ -99,16 +135,39 @@ export const normalizeProcessedTaxDocument = async ({
     throw createTaxError(400, "Documento fiscal invalido para normalizacao.");
   }
 
-  const normalizedFacts = normalizeTaxExtractionToFacts({
-    userId: normalizedUserId,
-    document,
-    extraction,
-  });
+  const normalizedFacts = Array.isArray(precomputedFacts)
+    ? precomputedFacts
+    : buildNormalizedFactsFromExtraction({
+        userId: normalizedUserId,
+        document,
+        extraction,
+      });
   const dedupeKeys = [...new Set(normalizedFacts.map((fact) => fact.dedupeKey).filter(Boolean))];
 
   await withDbTransaction(async (client) => {
-    // Enquanto ainda nao existe review queue, reprocessar um documento deve recriar
-    // integralmente os fatos dele sem acumular duplicatas do mesmo source_document_id.
+    const existingDocumentFactsResult = await client.query(
+      `SELECT
+         fact_type,
+         subcategory,
+         amount,
+         reference_period,
+         dedupe_key,
+         dedupe_strength,
+         review_status,
+         conflict_code
+       FROM tax_facts
+       WHERE user_id = $1
+         AND source_document_id = $2`,
+      [normalizedUserId, document.id],
+    );
+    const previousFactsByIdentity = existingDocumentFactsResult.rows.reduce((accumulator, row) => {
+      accumulator.set(buildFactIdentityKey(row), row);
+      return accumulator;
+    }, new Map());
+
+    // Reprocessar um documento recria integralmente os fatos do mesmo
+    // source_document_id, preservando o review_status quando a identidade
+    // logica do fato continua a mesma no pipeline novo.
     await client.query(
       `DELETE FROM tax_facts
        WHERE user_id = $1
@@ -135,11 +194,17 @@ export const normalizeProcessedTaxDocument = async ({
       const existingStrongFact = existingStrongFactsByKey.get(fact.dedupeKey);
 
       if (existingStrongFact) {
-        await insertTaxFact(client, buildConflictFact(fact, existingStrongFact));
+        await insertTaxFact(
+          client,
+          applyPreviousReviewState(
+            buildConflictFact(fact, existingStrongFact),
+            previousFactsByIdentity,
+          ),
+        );
         continue;
       }
 
-      await insertTaxFact(client, fact);
+      await insertTaxFact(client, applyPreviousReviewState(fact, previousFactsByIdentity));
     }
 
     await client.query(

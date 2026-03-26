@@ -3,7 +3,10 @@ import { runTaxExtractorForDocument } from "../domain/tax/tax-document-extractor
 import { createTaxError, normalizeTaxUserId } from "../domain/tax/tax.validation.js";
 import { classifyStoredTaxDocument } from "./tax-classification.service.js";
 import { getTaxDocumentByIdForUser } from "./tax-documents.service.js";
-import { normalizeProcessedTaxDocument } from "./tax-normalization.service.js";
+import {
+  buildNormalizedFactsFromExtraction,
+  normalizeProcessedTaxDocument,
+} from "./tax-normalization.service.js";
 
 const CLASSIFIER_ONLY_EXTRACTOR_NAME = "classifier-only";
 const CLASSIFIER_ONLY_EXTRACTOR_VERSION = "1.0.0";
@@ -56,6 +59,28 @@ const mapPersistedExtraction = (row) => ({
       : Number(row.confidence_score),
   rawJson: row.raw_json && typeof row.raw_json === "object" ? row.raw_json : {},
   warnings: Array.isArray(row.warnings_json) ? row.warnings_json : [],
+});
+
+const buildExtractionPreview = ({
+  classification,
+  extractorResult,
+  warnings,
+}) => ({
+  id: null,
+  extractorName: extractorResult?.extractorName || CLASSIFIER_ONLY_EXTRACTOR_NAME,
+  extractorVersion:
+    extractorResult?.extractorVersion || CLASSIFIER_ONLY_EXTRACTOR_VERSION,
+  classification: classification.documentType,
+  confidenceScore: classification.confidenceScore,
+  rawJson: extractorResult
+    ? {
+        classification: classification.classificationPayload,
+        extraction: extractorResult.payload,
+      }
+    : {
+        classification: classification.classificationPayload,
+      },
+  warnings,
 });
 
 const persistSuccessfulProcessing = async ({
@@ -157,6 +182,64 @@ const persistFailedProcessing = async ({
   );
 };
 
+const buildTaxDocumentProcessingPreview = async ({
+  userId,
+  document,
+}) => {
+  const classification = await classifyStoredTaxDocument(document);
+  const extractorResult = runTaxExtractorForDocument({
+    documentType: classification.documentType,
+    text: classification.text,
+    classification,
+  });
+  const warnings = [...classification.warnings, ...(extractorResult?.warnings || [])];
+  const extractionPreview = buildExtractionPreview({
+    classification,
+    extractorResult,
+    warnings,
+  });
+  const normalizedFacts = buildNormalizedFactsFromExtraction({
+    userId,
+    document: {
+      id: Number(document.id),
+      taxYear: Number(document.tax_year),
+      documentType: classification.documentType,
+    },
+    extraction: extractionPreview,
+  });
+
+  return {
+    classification,
+    extractorResult,
+    warnings,
+    extractionPreview,
+    normalizedFacts,
+  };
+};
+
+export const previewTaxDocumentProcessingByIdForUser = async (userId, documentId) => {
+  const normalizedUserId = normalizeTaxUserId(userId);
+  const normalizedDocumentId = normalizeDocumentId(documentId);
+  const document = await getProcessableTaxDocumentByIdForUser(
+    normalizedUserId,
+    normalizedDocumentId,
+  );
+
+  if (!document) {
+    throw createTaxError(404, "Documento fiscal nao encontrado.");
+  }
+
+  const preview = await buildTaxDocumentProcessingPreview({
+    userId: normalizedUserId,
+    document,
+  });
+
+  return {
+    document,
+    ...preview,
+  };
+};
+
 export const processTaxDocumentByIdForUser = async (userId, documentId) => {
   const normalizedUserId = normalizeTaxUserId(userId);
   const normalizedDocumentId = normalizeDocumentId(documentId);
@@ -170,28 +253,26 @@ export const processTaxDocumentByIdForUser = async (userId, documentId) => {
   }
 
   try {
-    const classification = await classifyStoredTaxDocument(document);
-    const extractorResult = runTaxExtractorForDocument({
-      documentType: classification.documentType,
-      text: classification.text,
-      classification,
+    const preview = await buildTaxDocumentProcessingPreview({
+      userId: normalizedUserId,
+      document,
     });
-    const warnings = [...classification.warnings, ...(extractorResult?.warnings || [])];
     const persistedExtraction = await persistSuccessfulProcessing({
       userId: normalizedUserId,
       documentId: normalizedDocumentId,
-      classification,
-      extractorResult,
-      warnings,
+      classification: preview.classification,
+      extractorResult: preview.extractorResult,
+      warnings: preview.warnings,
     });
     await normalizeProcessedTaxDocument({
       userId: normalizedUserId,
       document: {
         id: normalizedDocumentId,
         taxYear: Number(document.tax_year),
-        documentType: classification.documentType,
+        documentType: preview.classification.documentType,
       },
       extraction: persistedExtraction,
+      precomputedFacts: preview.normalizedFacts,
     });
 
     return getTaxDocumentByIdForUser(normalizedUserId, normalizedDocumentId);
