@@ -154,63 +154,6 @@ const formatDateTime = (value: string | null) => {
   });
 };
 
-const downloadTextFile = (fileName: string, content: string, contentType: string) => {
-  if (typeof window === "undefined" || typeof document === "undefined") {
-    return;
-  }
-
-  const blob = new Blob([content], { type: contentType });
-  const objectUrl = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = objectUrl;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(objectUrl);
-};
-
-const escapeCsvValue = (value: string | number | null | undefined) => {
-  const normalizedValue = value == null ? "" : String(value);
-
-  if (/[",\n]/.test(normalizedValue)) {
-    return `"${normalizedValue.replace(/"/g, '""')}"`;
-  }
-
-  return normalizedValue;
-};
-
-const buildFactsCsv = (facts: TaxFact[]) => {
-  const header = [
-    "fact_id",
-    "fact_type",
-    "subcategory",
-    "payer_name",
-    "payer_document",
-    "amount",
-    "review_status",
-    "conflict_code",
-    "source_document",
-  ];
-  const lines = facts.map((fact) =>
-    [
-      fact.id,
-      fact.factType,
-      fact.subcategory,
-      fact.payerName,
-      fact.payerDocument,
-      fact.amount.toFixed(2),
-      fact.reviewStatus,
-      fact.conflictCode || "",
-      fact.sourceDocument?.originalFileName || "",
-    ]
-      .map(escapeCsvValue)
-      .join(","),
-  );
-
-  return [header.join(","), ...lines].join("\n");
-};
-
 const FactSummaryCard = ({
   title,
   value,
@@ -252,6 +195,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
   });
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [isRebuildingSummary, setIsRebuildingSummary] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState<"json" | "csv" | null>(null);
   const [processingFactId, setProcessingFactId] = useState<number | null>(null);
   const [processingDocumentId, setProcessingDocumentId] = useState<number | null>(null);
   const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null);
@@ -606,28 +550,22 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     setCorrectionDraft(null);
   };
 
-  const handleExportJson = () => {
-    const payload = {
-      exportedAt: new Date().toISOString(),
-      summary,
-      obligation,
-      documents: documentsPage.items,
-      pendingFacts: factsPage.items,
-    };
+  const handleExport = async (format: "json" | "csv") => {
+    setExportingFormat(format);
+    setPageError("");
 
-    downloadTextFile(
-      `central-do-leao-${taxYear}.json`,
-      JSON.stringify(payload, null, 2),
-      "application/json;charset=utf-8",
-    );
-  };
-
-  const handleExportCsv = () => {
-    downloadTextFile(
-      `central-do-leao-facts-${taxYear}.csv`,
-      buildFactsCsv(factsPage.items),
-      "text/csv;charset=utf-8",
-    );
+    try {
+      const result = await taxService.downloadExport(taxYear, format);
+      showSuccess(
+        `Dossiê ${format.toUpperCase()} baixado${result.fileName ? `: ${result.fileName}.` : "."}`,
+      );
+    } catch (error) {
+      setPageError(
+        getApiErrorMessage(error, `Não foi possível baixar o dossiê ${format.toUpperCase()}.`),
+      );
+    } finally {
+      setExportingFormat(null);
+    }
   };
 
   const headerCalendarYear = summary.calendarYear || obligation.calendarYear || taxYear - 1;
@@ -684,17 +622,19 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               </button>
               <button
                 type="button"
-                onClick={handleExportJson}
-                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface"
+                onClick={() => void handleExport("json")}
+                disabled={exportingFormat !== null}
+                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Baixar JSON
+                {exportingFormat === "json" ? "Baixando JSON..." : "Baixar JSON"}
               </button>
               <button
                 type="button"
-                onClick={handleExportCsv}
-                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface"
+                onClick={() => void handleExport("csv")}
+                disabled={exportingFormat !== null}
+                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Baixar CSV
+                {exportingFormat === "csv" ? "Baixando CSV..." : "Baixar CSV"}
               </button>
             </div>
           </div>

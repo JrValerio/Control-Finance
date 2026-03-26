@@ -136,6 +136,16 @@ describe("Tax API foundation", () => {
     );
   });
 
+  it("GET /tax/export/:taxYear retorna 401 sem token", async () => {
+    const response = await request(app).get("/tax/export/2026?format=json");
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
   it("POST /tax/summary/:taxYear/rebuild retorna 401 sem token", async () => {
     const response = await request(app).post("/tax/summary/2026/rebuild");
 
@@ -1550,5 +1560,209 @@ describe("Tax API foundation", () => {
       factsPending: 3,
       factsApproved: 0,
     });
+  });
+
+  it("GET /tax/export/:taxYear retorna 409 quando ainda nao existe snapshot do resumo", async () => {
+    const token = await registerAndLogin("tax-export-missing-summary@test.dev");
+    const response = await request(app)
+      .get("/tax/export/2026?format=json")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      message: "Resumo fiscal ainda nao foi gerado para este exercicio.",
+      code: "TAX_SUMMARY_NOT_GENERATED",
+    });
+  });
+
+  it("GET /tax/export/:taxYear baixa dossie JSON oficial com manifesto e facts revisados", async () => {
+    const token = await registerAndLogin("tax-export-json@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+            "Decimo terceiro R$ 5.000,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "export-json.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+
+    const factsResult = await dbQuery(
+      `SELECT id
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+    const factIds = factsResult.rows.map((row) => Number(row.id));
+
+    const bulkApproveResponse = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds,
+        action: "approve",
+      });
+
+    expect(bulkApproveResponse.status).toBe(200);
+
+    const rebuildResponse = await request(app)
+      .post("/tax/summary/2026/rebuild")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(rebuildResponse.status).toBe(200);
+
+    const exportResponse = await request(app)
+      .get("/tax/export/2026?format=json")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.headers["content-type"]).toContain("application/json");
+    expect(exportResponse.headers["content-disposition"]).toContain(
+      'attachment; filename="dossie-fiscal-2026.json"',
+    );
+    expect(exportResponse.headers["x-tax-export-data-hash"]).toHaveLength(64);
+    expect(exportResponse.headers["x-tax-export-snapshot-version"]).toBe("1");
+    expect(exportResponse.headers["x-tax-export-facts-included"]).toBe("3");
+    expect(exportResponse.headers["x-tax-export-engine-version"]).toBe("irpf-mvp-v1");
+
+    const payload = JSON.parse(exportResponse.text);
+
+    expect(payload).toMatchObject({
+      manifest: {
+        taxYear: 2026,
+        exerciseYear: 2026,
+        calendarYear: 2025,
+        summarySnapshotVersion: 1,
+        factsIncluded: 3,
+        engineVersion: "irpf-mvp-v1",
+        dataHash: exportResponse.headers["x-tax-export-data-hash"],
+      },
+      summary: {
+        taxYear: 2026,
+        exerciseYear: 2026,
+        calendarYear: 2025,
+        snapshotVersion: 1,
+        annualTaxableIncome: 54321,
+        annualExclusiveIncome: 5000,
+        annualWithheldTax: 4321.09,
+      },
+    });
+    expect(payload.facts).toEqual([
+      expect.objectContaining({
+        factId: expect.any(Number),
+        factType: "taxable_income",
+        reviewStatus: "approved",
+        sourceDocumentId: uploadResponse.body.document.id,
+      }),
+      expect.objectContaining({
+        factId: expect.any(Number),
+        factType: "withheld_tax",
+        reviewStatus: "approved",
+        sourceDocumentId: uploadResponse.body.document.id,
+      }),
+      expect.objectContaining({
+        factId: expect.any(Number),
+        factType: "exclusive_tax_income",
+        reviewStatus: "approved",
+        sourceDocumentId: uploadResponse.body.document.id,
+      }),
+    ]);
+  });
+
+  it("GET /tax/export/:taxYear baixa CSV oficial dos facts aprovados ou corrigidos", async () => {
+    const token = await registerAndLogin("tax-export-csv@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "export-csv.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+
+    const factsResult = await dbQuery(
+      `SELECT id
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+    const factIds = factsResult.rows.map((row) => Number(row.id));
+
+    const bulkApproveResponse = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds,
+        action: "approve",
+      });
+
+    expect(bulkApproveResponse.status).toBe(200);
+
+    const rebuildResponse = await request(app)
+      .post("/tax/summary/2026/rebuild")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(rebuildResponse.status).toBe(200);
+
+    const exportResponse = await request(app)
+      .get("/tax/export/2026?format=csv")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(exportResponse.status).toBe(200);
+    expect(exportResponse.headers["content-type"]).toContain("text/csv");
+    expect(exportResponse.headers["content-disposition"]).toContain(
+      'attachment; filename="dossie-fiscal-2026.csv"',
+    );
+    expect(exportResponse.text).toContain(
+      "factId,factType,category,subcategory,payerName,payerDocument,referencePeriod,amount,currency,reviewStatus,sourceDocumentId",
+    );
+    expect(exportResponse.text).toContain("taxable_income");
+    expect(exportResponse.text).toContain("withheld_tax");
+    expect(exportResponse.text).toContain("approved");
+    expect(exportResponse.text).toContain(String(uploadResponse.body.document.id));
   });
 });

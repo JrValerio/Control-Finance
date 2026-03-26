@@ -18,6 +18,7 @@ vi.mock("../services/tax.service", () => ({
     uploadDocument: vi.fn(),
     reprocessDocument: vi.fn(),
     deleteDocument: vi.fn(),
+    downloadExport: vi.fn(),
     getSummary: vi.fn(),
     rebuildSummary: vi.fn(),
     getObligation: vi.fn(),
@@ -169,6 +170,9 @@ describe("TaxPage", () => {
       deletedDocumentId: 1,
       deletedFactsCount: 1,
     });
+    vi.mocked(taxService.downloadExport).mockResolvedValue({
+      fileName: "dossie-fiscal-2026.json",
+    });
     vi.mocked(taxService.getSummary).mockResolvedValue(buildSummary());
     vi.mocked(taxService.getObligation).mockResolvedValue(buildObligation());
     vi.mocked(taxService.listFacts).mockResolvedValue({
@@ -231,6 +235,31 @@ describe("TaxPage", () => {
 
     await waitFor(() => {
       expect(taxService.rebuildSummary).toHaveBeenCalledWith(2026);
+    });
+  });
+
+  it("baixa dossiês oficiais JSON e CSV pelo backend", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Baixar JSON" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Baixar JSON" }));
+
+    await waitFor(() => {
+      expect(taxService.downloadExport).toHaveBeenCalledWith(2026, "json");
+    });
+
+    vi.mocked(taxService.downloadExport).mockResolvedValueOnce({
+      fileName: "dossie-fiscal-2026.csv",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Baixar CSV" }));
+
+    await waitFor(() => {
+      expect(taxService.downloadExport).toHaveBeenCalledWith(2026, "csv");
     });
   });
 
