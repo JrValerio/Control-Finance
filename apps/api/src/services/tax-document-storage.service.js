@@ -78,6 +78,11 @@ export const saveTaxDocumentBuffer = async ({
   };
 };
 
+export const readStoredTaxDocumentBuffer = async (storageKey) => {
+  const absolutePath = resolveTaxDocumentAbsolutePath(storageKey);
+  return fs.readFile(absolutePath);
+};
+
 export const deleteStoredTaxDocument = async (storageKey) => {
   const absolutePath = resolveTaxDocumentAbsolutePath(storageKey);
 

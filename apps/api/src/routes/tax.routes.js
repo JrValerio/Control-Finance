@@ -8,6 +8,7 @@ import {
   getTaxDocumentByIdForUser,
   listTaxDocumentsByUser,
 } from "../services/tax-documents.service.js";
+import { processTaxDocumentByIdForUser } from "../services/tax-extraction.service.js";
 import { getTaxRuleSetsByYear } from "../services/tax-rules.service.js";
 import { getTaxSummaryByYear } from "../services/tax-summary.service.js";
 
@@ -113,6 +114,15 @@ router.get("/documents", async (req, res, next) => {
 router.get("/documents/:id", async (req, res, next) => {
   try {
     const document = await getTaxDocumentByIdForUser(req.user.id, req.params.id);
+    res.status(200).json(document);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/documents/:id/reprocess", async (req, res, next) => {
+  try {
+    const document = await processTaxDocumentByIdForUser(req.user.id, req.params.id);
     res.status(200).json(document);
   } catch (error) {
     next(error);
