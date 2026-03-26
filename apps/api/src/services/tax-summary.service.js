@@ -1,5 +1,6 @@
 import { dbQuery, withDbTransaction } from "../db/index.js";
 import { calculateTaxObligation, summarizeReviewedTaxFacts } from "../domain/tax/tax-obligation.calculator.js";
+import { mapStoredTaxFactToSnapshotPayload } from "../domain/tax/tax-fact-snapshot.js";
 import {
   calculateAnnualProgressiveTax,
   calculateSimplifiedDiscount,
@@ -164,7 +165,7 @@ const buildCalculatedSummaryPayload = ({
 
 const getLatestStoredSummaryRow = async (userId, taxYear) => {
   const result = await dbQuery(
-    `SELECT snapshot_version, summary_json, generated_at
+    `SELECT snapshot_version, summary_json, source_counts_json, facts_json, generated_at
      FROM tax_summaries
      WHERE user_id = $1
        AND tax_year = $2
@@ -204,6 +205,9 @@ export const rebuildTaxSummaryByYear = async (userId, taxYearValue) => {
   const activeRuleConfig = await requireActiveTaxRuleConfigByYear(taxYear);
   const sourceCounts = await getSourceCountsByUserAndYear(normalizedUserId, taxYear);
   const factSelection = await getReviewedTaxFactsSelectionByUserAndYear(normalizedUserId, taxYear);
+  const persistedFactsSnapshot = [...factSelection.includedFacts]
+    .sort((leftFact, rightFact) => Number(leftFact.id) - Number(rightFact.id))
+    .map(mapStoredTaxFactToSnapshotPayload);
   const summaryPayload = buildCalculatedSummaryPayload({
     reviewedFacts: factSelection.includedFacts,
     excludedFactsCount: factSelection.excludedFacts.length,
@@ -226,16 +230,18 @@ export const rebuildTaxSummaryByYear = async (userId, taxYearValue) => {
          tax_year,
          snapshot_version,
          summary_json,
-         source_counts_json
+         source_counts_json,
+         facts_json
        )
-       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
-       RETURNING snapshot_version, summary_json, generated_at`,
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb)
+       RETURNING snapshot_version, summary_json, source_counts_json, facts_json, generated_at`,
       [
         normalizedUserId,
         taxYear,
         nextSnapshotVersion,
         JSON.stringify(summaryPayload),
         JSON.stringify(sourceCounts),
+        JSON.stringify(persistedFactsSnapshot),
       ],
     );
 

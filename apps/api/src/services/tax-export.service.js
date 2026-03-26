@@ -1,9 +1,10 @@
 import { createHash } from "node:crypto";
 import { dbQuery } from "../db/index.js";
+import { normalizeStoredFactsSnapshot } from "../domain/tax/tax-fact-snapshot.js";
 import { createTaxError, normalizeTaxUserId, normalizeTaxYear, toISOStringOrNull } from "../domain/tax/tax.validation.js";
-import { getReviewedTaxFactsSelectionByUserAndYear } from "./tax-obligation.service.js";
 
 const TAX_EXPORT_ENGINE_VERSION = "irpf-mvp-v1";
+const TAXPAYER_CPF_MISMATCH_WARNING_CODE = "TAXPAYER_CPF_MISMATCH_EXCLUDED";
 
 const normalizeJsonObject = (value) => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -11,6 +12,30 @@ const normalizeJsonObject = (value) => {
   }
 
   return value;
+};
+
+const normalizeSourceCounts = (value) => {
+  const raw = normalizeJsonObject(value);
+
+  return {
+    documents: Number(raw.documents || 0),
+    factsPending: Number(raw.factsPending || 0),
+    factsApproved: Number(raw.factsApproved || 0),
+  };
+};
+
+const normalizeWarnings = (value) => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry) => entry && typeof entry === "object" && !Array.isArray(entry))
+    .map((entry) => ({
+      code: typeof entry.code === "string" ? entry.code.trim() : "",
+      message: typeof entry.message === "string" ? entry.message.trim() : "",
+    }))
+    .filter((entry) => entry.code);
 };
 
 const normalizeTaxExportFormat = (value) => {
@@ -25,7 +50,7 @@ const normalizeTaxExportFormat = (value) => {
 
 const getLatestStoredSummaryRow = async (userId, taxYear) => {
   const result = await dbQuery(
-    `SELECT snapshot_version, summary_json, source_counts_json, generated_at
+    `SELECT snapshot_version, summary_json, source_counts_json, facts_json, generated_at
      FROM tax_summaries
      WHERE user_id = $1
        AND tax_year = $2
@@ -36,24 +61,6 @@ const getLatestStoredSummaryRow = async (userId, taxYear) => {
 
   return result.rows[0] || null;
 };
-
-const mapFactRowToExportPayload = (row) => ({
-    factId: Number(row.id),
-    taxYear: Number(row.tax_year),
-    sourceDocumentId:
-      row.source_document_id === null || typeof row.source_document_id === "undefined"
-        ? null
-        : Number(row.source_document_id),
-    factType: row.fact_type,
-    category: row.category,
-    subcategory: row.subcategory,
-    payerName: row.payer_name,
-    payerDocument: row.payer_document,
-    referencePeriod: row.reference_period,
-    amount: Number(row.amount),
-    currency: row.currency,
-    reviewStatus: row.review_status,
-  });
 
 const escapeCsvValue = (value) => {
   const normalizedValue = value == null ? "" : String(value);
@@ -125,18 +132,35 @@ export const exportTaxDossierByYear = async (userId, taxYearValue, formatValue) 
     );
   }
 
-  const factSelection = await getReviewedTaxFactsSelectionByUserAndYear(normalizedUserId, taxYear);
-  const facts = [...factSelection.includedFacts]
-    .sort((leftFact, rightFact) => Number(leftFact.id) - Number(rightFact.id))
-    .map(mapFactRowToExportPayload);
+  const facts = normalizeStoredFactsSnapshot(latestSummary.facts_json);
+  const sourceCounts = normalizeSourceCounts(latestSummary.source_counts_json);
+  const storedSummary = normalizeJsonObject(latestSummary.summary_json);
+  const summaryWarnings = normalizeWarnings(storedSummary.warnings);
+  const allApprovedFactsExcludedByTaxpayerMismatch =
+    facts.length === 0 &&
+    sourceCounts.factsApproved > 0 &&
+    summaryWarnings.some((warning) => warning.code === TAXPAYER_CPF_MISMATCH_WARNING_CODE);
+
+  if (
+    facts.length === 0 &&
+    sourceCounts.factsApproved > 0 &&
+    !allApprovedFactsExcludedByTaxpayerMismatch
+  ) {
+    throw createTaxError(
+      409,
+      "Resumo fiscal precisa ser regenerado para exportar o snapshot oficial deste exercicio.",
+      "TAX_SUMMARY_REBUILD_REQUIRED",
+    );
+  }
+
   const summary = {
     taxYear,
     exerciseYear: taxYear,
     calendarYear: taxYear - 1,
     snapshotVersion: Number(latestSummary.snapshot_version),
     generatedAt: toISOStringOrNull(latestSummary.generated_at),
-    ...normalizeJsonObject(latestSummary.summary_json),
-    sourceCounts: normalizeJsonObject(latestSummary.source_counts_json),
+    ...storedSummary,
+    sourceCounts,
   };
   const canonicalExportPayload = buildCanonicalExportPayload({
     taxYear,

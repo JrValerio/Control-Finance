@@ -18,6 +18,7 @@ const TAX_RULE_SEED_BY_YEAR = Object.freeze({
           exemptAndExclusiveIncomeThreshold: 200000.0,
           assetBalanceThreshold: 800000.0,
           ruralRevenueThreshold: 177920.0,
+          stockOperationsThreshold: 40000.0,
         }),
       }),
       annual_table: Object.freeze({
