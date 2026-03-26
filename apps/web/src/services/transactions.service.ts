@@ -172,9 +172,19 @@ export interface ImportDryRunResult {
   rows: ImportDryRunRow[];
 }
 
+export interface ImportCommitTransaction {
+  id: number;
+  line: number | null;
+  type: string;
+  value: number;
+  date: string;
+  description: string | null;
+}
+
 export interface ImportCommitResult {
   imported: number;
   importSessionId: string;
+  createdTransactions: ImportCommitTransaction[];
   summary: {
     income: number;
     expense: number;
@@ -331,6 +341,14 @@ interface ImportDryRunApiResponse {
 interface ImportCommitApiResponse {
   imported?: unknown;
   importSessionId?: unknown;
+  createdTransactions?: Array<{
+    id?: unknown;
+    line?: unknown;
+    type?: unknown;
+    value?: unknown;
+    date?: unknown;
+    description?: unknown;
+  }>;
   summary?: {
     income?: unknown;
     expense?: unknown;
@@ -730,9 +748,23 @@ export const transactionsService = {
     const { data } = await api.post("/transactions/import/commit", { importId, categoryOverrides });
     const responseBody = data as ImportCommitApiResponse;
 
+    const createdTransactions: ImportCommitTransaction[] = Array.isArray(
+      responseBody.createdTransactions,
+    )
+      ? responseBody.createdTransactions.map((tx) => ({
+          id: Number(tx.id) || 0,
+          line: tx.line != null ? Number(tx.line) : null,
+          type: typeof tx.type === "string" ? tx.type : "",
+          value: Number(tx.value) || 0,
+          date: typeof tx.date === "string" ? tx.date : "",
+          description: typeof tx.description === "string" ? tx.description : null,
+        }))
+      : [];
+
     return {
       imported: Number(responseBody.imported) || 0,
       importSessionId: String(responseBody.importSessionId || ""),
+      createdTransactions,
       summary: {
         income: Number(responseBody.summary?.income) || 0,
         expense: Number(responseBody.summary?.expense) || 0,

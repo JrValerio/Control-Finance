@@ -408,6 +408,7 @@ router.post("/import/commit", importRateLimiter, requireFeature("csv_import"), a
     res.status(200).json({
       imported: commitResult.imported,
       importSessionId: commitResult.importSessionId,
+      createdTransactions: commitResult.createdTransactions ?? [],
       summary: commitResult.summary,
     });
   } catch (error) {

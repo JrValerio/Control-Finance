@@ -1142,6 +1142,52 @@ describe("transaction imports", () => {
     expect(commitResponse.body.imported).toBe(1);
   });
 
+  it("POST /transactions/import/commit retorna createdTransactions com id e line", async () => {
+    const token = await registerAndLogin("import-created-txs@controlfinance.dev");
+    await makeProUser("import-created-txs@controlfinance.dev");
+
+    const csv = csvFile(
+      "date,type,value,description\n2026-03-01,Entrada,1412.00,INSS Credito\n2026-03-02,Saida,80.00,Supermercado",
+    );
+
+    const dryRunResponse = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(dryRunResponse.status).toBe(200);
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryRunResponse.body.importId });
+
+    expect(commitResponse.status).toBe(200);
+    expect(commitResponse.body.imported).toBe(2);
+
+    const { createdTransactions } = commitResponse.body;
+    expect(Array.isArray(createdTransactions)).toBe(true);
+    expect(createdTransactions).toHaveLength(2);
+
+    const entry = createdTransactions.find((tx) => tx.type === "Entrada");
+    expect(entry).toMatchObject({
+      type: "Entrada",
+      value: 1412,
+      date: "2026-03-01",
+      description: "INSS Credito",
+    });
+    expect(typeof entry.id).toBe("number");
+    expect(entry.id).toBeGreaterThan(0);
+    expect(entry.line).toBeGreaterThan(0);
+
+    const exit = createdTransactions.find((tx) => tx.type === "Saida");
+    expect(exit).toMatchObject({
+      type: "Saida",
+      value: 80,
+      date: "2026-03-02",
+    });
+  });
+
   it("DELETE /transactions/imports/:sessionId desfaz importacao por sessao", async () => {
     const token = await registerAndLogin("import-undo@controlfinance.dev");
     await makeProUser("import-undo@controlfinance.dev");
