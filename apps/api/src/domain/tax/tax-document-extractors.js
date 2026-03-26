@@ -278,16 +278,6 @@ const extractAmountFromMatchingLineEntries = (lineEntries, matcher) => {
   return null;
 };
 
-const findNextRawLineByMatcher = (lineEntries, startIndex, matcher) => {
-  for (let index = Math.max(startIndex, 0); index < lineEntries.length; index += 1) {
-    if (matcher.test(lineEntries[index].normalized)) {
-      return lineEntries[index].raw;
-    }
-  }
-
-  return null;
-};
-
 const findNextValueAfterLabel = (lineEntries, startIndex, matcher) => {
   const labelIndex = lineEntries.findIndex(
     (entry, index) => index >= Math.max(startIndex, 0) && matcher.test(entry.normalized),
