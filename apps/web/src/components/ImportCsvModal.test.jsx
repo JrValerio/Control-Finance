@@ -5,6 +5,8 @@ import ImportCsvModal from "./ImportCsvModal";
 import { transactionsService } from "../services/transactions.service";
 import { categoriesService } from "../services/categories.service";
 import { incomeSourcesService } from "../services/incomeSources.service";
+import { profileService } from "../services/profile.service";
+import { forecastService } from "../services/forecast.service";
 
 vi.mock("../services/transactions.service", () => ({
   transactionsService: {
@@ -25,6 +27,19 @@ vi.mock("../services/incomeSources.service", () => ({
   incomeSourcesService: {
     list: vi.fn(),
     createStatement: vi.fn(),
+    postStatement: vi.fn(),
+  },
+}));
+
+vi.mock("../services/profile.service", () => ({
+  profileService: {
+    updateProfile: vi.fn(),
+  },
+}));
+
+vi.mock("../services/forecast.service", () => ({
+  forecastService: {
+    recompute: vi.fn(),
   },
 }));
 
@@ -71,6 +86,32 @@ describe("ImportCsvModal", () => {
     vi.clearAllMocks();
     categoriesService.listCategories.mockResolvedValue([]);
     incomeSourcesService.list.mockResolvedValue([]);
+    incomeSourcesService.postStatement.mockResolvedValue({
+      statement: {
+        id: 11,
+        incomeSourceId: 1,
+        referenceMonth: "2026-02",
+        netAmount: 1412,
+        totalDeductions: 0,
+        grossAmount: 1800,
+        details: null,
+        paymentDate: "2026-02-25",
+        status: "posted",
+        postedTransactionId: 91,
+        createdAt: "2026-02-25T00:00:00Z",
+        updatedAt: "2026-02-25T00:00:00Z",
+      },
+      transaction: {
+        id: 91,
+        type: "Entrada",
+        value: 1412,
+        date: "2026-02-25",
+        description: "INSS Beneficio - 2026-02",
+        categoryId: null,
+      },
+    });
+    profileService.updateProfile.mockResolvedValue({});
+    forecastService.recompute.mockResolvedValue({});
   });
 
   it("does not render when isOpen is false", () => {
@@ -344,6 +385,159 @@ describe("ImportCsvModal", () => {
           screen.getByRole("dialog", { name: /Registrar no histórico de renda/i }),
         ).toBeInTheDocument();
       });
+    });
+
+    it("sugere atualizar perfil e planejamento depois de confirmar a renda estruturada", async () => {
+      const file = new File(["dummy"], "inss.pdf", { type: "application/pdf" });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildInssResponse());
+      incomeSourcesService.list.mockResolvedValue([
+        {
+          id: 1,
+          name: "INSS Benefício",
+          deductions: [],
+          userId: 1,
+          categoryId: null,
+          defaultDay: null,
+          notes: null,
+          createdAt: "",
+          updatedAt: "",
+        },
+      ]);
+      incomeSourcesService.createStatement.mockResolvedValue({
+        statement: {
+          id: 11,
+          incomeSourceId: 1,
+          referenceMonth: "2026-02",
+          netAmount: 1412,
+          totalDeductions: 0,
+          grossAmount: 1800,
+          details: null,
+          paymentDate: "2026-02-25",
+          status: "draft",
+          postedTransactionId: null,
+          createdAt: "2026-02-25T00:00:00Z",
+          updatedAt: "2026-02-25T00:00:00Z",
+        },
+        deductions: [],
+      });
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Usar este documento na minha renda" }),
+        ).toBeInTheDocument();
+      });
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Usar este documento na minha renda" }),
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Registrar e lancar entrada" }),
+        ).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Atualizar perfil e planejamento" }),
+        ).toBeInTheDocument();
+      });
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Atualizar perfil e planejamento" }),
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Confirmar" })).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+
+      await waitFor(() => {
+        expect(profileService.updateProfile).toHaveBeenCalledWith({
+          salary_monthly: 1412,
+          payday: 25,
+        });
+      });
+      expect(forecastService.recompute).toHaveBeenCalled();
+      expect(
+        screen.getByText(/perfil e planejamento atualizados com sucesso/i),
+      ).toBeInTheDocument();
+    });
+
+    it("permite ignorar a sugestao de perfil depois de confirmar a renda", async () => {
+      const file = new File(["dummy"], "inss.pdf", { type: "application/pdf" });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildInssResponse());
+      incomeSourcesService.list.mockResolvedValue([
+        {
+          id: 1,
+          name: "INSS Benefício",
+          deductions: [],
+          userId: 1,
+          categoryId: null,
+          defaultDay: null,
+          notes: null,
+          createdAt: "",
+          updatedAt: "",
+        },
+      ]);
+      incomeSourcesService.createStatement.mockResolvedValue({
+        statement: {
+          id: 11,
+          incomeSourceId: 1,
+          referenceMonth: "2026-02",
+          netAmount: 1412,
+          totalDeductions: 0,
+          grossAmount: 1800,
+          details: null,
+          paymentDate: "2026-02-25",
+          status: "draft",
+          postedTransactionId: null,
+          createdAt: "2026-02-25T00:00:00Z",
+          updatedAt: "2026-02-25T00:00:00Z",
+        },
+        deductions: [],
+      });
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Usar este documento na minha renda" }),
+        ).toBeInTheDocument();
+      });
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Usar este documento na minha renda" }),
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Registrar e lancar entrada" }),
+        ).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Atualizar perfil e planejamento" }),
+        ).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Ignorar" }));
+
+      expect(profileService.updateProfile).not.toHaveBeenCalled();
+      expect(forecastService.recompute).not.toHaveBeenCalled();
+      expect(screen.getByText(/sugestao de atualizacao ignorada por enquanto/i)).toBeInTheDocument();
     });
   });
 
