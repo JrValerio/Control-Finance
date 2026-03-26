@@ -80,6 +80,16 @@ describe("Tax API foundation", () => {
     );
   });
 
+  it("GET /tax/facts retorna 401 sem token", async () => {
+    const response = await request(app).get("/tax/facts?taxYear=2026");
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
   it("POST /tax/documents retorna 401 sem token", async () => {
     const response = await request(app)
       .post("/tax/documents")
@@ -118,6 +128,30 @@ describe("Tax API foundation", () => {
 
   it("POST /tax/documents/:id/reprocess retorna 401 sem token", async () => {
     const response = await request(app).post("/tax/documents/1/reprocess");
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
+  it("PATCH /tax/facts/:id/review retorna 401 sem token", async () => {
+    const response = await request(app)
+      .patch("/tax/facts/1/review")
+      .send({ action: "approve" });
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
+  it("POST /tax/facts/bulk-review retorna 401 sem token", async () => {
+    const response = await request(app)
+      .post("/tax/facts/bulk-review")
+      .send({ factIds: [1], action: "approve" });
 
     expectErrorResponseWithRequestId(
       response,
@@ -644,6 +678,345 @@ describe("Tax API foundation", () => {
       .set("Authorization", `Bearer ${tokenB}`);
 
     expectErrorResponseWithRequestId(response, 404, "Documento fiscal nao encontrado.");
+  });
+
+  it("GET /tax/facts retorna fatos pendentes com documento de origem", async () => {
+    const token = await registerAndLogin("tax-facts-list@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .field("sourceLabel", "ACME")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "facts-list.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+    const factsResponse = await request(app)
+      .get("/tax/facts?taxYear=2026&reviewStatus=pending")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+    expect(factsResponse.status).toBe(200);
+    expect(factsResponse.body.total).toBe(2);
+    expect(factsResponse.body.items).toEqual([
+      expect.objectContaining({
+        factType: "withheld_tax",
+        reviewStatus: "pending",
+        sourceDocument: expect.objectContaining({
+          id: uploadResponse.body.document.id,
+          originalFileName: "facts-list.csv",
+          documentType: "income_report_employer",
+          processingStatus: "normalized",
+          sourceLabel: "ACME",
+        }),
+      }),
+      expect.objectContaining({
+        factType: "taxable_income",
+        reviewStatus: "pending",
+        sourceDocument: expect.objectContaining({
+          id: uploadResponse.body.document.id,
+          originalFileName: "facts-list.csv",
+          documentType: "income_report_employer",
+          processingStatus: "normalized",
+          sourceLabel: "ACME",
+        }),
+      }),
+    ]);
+  });
+
+  it("PATCH /tax/facts/:id/review aprova fato e registra trilha em tax_reviews", async () => {
+    const token = await registerAndLogin("tax-facts-approve@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "facts-approve.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(reprocessResponse.status).toBe(200);
+
+    const factResult = await dbQuery(
+      `SELECT id, updated_at
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC
+       LIMIT 1`,
+      [uploadResponse.body.document.id],
+    );
+    const factId = Number(factResult.rows[0].id);
+    const previousUpdatedAt = new Date(factResult.rows[0].updated_at).toISOString();
+
+    const reviewResponse = await request(app)
+      .patch(`/tax/facts/${factId}/review`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        action: "approve",
+        note: "Conferido com o informe original.",
+      });
+
+    expect(reviewResponse.status).toBe(200);
+    expect(reviewResponse.body.fact).toMatchObject({
+      id: factId,
+      reviewStatus: "approved",
+    });
+
+    const persistedFactResult = await dbQuery(
+      `SELECT review_status, updated_at
+       FROM tax_facts
+       WHERE id = $1`,
+      [factId],
+    );
+    const persistedReviewResult = await dbQuery(
+      `SELECT review_action, previous_payload_json, corrected_payload_json, note
+       FROM tax_reviews
+       WHERE tax_fact_id = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [factId],
+    );
+
+    expect(persistedFactResult.rows[0].review_status).toBe("approved");
+    expect(new Date(persistedFactResult.rows[0].updated_at).toISOString()).not.toBe(
+      previousUpdatedAt,
+    );
+    expect(persistedReviewResult.rows[0]).toMatchObject({
+      review_action: "approve",
+      corrected_payload_json: {},
+      note: "Conferido com o informe original.",
+    });
+    expect(persistedReviewResult.rows[0].previous_payload_json).toMatchObject({
+      id: factId,
+      reviewStatus: "pending",
+    });
+  });
+
+  it("PATCH /tax/facts/:id/review corrige fato, recalcula chave logica e registra before/after", async () => {
+    const token = await registerAndLogin("tax-facts-correct@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "facts-correct.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(reprocessResponse.status).toBe(200);
+
+    const factResult = await dbQuery(
+      `SELECT id, dedupe_key
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC
+       LIMIT 1`,
+      [uploadResponse.body.document.id],
+    );
+    const factId = Number(factResult.rows[0].id);
+    const previousDedupeKey = factResult.rows[0].dedupe_key;
+
+    const reviewResponse = await request(app)
+      .patch(`/tax/facts/${factId}/review`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        action: "correct",
+        corrected: {
+          amount: 54000,
+          subcategory: "annual_taxable_income_adjusted",
+        },
+        note: "Ajuste manual apos conferencia.",
+      });
+
+    expect(reviewResponse.status).toBe(200);
+    expect(reviewResponse.body.fact).toMatchObject({
+      id: factId,
+      reviewStatus: "corrected",
+      subcategory: "annual_taxable_income_adjusted",
+      amount: 54000,
+      dedupeStrength: "strong",
+    });
+
+    const persistedFactResult = await dbQuery(
+      `SELECT amount, subcategory, dedupe_key, review_status
+       FROM tax_facts
+       WHERE id = $1`,
+      [factId],
+    );
+    const persistedReviewResult = await dbQuery(
+      `SELECT review_action, previous_payload_json, corrected_payload_json, note
+       FROM tax_reviews
+       WHERE tax_fact_id = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [factId],
+    );
+
+    expect(Number(persistedFactResult.rows[0].amount)).toBe(54000);
+    expect(persistedFactResult.rows[0].subcategory).toBe("annual_taxable_income_adjusted");
+    expect(persistedFactResult.rows[0].review_status).toBe("corrected");
+    expect(persistedFactResult.rows[0].dedupe_key).not.toBe(previousDedupeKey);
+    expect(persistedReviewResult.rows[0]).toMatchObject({
+      review_action: "correct",
+      note: "Ajuste manual apos conferencia.",
+    });
+    expect(persistedReviewResult.rows[0].previous_payload_json).toMatchObject({
+      id: factId,
+      amount: 54321,
+      reviewStatus: "pending",
+    });
+    expect(persistedReviewResult.rows[0].corrected_payload_json).toMatchObject({
+      id: factId,
+      amount: 54000,
+      subcategory: "annual_taxable_income_adjusted",
+      reviewStatus: "corrected",
+    });
+  });
+
+  it("POST /tax/facts/bulk-review aprova varios fatos e registra bulk_approve", async () => {
+    const token = await registerAndLogin("tax-facts-bulk@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+            "Decimo terceiro R$ 5.000,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "facts-bulk.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(reprocessResponse.status).toBe(200);
+
+    const factsResult = await dbQuery(
+      `SELECT id
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+    const factIds = factsResult.rows.map((row) => Number(row.id));
+
+    const bulkResponse = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds,
+        action: "approve",
+        note: "Aprovacao em lote.",
+      });
+
+    expect(bulkResponse.status).toBe(200);
+    expect(bulkResponse.body).toEqual({
+      updatedCount: 3,
+    });
+
+    const persistedFactsResult = await dbQuery(
+      `SELECT review_status
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+    const persistedReviewsResult = await dbQuery(
+      `SELECT tr.review_action, tr.note
+       FROM tax_reviews tr
+       INNER JOIN tax_facts tf
+         ON tf.id = tr.tax_fact_id
+       WHERE tf.source_document_id = $1
+       ORDER BY tr.id ASC`,
+      [uploadResponse.body.document.id],
+    );
+    const summaryResponse = await request(app)
+      .get("/tax/summary/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(persistedFactsResult.rows).toEqual([
+      { review_status: "approved" },
+      { review_status: "approved" },
+      { review_status: "approved" },
+    ]);
+    expect(persistedReviewsResult.rows).toEqual([
+      { review_action: "bulk_approve", note: "Aprovacao em lote." },
+      { review_action: "bulk_approve", note: "Aprovacao em lote." },
+      { review_action: "bulk_approve", note: "Aprovacao em lote." },
+    ]);
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.sourceCounts).toEqual({
+      documents: 1,
+      factsPending: 0,
+      factsApproved: 3,
+    });
   });
 
   it("GET /tax/rules/:taxYear retorna estrutura vazia quando ainda nao ha regras ativas", async () => {
