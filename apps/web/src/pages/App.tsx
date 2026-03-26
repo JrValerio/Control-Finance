@@ -108,6 +108,7 @@ interface AppProps {
   onLogout?: () => void;
   onOpenBills?: () => void;
   onOpenIncomeSources?: () => void;
+  onOpenTax?: () => void;
   onOpenCategoriesSettings?: () => void;
   onOpenBillingSettings?: () => void;
   onOpenProfileSettings?: () => void;
@@ -449,6 +450,7 @@ const App = ({
   onLogout = undefined,
   onOpenBills = undefined,
   onOpenIncomeSources = undefined,
+  onOpenTax = undefined,
   onOpenCategoriesSettings = undefined,
   onOpenBillingSettings = undefined,
   onOpenProfileSettings = undefined,
@@ -1463,6 +1465,11 @@ const App = ({
     onOpenIncomeSources?.();
   };
 
+  const handleOpenTax = () => {
+    closeMobileActionsMenu();
+    onOpenTax?.();
+  };
+
   const handleOpenCategoriesSettings = () => {
     closeMobileActionsMenu();
     onOpenCategoriesSettings?.();
@@ -1652,6 +1659,16 @@ const App = ({
                         Fontes de Renda
                       </button>
                     ) : null}
+                    {onOpenTax ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleOpenTax}
+                        className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                      >
+                        Central do Leão
+                      </button>
+                    ) : null}
                     {onOpenCategoriesSettings ? (
                       <button
                         type="button"
@@ -1662,7 +1679,7 @@ const App = ({
                         Categorias
                       </button>
                     ) : null}
-                    {(onOpenBills || onOpenIncomeSources || onOpenCategoriesSettings) ? (
+                    {(onOpenBills || onOpenIncomeSources || onOpenTax || onOpenCategoriesSettings) ? (
                       <div className="my-1 h-px bg-cf-border" role="separator" />
                     ) : null}
                     <button
@@ -1796,6 +1813,15 @@ const App = ({
                     className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                   >
                     Fontes de Renda
+                  </button>
+                ) : null}
+                {onOpenTax ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenTax}
+                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                  >
+                    Central do Leão
                   </button>
                 ) : null}
                 {onOpenCategoriesSettings ? (

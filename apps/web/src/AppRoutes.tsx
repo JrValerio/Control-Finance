@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import ProfileSettings from "./pages/ProfileSettings";
 import SecuritySettings from "./pages/SecuritySettings";
+import TaxPage from "./pages/TaxPage";
 import ProtectedRoute from "./routers/ProtectedRoute";
 import { useAuth } from "./hooks/useAuth";
 
@@ -45,6 +46,10 @@ const Dashboard = () => {
     navigate("/app/income-sources");
   };
 
+  const handleOpenTax = () => {
+    navigate("/app/tax");
+  };
+
   return (
     <App
       onLogout={handleLogout}
@@ -54,6 +59,7 @@ const Dashboard = () => {
       onOpenSecuritySettings={handleOpenSecuritySettings}
       onOpenBills={handleOpenBills}
       onOpenIncomeSources={handleOpenIncomeSources}
+      onOpenTax={handleOpenTax}
     />
   );
 };
@@ -158,6 +164,16 @@ const IncomeSourcesRoute = () => {
   return <IncomeSourcesPage onBack={handleBack} />;
 };
 
+const TaxRoute = () => {
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    navigate("/app");
+  };
+
+  return <TaxPage onBack={handleBack} />;
+};
+
 const RootRedirect = () => {
   const { isAuthenticated } = useAuth();
 
@@ -224,6 +240,22 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <IncomeSourcesRoute />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/tax"
+        element={
+          <ProtectedRoute>
+            <TaxRoute />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/tax/:taxYear"
+        element={
+          <ProtectedRoute>
+            <TaxRoute />
           </ProtectedRoute>
         }
       />
