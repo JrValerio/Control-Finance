@@ -38,6 +38,8 @@ export interface IncomeStatement {
   referenceMonth: string;
   netAmount: number;
   totalDeductions: number;
+  grossAmount: number | null;
+  details: Record<string, unknown> | null;
   paymentDate: string | null;
   status: "draft" | "posted";
   postedTransactionId: number | null;
@@ -87,6 +89,8 @@ export interface CreateStatementPayload {
   referenceMonth: string;
   netAmount: number;
   paymentDate?: string | null;
+  grossAmount?: number | null;
+  details?: Record<string, unknown> | null;
 }
 
 // ─── Raw API payload types ─────────────────────────────────────────────────────
@@ -128,6 +132,8 @@ interface RawStatement {
   referenceMonth?: unknown;
   netAmount?: unknown;
   totalDeductions?: unknown;
+  grossAmount?: unknown;
+  details?: unknown;
   paymentDate?: unknown;
   status?: unknown;
   postedTransactionId?: unknown;
@@ -179,6 +185,10 @@ const normalizeStatement = (raw: RawStatement): IncomeStatement => ({
   referenceMonth: typeof raw.referenceMonth === "string" ? raw.referenceMonth : "",
   netAmount: Number(raw.netAmount) || 0,
   totalDeductions: Number(raw.totalDeductions) || 0,
+  grossAmount: raw.grossAmount != null ? Number(raw.grossAmount) || null : null,
+  details: raw.details != null && typeof raw.details === "object" && !Array.isArray(raw.details)
+    ? (raw.details as Record<string, unknown>)
+    : null,
   paymentDate: normalizeStringOrNull(raw.paymentDate),
   status: raw.status === "posted" ? "posted" : "draft",
   postedTransactionId: normalizeIntOrNull(raw.postedTransactionId),

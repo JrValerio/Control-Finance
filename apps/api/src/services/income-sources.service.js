@@ -113,6 +113,23 @@ const normalizeReferenceMonth = (value) => {
   return value;
 };
 
+const normalizeOptionalGrossAmount = (value) => {
+  if (value == null) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw createError(400, "Valor bruto deve ser maior que zero.");
+  }
+  return toMoney(parsed);
+};
+
+const normalizeDetails = (value) => {
+  if (value == null) return null;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw createError(400, "Detalhes deve ser um objeto.");
+  }
+  return value;
+};
+
 const normalizePaymentDate = (value) => {
   if (value == null || value === "") return null;
   if (typeof value !== "string" || !isValidISODate(value)) {
@@ -180,6 +197,8 @@ const mapStatementRow = (row) => ({
   referenceMonth: String(row.reference_month),
   netAmount: toMoney(row.net_amount),
   totalDeductions: toMoney(row.total_deductions),
+  grossAmount: row.gross_amount != null ? toMoney(row.gross_amount) : null,
+  details: row.details_json ?? null,
   paymentDate: row.payment_date != null ? toISODate(row.payment_date) : null,
   status: String(row.status),
   postedTransactionId: row.posted_transaction_id != null ? Number(row.posted_transaction_id) : null,
@@ -426,6 +445,8 @@ export const createStatementDraftForSource = async (userId, sourceId, payload) =
   const referenceMonth = normalizeReferenceMonth(payload.referenceMonth);
   const netAmount = normalizeNetAmount(payload.netAmount);
   const paymentDate = normalizePaymentDate(payload.paymentDate ?? null);
+  const grossAmount = normalizeOptionalGrossAmount(payload.grossAmount ?? null);
+  const details = normalizeDetails(payload.details ?? null);
 
   return withDbTransaction(async (client) => {
     // Fetch active deductions to clone
@@ -446,10 +467,14 @@ export const createStatementDraftForSource = async (userId, sourceId, payload) =
     try {
       const { rows } = await client.query(
         `INSERT INTO income_statements
-           (income_source_id, reference_month, net_amount, total_deductions, payment_date)
-         VALUES ($1, $2, $3, $4, $5)
+           (income_source_id, reference_month, net_amount, total_deductions, payment_date,
+            gross_amount, details_json)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING *`,
-        [sid, referenceMonth, netAmount, toMoney(totalDeductions), paymentDate],
+        [
+          sid, referenceMonth, netAmount, toMoney(totalDeductions), paymentDate,
+          grossAmount, details != null ? JSON.stringify(details) : null,
+        ],
       );
       stmtRow = rows[0];
     } catch (err) {
