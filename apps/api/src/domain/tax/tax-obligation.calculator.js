@@ -72,6 +72,8 @@ export const calculateTaxObligation = ({
   const annualTaxableIncome = normalizeMoney(totals.annualTaxableIncome);
   const annualExemptIncome = normalizeMoney(totals.annualExemptIncome);
   const annualExclusiveIncome = normalizeMoney(totals.annualExclusiveIncome);
+  const annualWithheldTax = normalizeMoney(totals.annualWithheldTax);
+  const totalLegalDeductions = normalizeMoney(totals.totalLegalDeductions);
   const annualCombinedExemptAndExclusiveIncome = normalizeMoney(
     annualExemptIncome + annualExclusiveIncome,
   );
@@ -117,6 +119,8 @@ export const calculateTaxObligation = ({
       annualTaxableIncome,
       annualExemptIncome,
       annualExclusiveIncome,
+      annualWithheldTax,
+      totalLegalDeductions,
       annualCombinedExemptAndExclusiveIncome,
       totalAssetBalance,
     },

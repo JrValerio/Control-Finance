@@ -5,10 +5,11 @@ import {
   calculateSimplifiedDiscount,
 } from "../domain/tax/tax-rules.engine.js";
 import { normalizeTaxUserId, normalizeTaxYear, toISOStringOrNull } from "../domain/tax/tax.validation.js";
-import { listReviewedTaxFactsByUserAndYear } from "./tax-obligation.service.js";
+import { getReviewedTaxFactsSelectionByUserAndYear } from "./tax-obligation.service.js";
 import { requireActiveTaxRuleConfigByYear } from "./tax-rules.service.js";
 
 const DUPLICATE_FACT_CONFLICT_CODE = "TAX_FACT_DUPLICATE";
+const TAXPAYER_CPF_MISMATCH_WARNING_CODE = "TAXPAYER_CPF_MISMATCH_EXCLUDED";
 
 const buildDefaultSummaryPayload = () => ({
   mustDeclare: null,
@@ -68,7 +69,7 @@ const getSourceCountsByUserAndYear = async (userId, taxYear) => {
   };
 };
 
-const buildSummaryWarnings = ({ reviewedFacts, sourceCounts }) => {
+const buildSummaryWarnings = ({ reviewedFacts, sourceCounts, excludedFactsCount }) => {
   const warnings = [];
 
   if (sourceCounts.factsPending > 0) {
@@ -86,11 +87,22 @@ const buildSummaryWarnings = ({ reviewedFacts, sourceCounts }) => {
     });
   }
 
+  if (Number(excludedFactsCount || 0) > 0) {
+    warnings.push({
+      code: TAXPAYER_CPF_MISMATCH_WARNING_CODE,
+      message:
+        Number(excludedFactsCount) === 1
+          ? "Ha 1 fato revisado com CPF divergente do titular cadastrado e ele ficou fora do resumo anual."
+          : `Ha ${Number(excludedFactsCount)} fatos revisados com CPF divergente do titular cadastrado e eles ficaram fora do resumo anual.`,
+    });
+  }
+
   return warnings;
 };
 
 const buildCalculatedSummaryPayload = ({
   reviewedFacts,
+  excludedFactsCount,
   sourceCounts,
   activeRuleConfig,
 }) => {
@@ -145,6 +157,7 @@ const buildCalculatedSummaryPayload = ({
     warnings: buildSummaryWarnings({
       reviewedFacts,
       sourceCounts,
+      excludedFactsCount,
     }),
   };
 };
@@ -190,9 +203,10 @@ export const rebuildTaxSummaryByYear = async (userId, taxYearValue) => {
   const taxYear = normalizeTaxYear(taxYearValue);
   const activeRuleConfig = await requireActiveTaxRuleConfigByYear(taxYear);
   const sourceCounts = await getSourceCountsByUserAndYear(normalizedUserId, taxYear);
-  const reviewedFacts = await listReviewedTaxFactsByUserAndYear(normalizedUserId, taxYear);
+  const factSelection = await getReviewedTaxFactsSelectionByUserAndYear(normalizedUserId, taxYear);
   const summaryPayload = buildCalculatedSummaryPayload({
-    reviewedFacts,
+    reviewedFacts: factSelection.includedFacts,
+    excludedFactsCount: factSelection.excludedFacts.length,
     sourceCounts,
     activeRuleConfig,
   });
