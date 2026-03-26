@@ -10,6 +10,8 @@ export interface IncomeStatementPrefill {
   referenceMonth?: string;
   netAmount?: number;
   paymentDate?: string;
+  grossAmount?: number | null;
+  details?: Record<string, unknown> | null;
 }
 
 interface Props {
@@ -99,6 +101,8 @@ export default function IncomeStatementQuickModal({
         referenceMonth: referenceMonth.trim(),
         netAmount: parsedNet,
         paymentDate: paymentDate.trim() || null,
+        grossAmount: prefill?.grossAmount ?? null,
+        details: prefill?.details ?? null,
       });
 
       setCreatedStatement(statement);

@@ -181,10 +181,17 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   const incomePrefill = useMemo(() => {
     const suggestion = dryRunResult?.suggestion;
     if (suggestion?.type !== "profile") return null;
+    const details = {};
+    if (suggestion.benefitKind) details.benefitKind = suggestion.benefitKind;
+    if (Array.isArray(suggestion.deductions) && suggestion.deductions.length > 0) {
+      details.deductions = suggestion.deductions;
+    }
     return {
       referenceMonth: suggestion.referenceMonth ?? undefined,
       netAmount: suggestion.netAmount ?? undefined,
       paymentDate: suggestion.paymentDate ?? undefined,
+      grossAmount: suggestion.grossAmount ?? null,
+      details: Object.keys(details).length > 0 ? details : null,
     };
   }, [dryRunResult]);
 
