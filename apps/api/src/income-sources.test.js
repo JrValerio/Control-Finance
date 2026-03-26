@@ -721,7 +721,7 @@ describe("income-sources", () => {
   });
 
   it("POST .../link-transaction retorna 422 para transacao tipo Saida", async () => {
-    const { token, statementId, transactionId: _ } = await setupStatementAndTransaction(
+    const { token, statementId } = await setupStatementAndTransaction(
       "inss-link-exit@test.dev",
       { txType: "Saida" },
     );
