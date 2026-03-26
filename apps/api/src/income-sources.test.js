@@ -444,6 +444,99 @@ describe("income-sources", () => {
     expectErrorResponseWithRequestId(res, 409, "Ja existe um extrato para 2026-01.");
   });
 
+  it("POST /income-sources/:id/statements persiste grossAmount e details", async () => {
+    const token = await registerAndLogin("inss-stmt-gross@test.dev");
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Pensao INSS" });
+    const sourceId = srcRes.body.id;
+
+    const res = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-03",
+        netAmount: 2803.52,
+        grossAmount: 4958.67,
+        details: {
+          benefitKind: "pensao_por_morte_previdenciaria",
+          deductions: [
+            { label: "emprestimo_consignado", amount: 1200 },
+            { label: "cartao_rmc", amount: 955.15 },
+          ],
+        },
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.statement).toMatchObject({
+      referenceMonth: "2026-03",
+      netAmount: 2803.52,
+      grossAmount: 4958.67,
+    });
+    expect(res.body.statement.details).toMatchObject({
+      benefitKind: "pensao_por_morte_previdenciaria",
+      deductions: [
+        { label: "emprestimo_consignado", amount: 1200 },
+        { label: "cartao_rmc", amount: 955.15 },
+      ],
+    });
+  });
+
+  it("POST /income-sources/:id/statements retorna grossAmount null quando omitido", async () => {
+    const token = await registerAndLogin("inss-stmt-nogross@test.dev");
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Salario" });
+    const sourceId = srcRes.body.id;
+
+    const res = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ referenceMonth: "2026-03", netAmount: 5000 });
+
+    expect(res.status).toBe(201);
+    expect(res.body.statement.grossAmount).toBeNull();
+    expect(res.body.statement.details).toBeNull();
+  });
+
+  it("POST /income-sources/:id/statements retorna 400 para grossAmount negativo", async () => {
+    const token = await registerAndLogin("inss-stmt-negatives@test.dev");
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Salario" });
+    const sourceId = srcRes.body.id;
+
+    const res = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ referenceMonth: "2026-03", netAmount: 5000, grossAmount: -100 });
+
+    expectErrorResponseWithRequestId(res, 400, "Valor bruto deve ser maior que zero.");
+  });
+
+  it("POST /income-sources/:id/statements retorna 400 para details invalido", async () => {
+    const token = await registerAndLogin("inss-stmt-baddetails@test.dev");
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Salario" });
+    const sourceId = srcRes.body.id;
+
+    const res = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ referenceMonth: "2026-03", netAmount: 5000, details: "string invalida" });
+
+    expectErrorResponseWithRequestId(res, 400, "Detalhes deve ser um objeto.");
+  });
+
   it("POST /income-sources/:id/statements retorna 400 para mes invalido", async () => {
     const token = await registerAndLogin("inss-stmt-badmonth@test.dev");
 
