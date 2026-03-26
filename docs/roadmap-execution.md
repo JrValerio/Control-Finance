@@ -193,6 +193,7 @@ Toda entrega nova deve responder a pelo menos um destes critérios:
 - modal de upload fiscal com reprocessamento automático
 - retry/delete por documento com rebuild de snapshot
 - download oficial do dossiê pelo backend
+- runbook operacional do batch legado em `docs/runbooks/tax-legacy-reprocess.md`
 
 ### Guardrails fixados
 

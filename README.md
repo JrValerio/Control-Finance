@@ -311,6 +311,7 @@ npm -w apps/web run build
 ## Documentação técnica
 
 * `docs/roadmap-execution.md` — mapa interno de execução: estado atual, próximo sprint, backlog e decisões arquiteturais
+* `docs/runbooks/tax-legacy-reprocess.md` — execução operacional do batch de reprocessamento fiscal legado
 
 * `docs/architecture/v1.31.0-central-do-leao-irpf.md`
 * `docs/architecture/v1.6.11-billing-state-machine.md`
