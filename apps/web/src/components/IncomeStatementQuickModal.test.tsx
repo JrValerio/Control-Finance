@@ -2,17 +2,23 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import IncomeStatementQuickModal from "./IncomeStatementQuickModal";
-import { incomeSourcesService, type IncomeSourceWithDeductions } from "../services/incomeSources.service";
+import {
+  incomeSourcesService,
+  type IncomeSourceWithDeductions,
+} from "../services/incomeSources.service";
 
 vi.mock("../services/incomeSources.service", () => ({
   incomeSourcesService: {
     list: vi.fn(),
     createStatement: vi.fn(),
     linkTransaction: vi.fn(),
+    postStatement: vi.fn(),
   },
 }));
 
-const buildSource = (overrides: Partial<IncomeSourceWithDeductions> = {}): IncomeSourceWithDeductions => ({
+const buildSource = (
+  overrides: Partial<IncomeSourceWithDeductions> = {},
+): IncomeSourceWithDeductions => ({
   id: 1,
   userId: 1,
   name: "INSS Benefício",
@@ -40,6 +46,22 @@ const mockStatement = {
   updatedAt: "2026-02-25T00:00:00Z",
 };
 
+const mockPostResult = {
+  statement: {
+    ...mockStatement,
+    status: "posted" as const,
+    postedTransactionId: 99,
+  },
+  transaction: {
+    id: 99,
+    type: "Entrada",
+    value: 1412,
+    date: "2026-02-25",
+    description: "INSS Beneficio - 2026-02",
+    categoryId: null,
+  },
+};
+
 describe("IncomeStatementQuickModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -49,6 +71,7 @@ describe("IncomeStatementQuickModal", () => {
       deductions: [],
     });
     vi.mocked(incomeSourcesService.linkTransaction).mockResolvedValue(mockStatement);
+    vi.mocked(incomeSourcesService.postStatement).mockResolvedValue(mockPostResult);
   });
 
   it("does not render when isOpen is false", () => {
@@ -99,12 +122,15 @@ describe("IncomeStatementQuickModal", () => {
     await waitFor(() => {
       expect(screen.getByRole("combobox", { name: /Fonte de renda/i })).toHaveValue("1");
     });
-    await userEvent.click(screen.getByRole("button", { name: "Registrar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Registrar somente no historico" }),
+    );
     await waitFor(() => {
-      expect(screen.getByText("Lançamento registrado com sucesso.")).toBeInTheDocument();
+      expect(screen.getByText("Lancamento registrado com sucesso.")).toBeInTheDocument();
     });
     expect(onCreated).toHaveBeenCalledWith(mockStatement);
     expect(incomeSourcesService.linkTransaction).not.toHaveBeenCalled();
+    expect(incomeSourcesService.postStatement).not.toHaveBeenCalled();
   });
 
   it("shows error message when createStatement rejects", async () => {
@@ -119,7 +145,9 @@ describe("IncomeStatementQuickModal", () => {
     await waitFor(() => {
       expect(screen.getByRole("combobox", { name: /Fonte de renda/i })).toHaveValue("1");
     });
-    await userEvent.click(screen.getByRole("button", { name: "Registrar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Registrar somente no historico" }),
+    );
     await waitFor(() => {
       expect(screen.getByText("Falha de rede")).toBeInTheDocument();
     });
@@ -137,11 +165,42 @@ describe("IncomeStatementQuickModal", () => {
     await waitFor(() => {
       expect(screen.getByRole("combobox", { name: /Fonte de renda/i })).toHaveValue("1");
     });
-    await userEvent.click(screen.getByRole("button", { name: "Registrar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Registrar e vincular entrada" }),
+    );
     await waitFor(() => {
-      expect(screen.getByText(/vínculo com a transação importada confirmado/i)).toBeInTheDocument();
+      expect(screen.getByText(/vinculo com a transacao importada confirmado/i)).toBeInTheDocument();
     });
     expect(incomeSourcesService.linkTransaction).toHaveBeenCalledWith(10, 99);
+    expect(incomeSourcesService.postStatement).not.toHaveBeenCalled();
+  });
+
+  it("posts the statement when compose income is enabled for imported proof without transaction", async () => {
+    const onCreated = vi.fn();
+    render(
+      <IncomeStatementQuickModal
+        isOpen
+        onClose={vi.fn()}
+        defaultComposeIncome
+        prefill={{ referenceMonth: "2026-02", netAmount: 1412, paymentDate: "2026-02-25" }}
+        onCreated={onCreated}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: /Fonte de renda/i })).toHaveValue("1");
+    });
+
+    expect(screen.getByLabelText(/Este documento compoe minha renda/i)).toBeChecked();
+
+    await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/entrada gerada/i)).toBeInTheDocument();
+    });
+
+    expect(incomeSourcesService.postStatement).toHaveBeenCalledWith(10);
+    expect(onCreated).toHaveBeenCalledWith(mockPostResult.statement);
   });
 
   it("shows amber warning when linkage fails after successful statement creation", async () => {
@@ -159,14 +218,16 @@ describe("IncomeStatementQuickModal", () => {
     await waitFor(() => {
       expect(screen.getByRole("combobox", { name: /Fonte de renda/i })).toHaveValue("1");
     });
-    await userEvent.click(screen.getByRole("button", { name: "Registrar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Registrar e vincular entrada" }),
+    );
     await waitFor(() => {
       expect(
-        screen.getByText(/histórico registrado, mas o vínculo com a transação/i),
+        screen.getByText(/historico registrado, mas o vinculo com a transacao/i),
       ).toBeInTheDocument();
     });
     expect(screen.getByText(/vincular manualmente/i)).toBeInTheDocument();
-    expect(screen.getByText("Lançamento registrado com sucesso.")).toBeInTheDocument();
+    expect(screen.getByText("Lancamento registrado com sucesso.")).toBeInTheDocument();
   });
 
   it("shows validation error when source not selected", async () => {
@@ -178,9 +239,10 @@ describe("IncomeStatementQuickModal", () => {
     await waitFor(() => {
       expect(screen.getByRole("option", { name: "A" })).toBeInTheDocument();
     });
-    // Don't select anything — submit with empty source
     await userEvent.selectOptions(screen.getByRole("combobox"), "");
-    await userEvent.click(screen.getByRole("button", { name: "Registrar" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Registrar somente no historico" }),
+    );
     expect(screen.getByText(/selecione uma fonte/i)).toBeInTheDocument();
   });
 });

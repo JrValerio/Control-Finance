@@ -3,6 +3,7 @@ import {
   incomeSourcesService,
   type IncomeSourceWithDeductions,
   type IncomeStatement,
+  type PostStatementResult,
 } from "../services/incomeSources.service";
 import { getApiErrorMessage } from "../utils/apiError";
 
@@ -20,16 +21,19 @@ interface Props {
   prefill?: IncomeStatementPrefill | null;
   /** When provided, automatically links the created statement to this transaction. */
   transactionId?: number | null;
+  defaultComposeIncome?: boolean;
   onCreated?: (statement: IncomeStatement) => void;
 }
 
-type LinkStatus = "idle" | "linking" | "linked" | "link_failed";
+type FinalizationMode = "none" | "link" | "post";
+type FinalizationStatus = "idle" | "linking" | "linked" | "posting" | "posted" | "failed";
 
 export default function IncomeStatementQuickModal({
   isOpen,
   onClose,
   prefill,
   transactionId,
+  defaultComposeIncome = false,
   onCreated,
 }: Props) {
   const [sources, setSources] = useState<IncomeSourceWithDeductions[]>([]);
@@ -38,11 +42,14 @@ export default function IncomeStatementQuickModal({
   const [referenceMonth, setReferenceMonth] = useState("");
   const [netAmount, setNetAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState("");
+  const [composeIncome, setComposeIncome] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [createdStatement, setCreatedStatement] = useState<IncomeStatement | null>(null);
-  const [linkStatus, setLinkStatus] = useState<LinkStatus>("idle");
-  const [linkError, setLinkError] = useState("");
+  const [postedTransaction, setPostedTransaction] = useState<PostStatementResult["transaction"] | null>(null);
+  const [finalizationMode, setFinalizationMode] = useState<FinalizationMode>("none");
+  const [finalizationStatus, setFinalizationStatus] = useState<FinalizationStatus>("idle");
+  const [finalizationError, setFinalizationError] = useState("");
 
   // Reset + fetch sources on open
   useEffect(() => {
@@ -51,10 +58,13 @@ export default function IncomeStatementQuickModal({
       setReferenceMonth("");
       setNetAmount("");
       setPaymentDate("");
+      setComposeIncome(Boolean(transactionId) || defaultComposeIncome);
       setErrorMessage("");
       setCreatedStatement(null);
-      setLinkStatus("idle");
-      setLinkError("");
+      setPostedTransaction(null);
+      setFinalizationMode("none");
+      setFinalizationStatus("idle");
+      setFinalizationError("");
       setSources([]);
       return;
     }
@@ -62,6 +72,11 @@ export default function IncomeStatementQuickModal({
     setReferenceMonth(prefill?.referenceMonth ?? "");
     setNetAmount(prefill?.netAmount != null ? String(prefill.netAmount) : "");
     setPaymentDate(prefill?.paymentDate ?? "");
+    setComposeIncome(Boolean(transactionId) || defaultComposeIncome);
+    setPostedTransaction(null);
+    setFinalizationMode("none");
+    setFinalizationStatus("idle");
+    setFinalizationError("");
 
     setIsLoadingSources(true);
     incomeSourcesService
@@ -74,7 +89,7 @@ export default function IncomeStatementQuickModal({
       })
       .catch(() => {})
       .finally(() => setIsLoadingSources(false));
-  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [defaultComposeIncome, isOpen, prefill?.netAmount, prefill?.paymentDate, prefill?.referenceMonth, transactionId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,24 +120,47 @@ export default function IncomeStatementQuickModal({
         details: prefill?.details ?? null,
       });
 
-      setCreatedStatement(statement);
-      onCreated?.(statement);
+      let finalStatement = statement;
+      let shouldNotifyCreated = true;
 
-      // Auto-link if transactionId was supplied
-      if (transactionId) {
-        setLinkStatus("linking");
-        try {
-          await incomeSourcesService.linkTransaction(statement.id, transactionId);
-          setLinkStatus("linked");
-        } catch (linkErr) {
-          setLinkStatus("link_failed");
-          setLinkError(
-            getApiErrorMessage(linkErr, "Não foi possível vincular à transação importada."),
-          );
+      if (composeIncome) {
+        if (transactionId) {
+          setFinalizationMode("link");
+          setFinalizationStatus("linking");
+          try {
+            finalStatement = await incomeSourcesService.linkTransaction(statement.id, transactionId);
+            setFinalizationStatus("linked");
+          } catch (linkErr) {
+            setFinalizationStatus("failed");
+            setFinalizationError(
+              getApiErrorMessage(linkErr, "Nao foi possivel vincular a transacao importada."),
+            );
+            shouldNotifyCreated = false;
+          }
+        } else {
+          setFinalizationMode("post");
+          setFinalizationStatus("posting");
+          try {
+            const postResult = await incomeSourcesService.postStatement(statement.id);
+            finalStatement = postResult.statement;
+            setPostedTransaction(postResult.transaction);
+            setFinalizationStatus("posted");
+          } catch (postErr) {
+            setFinalizationStatus("failed");
+            setFinalizationError(
+              getApiErrorMessage(postErr, "Nao foi possivel lancar a entrada automaticamente."),
+            );
+            shouldNotifyCreated = false;
+          }
         }
       }
+
+      setCreatedStatement(finalStatement);
+      if (shouldNotifyCreated) {
+        onCreated?.(finalStatement);
+      }
     } catch (err) {
-      setErrorMessage(getApiErrorMessage(err, "Não foi possível registrar o lançamento."));
+      setErrorMessage(getApiErrorMessage(err, "Nao foi possivel registrar o lancamento."));
     } finally {
       setIsSubmitting(false);
     }
@@ -167,31 +205,57 @@ export default function IncomeStatementQuickModal({
           <div className="space-y-2">
             <div className="rounded border border-green-200 bg-green-50 px-3 py-3 dark:border-green-800 dark:bg-green-950/40">
               <p className="text-sm font-semibold text-green-700 dark:text-green-400">
-                Lançamento registrado com sucesso.
+                {finalizationStatus === "posted"
+                  ? "Renda registrada e entrada lancada com sucesso."
+                  : "Lancamento registrado com sucesso."}
               </p>
 
-              {linkStatus === "linking" && (
+              {finalizationStatus === "linking" && (
                 <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                  Vinculando à transação importada...
+                  Vinculando a transacao importada...
                 </p>
               )}
-              {linkStatus === "linked" && (
+              {finalizationStatus === "linked" && (
                 <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
-                  Vínculo com a transação importada confirmado.
+                  Vinculo com a transacao importada confirmado.
+                </p>
+              )}
+              {finalizationStatus === "posting" && (
+                <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                  Lancando a entrada do mes...
+                </p>
+              )}
+              {finalizationStatus === "posted" && postedTransaction && (
+                <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
+                  Entrada gerada: R$ {postedTransaction.value.toFixed(2).replace(".", ",")}
                 </p>
               )}
             </div>
 
-            {linkStatus === "link_failed" && (
+            {finalizationStatus === "failed" && finalizationMode === "link" && (
               <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
                 <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                  Histórico registrado, mas o vínculo com a transação importada não foi concluído.
+                  Historico registrado, mas o vinculo com a transacao importada nao foi concluido.
                 </p>
-                {linkError && (
-                  <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{linkError}</p>
+                {finalizationError && (
+                  <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{finalizationError}</p>
                 )}
                 <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  Você pode vincular manualmente pelo histórico de renda.
+                  Voce pode vincular manualmente pelo historico de renda.
+                </p>
+              </div>
+            )}
+
+            {finalizationStatus === "failed" && finalizationMode === "post" && (
+              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                  Historico registrado, mas a entrada ainda nao foi lancada na renda mensal.
+                </p>
+                {finalizationError && (
+                  <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{finalizationError}</p>
+                )}
+                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  Voce pode revisar o extrato e lancar a entrada depois pela area de fontes de renda.
                 </p>
               </div>
             )}
@@ -199,7 +263,7 @@ export default function IncomeStatementQuickModal({
             <button
               type="button"
               onClick={onClose}
-              disabled={linkStatus === "linking"}
+              disabled={finalizationStatus === "linking" || finalizationStatus === "posting"}
               className="rounded border border-green-400 bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-green-700 dark:bg-green-900/40 dark:text-green-300"
             >
               Fechar
@@ -292,6 +356,29 @@ export default function IncomeStatementQuickModal({
                 />
               </div>
 
+              <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
+                <label
+                  htmlFor="income-quick-compose"
+                  className="flex items-start gap-2 text-sm font-medium text-cf-text-primary"
+                >
+                  <input
+                    id="income-quick-compose"
+                    type="checkbox"
+                    checked={composeIncome}
+                    onChange={(e) => setComposeIncome(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-cf-border accent-brand-1"
+                  />
+                  <span>Este documento compoe minha renda</span>
+                </label>
+                <p className="mt-1 text-xs text-cf-text-secondary">
+                  {composeIncome
+                    ? transactionId
+                      ? "Ao registrar, o historico sera vinculado a entrada importada deste extrato."
+                      : "Ao registrar, o historico sera lancado como entrada do mes."
+                    : "Ao registrar, o documento fica so no historico e nao entra na renda mensal ainda."}
+                </p>
+              </div>
+
               {errorMessage ? (
                 <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-400">
                   {errorMessage}
@@ -304,7 +391,13 @@ export default function IncomeStatementQuickModal({
                   disabled={isSubmitting || sources.length === 0}
                   className="rounded border border-brand-1 bg-brand-1 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSubmitting ? "Registrando..." : "Registrar"}
+                  {isSubmitting
+                    ? "Registrando..."
+                    : composeIncome
+                      ? transactionId
+                        ? "Registrar e vincular entrada"
+                        : "Registrar e lancar entrada"
+                      : "Registrar somente no historico"}
                 </button>
                 <button
                   type="button"

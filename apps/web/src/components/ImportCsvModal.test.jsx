@@ -303,7 +303,7 @@ describe("ImportCsvModal", () => {
         },
       });
 
-    it("exibe botao Registrar no historico de renda para suggestion type=profile", async () => {
+    it("exibe botao de compor renda para suggestion type=profile", async () => {
       const file = new File(["dummy"], "inss.pdf", { type: "application/pdf" });
       transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildInssResponse());
 
@@ -313,7 +313,7 @@ describe("ImportCsvModal", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole("button", { name: "Registrar no histórico de renda" }),
+          screen.getByRole("button", { name: "Usar este documento na minha renda" }),
         ).toBeInTheDocument();
       });
     });
@@ -331,12 +331,12 @@ describe("ImportCsvModal", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole("button", { name: "Registrar no histórico de renda" }),
+          screen.getByRole("button", { name: "Usar este documento na minha renda" }),
         ).toBeInTheDocument();
       });
 
       await userEvent.click(
-        screen.getByRole("button", { name: "Registrar no histórico de renda" }),
+        screen.getByRole("button", { name: "Usar este documento na minha renda" }),
       );
 
       await waitFor(() => {
