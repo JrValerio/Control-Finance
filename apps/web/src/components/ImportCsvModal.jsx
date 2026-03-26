@@ -575,7 +575,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                     onClick={() => setIsIncomeModalOpen(true)}
                     className="mt-1 rounded border border-blue-400 bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-200 dark:border-blue-600 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-800/40"
                   >
-                    Registrar no histórico de renda
+                    Usar este documento na minha renda
                   </button>
                 ) : null}
                 {suggestionCard.kind === "profile" && incomeStatementCreated ? (
@@ -852,6 +852,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
         onClose={() => setIsIncomeModalOpen(false)}
         prefill={incomePrefill}
         transactionId={incomeTransactionId}
+        defaultComposeIncome
         onCreated={() => {
           setIsIncomeModalOpen(false);
           setIncomeStatementCreated(true);
