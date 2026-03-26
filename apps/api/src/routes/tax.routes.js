@@ -10,9 +10,10 @@ import {
 } from "../services/tax-documents.service.js";
 import { processTaxDocumentByIdForUser } from "../services/tax-extraction.service.js";
 import { listTaxFactsByUser } from "../services/tax-facts.service.js";
+import { getTaxObligationByYear } from "../services/tax-obligation.service.js";
 import { bulkApproveTaxFactsByUser, reviewTaxFactByUser } from "../services/tax-reviews.service.js";
 import { getTaxRuleSetsByYear } from "../services/tax-rules.service.js";
-import { getTaxSummaryByYear } from "../services/tax-summary.service.js";
+import { getTaxSummaryByYear, rebuildTaxSummaryByYear } from "../services/tax-summary.service.js";
 
 const router = Router();
 const TAX_DOCUMENT_MAX_FILE_SIZE_BYTES = Number(
@@ -167,9 +168,27 @@ router.get("/rules/:taxYear", async (req, res, next) => {
   }
 });
 
+router.get("/obligation/:taxYear", async (req, res, next) => {
+  try {
+    const obligation = await getTaxObligationByYear(req.user.id, req.params.taxYear);
+    res.status(200).json(obligation);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get("/summary/:taxYear", async (req, res, next) => {
   try {
     const summary = await getTaxSummaryByYear(req.user.id, req.params.taxYear);
+    res.status(200).json(summary);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/summary/:taxYear/rebuild", async (req, res, next) => {
+  try {
+    const summary = await rebuildTaxSummaryByYear(req.user.id, req.params.taxYear);
     res.status(200).json(summary);
   } catch (error) {
     next(error);

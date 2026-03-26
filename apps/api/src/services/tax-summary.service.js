@@ -1,5 +1,14 @@
-import { dbQuery } from "../db/index.js";
+import { dbQuery, withDbTransaction } from "../db/index.js";
+import { calculateTaxObligation, summarizeReviewedTaxFacts } from "../domain/tax/tax-obligation.calculator.js";
+import {
+  calculateAnnualProgressiveTax,
+  calculateSimplifiedDiscount,
+} from "../domain/tax/tax-rules.engine.js";
 import { normalizeTaxUserId, normalizeTaxYear, toISOStringOrNull } from "../domain/tax/tax.validation.js";
+import { listReviewedTaxFactsByUserAndYear } from "./tax-obligation.service.js";
+import { requireActiveTaxRuleConfigByYear } from "./tax-rules.service.js";
+
+const DUPLICATE_FACT_CONFLICT_CODE = "TAX_FACT_DUPLICATE";
 
 const buildDefaultSummaryPayload = () => ({
   mustDeclare: null,
@@ -21,6 +30,16 @@ const normalizeStoredSummary = (value) => {
   }
 
   return value;
+};
+
+const normalizeMoney = (value) => {
+  const parsedValue = Number(value);
+
+  if (!Number.isFinite(parsedValue)) {
+    return 0;
+  }
+
+  return Number(parsedValue.toFixed(2));
 };
 
 const getSourceCountsByUserAndYear = async (userId, taxYear) => {
@@ -49,20 +68,106 @@ const getSourceCountsByUserAndYear = async (userId, taxYear) => {
   };
 };
 
-export const getTaxSummaryByYear = async (userId, taxYearValue) => {
-  const normalizedUserId = normalizeTaxUserId(userId);
-  const taxYear = normalizeTaxYear(taxYearValue);
-  const sourceCounts = await getSourceCountsByUserAndYear(normalizedUserId, taxYear);
-  const summaryResult = await dbQuery(
+const buildSummaryWarnings = ({ reviewedFacts, sourceCounts }) => {
+  const warnings = [];
+
+  if (sourceCounts.factsPending > 0) {
+    warnings.push({
+      code: "PENDING_FACTS_EXCLUDED",
+      message: "Ha fatos fiscais pendentes de revisao e eles nao entram no resumo anual.",
+    });
+  }
+
+  if (reviewedFacts.some((fact) => fact.conflict_code === DUPLICATE_FACT_CONFLICT_CODE)) {
+    warnings.push({
+      code: "DUPLICATE_FACTS_INCLUDED",
+      message:
+        "Ha fatos aprovados ou corrigidos marcados como potencialmente duplicados. Revise antes de declarar.",
+    });
+  }
+
+  return warnings;
+};
+
+const buildCalculatedSummaryPayload = ({
+  reviewedFacts,
+  sourceCounts,
+  activeRuleConfig,
+}) => {
+  const totals = summarizeReviewedTaxFacts(reviewedFacts);
+  const obligation = calculateTaxObligation({
+    totals,
+    obligationRules: activeRuleConfig.ruleSets.obligation?.rules,
+  });
+  const annualTableRules = activeRuleConfig.ruleSets.annual_table?.rules || {};
+  const deductionLimitRules = activeRuleConfig.ruleSets.deduction_limits?.rules || {};
+  const comparisonRules = activeRuleConfig.ruleSets.comparison_logic?.rules || {};
+  const legalBaseAmount = Math.max(
+    normalizeMoney(totals.annualTaxableIncome - totals.totalLegalDeductions),
+    0,
+  );
+  const simplifiedDiscountUsed = calculateSimplifiedDiscount({
+    annualTaxableIncome: totals.annualTaxableIncome,
+    comparisonRules,
+    deductionLimitRules,
+  });
+  const simplifiedBaseAmount = Math.max(
+    normalizeMoney(totals.annualTaxableIncome - simplifiedDiscountUsed),
+    0,
+  );
+  const annualTaxUsingLegalDeductions = calculateAnnualProgressiveTax({
+    baseAmount: legalBaseAmount,
+    annualTableRules,
+  });
+  const annualTaxUsingSimplifiedDiscount = calculateAnnualProgressiveTax({
+    baseAmount: simplifiedBaseAmount,
+    annualTableRules,
+  });
+  const bestMethod =
+    annualTaxUsingLegalDeductions < annualTaxUsingSimplifiedDiscount
+      ? "legal_deductions"
+      : "simplified_discount";
+
+  return {
+    mustDeclare: obligation.mustDeclare,
+    obligationReasons: obligation.reasons.map((reason) => reason.code),
+    annualTaxableIncome: totals.annualTaxableIncome,
+    annualExemptIncome: totals.annualExemptIncome,
+    annualExclusiveIncome: totals.annualExclusiveIncome,
+    annualWithheldTax: totals.annualWithheldTax,
+    totalLegalDeductions: totals.totalLegalDeductions,
+    simplifiedDiscountUsed,
+    bestMethod,
+    estimatedAnnualTax:
+      bestMethod === "legal_deductions"
+        ? annualTaxUsingLegalDeductions
+        : annualTaxUsingSimplifiedDiscount,
+    warnings: buildSummaryWarnings({
+      reviewedFacts,
+      sourceCounts,
+    }),
+  };
+};
+
+const getLatestStoredSummaryRow = async (userId, taxYear) => {
+  const result = await dbQuery(
     `SELECT snapshot_version, summary_json, generated_at
      FROM tax_summaries
      WHERE user_id = $1
        AND tax_year = $2
      ORDER BY snapshot_version DESC
      LIMIT 1`,
-    [normalizedUserId, taxYear],
+    [userId, taxYear],
   );
-  const latestSummary = summaryResult.rows[0];
+
+  return result.rows[0] || null;
+};
+
+export const getTaxSummaryByYear = async (userId, taxYearValue) => {
+  const normalizedUserId = normalizeTaxUserId(userId);
+  const taxYear = normalizeTaxYear(taxYearValue);
+  const sourceCounts = await getSourceCountsByUserAndYear(normalizedUserId, taxYear);
+  const latestSummary = await getLatestStoredSummaryRow(normalizedUserId, taxYear);
   const summaryPayload = {
     ...buildDefaultSummaryPayload(),
     ...normalizeStoredSummary(latestSummary?.summary_json),
@@ -70,10 +175,68 @@ export const getTaxSummaryByYear = async (userId, taxYearValue) => {
 
   return {
     taxYear,
+    exerciseYear: taxYear,
+    calendarYear: taxYear - 1,
     status: latestSummary ? "generated" : "not_generated",
     snapshotVersion: latestSummary ? Number(latestSummary.snapshot_version) : null,
     ...summaryPayload,
     sourceCounts,
     generatedAt: toISOStringOrNull(latestSummary?.generated_at),
+  };
+};
+
+export const rebuildTaxSummaryByYear = async (userId, taxYearValue) => {
+  const normalizedUserId = normalizeTaxUserId(userId);
+  const taxYear = normalizeTaxYear(taxYearValue);
+  const activeRuleConfig = await requireActiveTaxRuleConfigByYear(taxYear);
+  const sourceCounts = await getSourceCountsByUserAndYear(normalizedUserId, taxYear);
+  const reviewedFacts = await listReviewedTaxFactsByUserAndYear(normalizedUserId, taxYear);
+  const summaryPayload = buildCalculatedSummaryPayload({
+    reviewedFacts,
+    sourceCounts,
+    activeRuleConfig,
+  });
+
+  const persistedSummary = await withDbTransaction(async (client) => {
+    const currentVersionResult = await client.query(
+      `SELECT COALESCE(MAX(snapshot_version), 0) AS latest_version
+       FROM tax_summaries
+       WHERE user_id = $1
+         AND tax_year = $2`,
+      [normalizedUserId, taxYear],
+    );
+    const nextSnapshotVersion = Number(currentVersionResult.rows[0]?.latest_version || 0) + 1;
+    const insertResult = await client.query(
+      `INSERT INTO tax_summaries (
+         user_id,
+         tax_year,
+         snapshot_version,
+         summary_json,
+         source_counts_json
+       )
+       VALUES ($1, $2, $3, $4::jsonb, $5::jsonb)
+       RETURNING snapshot_version, summary_json, generated_at`,
+      [
+        normalizedUserId,
+        taxYear,
+        nextSnapshotVersion,
+        JSON.stringify(summaryPayload),
+        JSON.stringify(sourceCounts),
+      ],
+    );
+
+    return insertResult.rows[0];
+  });
+
+  return {
+    taxYear,
+    exerciseYear: activeRuleConfig.exerciseYear,
+    calendarYear: activeRuleConfig.calendarYear,
+    status: "generated",
+    snapshotVersion: Number(persistedSummary.snapshot_version),
+    ...buildDefaultSummaryPayload(),
+    ...normalizeStoredSummary(persistedSummary.summary_json),
+    sourceCounts,
+    generatedAt: toISOStringOrNull(persistedSummary.generated_at),
   };
 };

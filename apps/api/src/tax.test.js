@@ -116,8 +116,28 @@ describe("Tax API foundation", () => {
     );
   });
 
+  it("GET /tax/obligation/:taxYear retorna 401 sem token", async () => {
+    const response = await request(app).get("/tax/obligation/2026");
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
   it("GET /tax/summary/:taxYear retorna 401 sem token", async () => {
     const response = await request(app).get("/tax/summary/2026");
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
+  it("POST /tax/summary/:taxYear/rebuild retorna 401 sem token", async () => {
+    const response = await request(app).post("/tax/summary/2026/rebuild");
 
     expectErrorResponseWithRequestId(
       response,
@@ -1019,19 +1039,151 @@ describe("Tax API foundation", () => {
     });
   });
 
-  it("GET /tax/rules/:taxYear retorna estrutura vazia quando ainda nao ha regras ativas", async () => {
+  it("GET /tax/rules/:taxYear retorna regras oficiais seedadas para o exercicio 2026", async () => {
     const token = await registerAndLogin("tax-rules@test.dev");
     const response = await request(app)
       .get("/tax/rules/2026")
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      taxYear: 2026,
-      exerciseYear: 2027,
-      ruleSets: {},
-      totalActiveRuleSets: 0,
+    expect(response.body.taxYear).toBe(2026);
+    expect(response.body.exerciseYear).toBe(2026);
+    expect(response.body.calendarYear).toBe(2025);
+    expect(response.body.totalActiveRuleSets).toBe(4);
+    expect(response.body.ruleSets).toMatchObject({
+      obligation: {
+        version: 1,
+        sourceLabel: "Receita Federal - DIRPF 2026",
+      },
+      annual_table: {
+        version: 1,
+        sourceLabel: "Receita Federal - Tributacao de 2025",
+      },
+      deduction_limits: {
+        version: 1,
+        sourceLabel: "Receita Federal - Tributacao de 2025",
+      },
+      comparison_logic: {
+        version: 1,
+        sourceLabel: "Receita Federal - Tributacao de 2025",
+      },
     });
+
+    const persistedRulesResult = await dbQuery(
+      `SELECT rule_family, version
+       FROM tax_rule_sets
+       WHERE tax_year = 2026
+         AND is_active = TRUE
+       ORDER BY rule_family ASC`,
+    );
+
+    expect(persistedRulesResult.rows).toEqual([
+      { rule_family: "annual_table", version: 1 },
+      { rule_family: "comparison_logic", version: 1 },
+      { rule_family: "deduction_limits", version: 1 },
+      { rule_family: "obligation", version: 1 },
+    ]);
+  });
+
+  it("GET /tax/obligation/:taxYear considera apenas fatos approved ou corrected", async () => {
+    const token = await registerAndLogin("tax-obligation@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+            "Decimo terceiro R$ 5.000,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "obligation.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+
+    const beforeApprovalResponse = await request(app)
+      .get("/tax/obligation/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(beforeApprovalResponse.status).toBe(200);
+    expect(beforeApprovalResponse.body).toMatchObject({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      mustDeclare: false,
+      reasons: [],
+      thresholds: {
+        taxableIncome: 35584,
+        exemptAndExclusiveIncome: 200000,
+        assets: 800000,
+        ruralRevenue: 177920,
+      },
+      totals: {
+        annualTaxableIncome: 0,
+        annualExemptIncome: 0,
+        annualExclusiveIncome: 0,
+        annualCombinedExemptAndExclusiveIncome: 0,
+        totalAssetBalance: 0,
+      },
+      approvedFactsCount: 0,
+    });
+
+    const factsResult = await dbQuery(
+      `SELECT id
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+    const factIds = factsResult.rows.map((row) => Number(row.id));
+
+    const bulkApproveResponse = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds,
+        action: "approve",
+      });
+
+    expect(bulkApproveResponse.status).toBe(200);
+
+    const afterApprovalResponse = await request(app)
+      .get("/tax/obligation/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(afterApprovalResponse.status).toBe(200);
+    expect(afterApprovalResponse.body.mustDeclare).toBe(true);
+    expect(afterApprovalResponse.body.reasons).toEqual([
+      {
+        code: "TAXABLE_INCOME_LIMIT",
+        message: "Rendimentos tributaveis acima do limite do exercicio.",
+      },
+    ]);
+    expect(afterApprovalResponse.body.totals).toMatchObject({
+      annualTaxableIncome: 54321,
+      annualExemptIncome: 0,
+      annualExclusiveIncome: 5000,
+      annualCombinedExemptAndExclusiveIncome: 5000,
+      totalAssetBalance: 0,
+    });
+    expect(afterApprovalResponse.body.approvedFactsCount).toBe(3);
   });
 
   it("GET /tax/summary/:taxYear retorna esqueleto da trilha fiscal antes da primeira geracao", async () => {
@@ -1043,6 +1195,8 @@ describe("Tax API foundation", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
       taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
       status: "not_generated",
       snapshotVersion: null,
       mustDeclare: null,
@@ -1062,6 +1216,131 @@ describe("Tax API foundation", () => {
         factsApproved: 0,
       },
       generatedAt: null,
+    });
+  });
+
+  it("POST /tax/summary/:taxYear/rebuild gera snapshot versionado com fatos revisados", async () => {
+    const token = await registerAndLogin("tax-summary-rebuild@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+            "Decimo terceiro R$ 5.000,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "summary-rebuild.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+
+    const factsResult = await dbQuery(
+      `SELECT id
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+    const factIds = factsResult.rows.map((row) => Number(row.id));
+
+    const bulkApproveResponse = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds,
+        action: "approve",
+      });
+
+    expect(bulkApproveResponse.status).toBe(200);
+
+    const rebuildResponse = await request(app)
+      .post("/tax/summary/2026/rebuild")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(rebuildResponse.status).toBe(200);
+    expect(rebuildResponse.body).toMatchObject({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      status: "generated",
+      snapshotVersion: 1,
+      mustDeclare: true,
+      obligationReasons: ["TAXABLE_INCOME_LIMIT"],
+      annualTaxableIncome: 54321,
+      annualExemptIncome: 0,
+      annualExclusiveIncome: 5000,
+      annualWithheldTax: 4321.09,
+      totalLegalDeductions: 0,
+      simplifiedDiscountUsed: 10864.2,
+      bestMethod: "simplified_discount",
+      estimatedAnnualTax: 1839.49,
+      warnings: [],
+      sourceCounts: {
+        documents: 1,
+        factsPending: 0,
+        factsApproved: 3,
+      },
+    });
+    expect(typeof rebuildResponse.body.generatedAt).toBe("string");
+
+    const persistedSummariesResult = await dbQuery(
+      `SELECT snapshot_version
+       FROM tax_summaries
+       WHERE user_id = (SELECT id FROM users WHERE email = 'tax-summary-rebuild@test.dev')
+         AND tax_year = 2026
+       ORDER BY snapshot_version ASC`,
+    );
+
+    expect(persistedSummariesResult.rows).toEqual([{ snapshot_version: 1 }]);
+
+    const secondRebuildResponse = await request(app)
+      .post("/tax/summary/2026/rebuild")
+      .set("Authorization", `Bearer ${token}`);
+    const getSummaryResponse = await request(app)
+      .get("/tax/summary/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(secondRebuildResponse.status).toBe(200);
+    expect(secondRebuildResponse.body.snapshotVersion).toBe(2);
+    expect(getSummaryResponse.status).toBe(200);
+    expect(getSummaryResponse.body).toMatchObject({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      status: "generated",
+      snapshotVersion: 2,
+      mustDeclare: true,
+      obligationReasons: ["TAXABLE_INCOME_LIMIT"],
+      annualTaxableIncome: 54321,
+      annualExclusiveIncome: 5000,
+      annualWithheldTax: 4321.09,
+      totalLegalDeductions: 0,
+      simplifiedDiscountUsed: 10864.2,
+      bestMethod: "simplified_discount",
+      estimatedAnnualTax: 1839.49,
+      sourceCounts: {
+        documents: 1,
+        factsPending: 0,
+        factsApproved: 3,
+      },
     });
   });
 
