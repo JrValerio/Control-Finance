@@ -273,6 +273,18 @@ export const incomeSourcesService = {
     return normalizeStatementWithDeductions(data as { statement?: unknown; deductions?: unknown });
   },
 
+  linkTransaction: async (
+    statementId: number,
+    transactionId: number,
+  ): Promise<IncomeStatement> => {
+    const { data } = await api.post(
+      `/income-sources/statements/${statementId}/link-transaction`,
+      { transactionId },
+    );
+    const raw = data as { statement?: unknown };
+    return normalizeStatement((raw.statement ?? data) as RawStatement);
+  },
+
   postStatement: async (statementId: number): Promise<PostStatementResult> => {
     const { data } = await api.post(`/income-sources/statements/${statementId}/post`);
     const raw = data as {

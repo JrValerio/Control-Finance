@@ -614,6 +614,93 @@ export const postStatementForSource = async (userId, statementId) => {
   });
 };
 
+// ─── Link Statement to Transaction ────────────────────────────────────────────
+
+const LINK_AMOUNT_TOLERANCE = 0.05; // 5%
+const LINK_DATE_TOLERANCE_DAYS = 10;
+
+const normalizeTransactionId = (value) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw createError(400, "ID de transacao invalido.");
+  }
+  return parsed;
+};
+
+export const linkStatementToTransaction = async (userId, statementId, transactionId) => {
+  const uid = normalizeUserId(userId);
+  const stid = normalizeStatementId(statementId);
+  const txid = normalizeTransactionId(transactionId);
+
+  // Fetch statement (ownership via JOIN with income_sources)
+  const { rows: stmtRows } = await dbQuery(
+    `SELECT st.*
+     FROM income_statements st
+     JOIN income_sources s ON s.id = st.income_source_id
+     WHERE st.id = $1 AND s.user_id = $2`,
+    [stid, uid],
+  );
+  if (!stmtRows[0]) throw createError(404, "Extrato nao encontrado.");
+  const stmt = stmtRows[0];
+
+  // Fetch transaction (ownership)
+  const { rows: txRows } = await dbQuery(
+    `SELECT * FROM transactions WHERE id = $1 AND user_id = $2`,
+    [txid, uid],
+  );
+  if (!txRows[0]) throw createError(404, "Transacao nao encontrada.");
+  const tx = txRows[0];
+
+  // Must be an income transaction
+  if (String(tx.type) !== TRANSACTION_TYPE_ENTRY) {
+    throw createError(422, "A transacao deve ser do tipo Entrada.");
+  }
+
+  // Amount compatibility: abs difference must be <= 5% of statement net_amount
+  const stmtAmount = toMoney(stmt.net_amount);
+  const txAmount = toMoney(tx.value);
+  const diff = Math.abs(txAmount - stmtAmount);
+  if (stmtAmount > 0 && diff / stmtAmount > LINK_AMOUNT_TOLERANCE) {
+    throw createError(
+      422,
+      `Valor da transacao (${txAmount.toFixed(2)}) difere mais de ${LINK_AMOUNT_TOLERANCE * 100}% do extrato (${stmtAmount.toFixed(2)}).`,
+    );
+  }
+
+  // Date compatibility: if payment_date set, transaction date must be within ±10 days
+  if (stmt.payment_date != null) {
+    const paymentMs = new Date(`${toISODate(stmt.payment_date)}T00:00:00Z`).getTime();
+    const txMs = new Date(`${toISODate(tx.date)}T00:00:00Z`).getTime();
+    const diffDays = Math.abs(paymentMs - txMs) / (1000 * 60 * 60 * 24);
+    if (diffDays > LINK_DATE_TOLERANCE_DAYS) {
+      throw createError(
+        422,
+        `Data da transacao difere mais de ${LINK_DATE_TOLERANCE_DAYS} dias da data de pagamento do extrato.`,
+      );
+    }
+  }
+
+  // If already linked to a different transaction, reject
+  if (stmt.posted_transaction_id != null && Number(stmt.posted_transaction_id) !== txid) {
+    throw createError(409, "Extrato ja vinculado a outra transacao.");
+  }
+
+  // Idempotent: already linked to same transaction
+  if (stmt.posted_transaction_id != null && Number(stmt.posted_transaction_id) === txid) {
+    return mapStatementRow(stmt);
+  }
+
+  const { rows: updatedRows } = await dbQuery(
+    `UPDATE income_statements
+     SET posted_transaction_id = $1, status = 'posted', updated_at = NOW()
+     WHERE id = $2
+     RETURNING *`,
+    [txid, stid],
+  );
+
+  return mapStatementRow(updatedRows[0]);
+};
+
 export const listStatementsForSource = async (userId, sourceId) => {
   const uid = normalizeUserId(userId);
   const sid = normalizeSourceId(sourceId);
