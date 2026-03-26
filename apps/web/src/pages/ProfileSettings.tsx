@@ -81,6 +81,7 @@ const ProfileSettings = ({
   const [salaryMonthly, setSalaryMonthly] = useState("");
   const [payday, setPayday] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [taxpayerCpf, setTaxpayerCpf] = useState("");
 
   // Auth info (read-only display)
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
@@ -123,6 +124,7 @@ const ProfileSettings = ({
         p?.payday !== null && p?.payday !== undefined ? String(p.payday) : "",
       );
       setAvatarUrl(p?.avatarUrl ?? "");
+      setTaxpayerCpf(p?.taxpayerCpf ?? "");
       setAiTone(p?.aiTone ?? "pragmatic");
       setAiInsightFrequency(p?.aiInsightFrequency ?? "always");
     } catch (error) {
@@ -167,6 +169,7 @@ const ProfileSettings = ({
         salary_monthly: salaryNum,
         payday: paydayNum,
         avatar_url: avatarUrl.trim() || null,
+        taxpayer_cpf: taxpayerCpf.trim() || null,
       });
       setSaveSuccess(true);
       successTimerRef.current = setTimeout(() => setSaveSuccess(false), 4000);
@@ -303,6 +306,28 @@ const ProfileSettings = ({
                     placeholder="Como você quer ser chamado"
                     className="mt-1 w-full rounded border border-cf-border-input bg-cf-surface px-3 py-1.5 text-sm text-cf-text-primary placeholder:text-cf-text-secondary focus:outline-none focus:ring-1 focus:ring-brand-1"
                   />
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="taxpayer_cpf"
+                    className="block text-sm font-semibold text-cf-text-primary"
+                  >
+                    CPF do titular (IRPF)
+                  </label>
+                  <input
+                    id="taxpayer_cpf"
+                    type="text"
+                    inputMode="numeric"
+                    value={taxpayerCpf}
+                    onChange={(e) => setTaxpayerCpf(e.target.value)}
+                    maxLength={14}
+                    placeholder="000.000.000-00"
+                    className="mt-1 w-full rounded border border-cf-border-input bg-cf-surface px-3 py-1.5 text-sm text-cf-text-primary placeholder:text-cf-text-secondary focus:outline-none focus:ring-1 focus:ring-brand-1"
+                  />
+                  <p className="mt-0.5 text-xs text-cf-text-secondary">
+                    Usado pela Central do Leão para conferir se os informes pertencem ao mesmo titular e evitar mistura de receitas.
+                  </p>
                 </div>
 
                 {/* Email (read-only) */}

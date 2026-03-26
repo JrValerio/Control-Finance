@@ -132,8 +132,8 @@ describe("GET /me", () => {
     const userId = userResult.rows[0].id;
 
     await dbQuery(
-      `INSERT INTO user_profiles (user_id, display_name, salary_monthly, payday, avatar_url)
-       VALUES ($1, 'Joao Silva', 5000.00, 5, 'https://example.com/avatar.jpg')`,
+      `INSERT INTO user_profiles (user_id, display_name, salary_monthly, payday, avatar_url, taxpayer_cpf)
+       VALUES ($1, 'Joao Silva', 5000.00, 5, 'https://example.com/avatar.jpg', '52998224725')`,
       [userId],
     );
 
@@ -147,6 +147,7 @@ describe("GET /me", () => {
       salaryMonthly: 5000,
       payday: 5,
       avatarUrl: "https://example.com/avatar.jpg",
+      taxpayerCpf: "52998224725",
     });
   });
 });
@@ -189,6 +190,7 @@ describe("PATCH /me/profile", () => {
         salary_monthly: 7500,
         payday: 10,
         avatar_url: "https://example.com/maria.jpg",
+        taxpayer_cpf: "529.982.247-25",
       });
 
     expect(response.status).toBe(200);
@@ -197,7 +199,38 @@ describe("PATCH /me/profile", () => {
       salaryMonthly: 7500,
       payday: 10,
       avatarUrl: "https://example.com/maria.jpg",
+      taxpayerCpf: "52998224725",
     });
+  });
+
+  it("retorna 400 para taxpayer_cpf invalido", async () => {
+    const token = await registerAndLogin("patch-taxpayer-cpf-bad@test.dev");
+
+    const response = await request(app)
+      .patch("/me/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ taxpayer_cpf: "111.111.111-11" });
+
+    expectErrorResponseWithRequestId(response, 400, "taxpayer_cpf invalido.");
+  });
+
+  it("persiste taxpayer_cpf e retorna no round-trip GET /me", async () => {
+    const token = await registerAndLogin("patch-taxpayer-cpf-roundtrip@test.dev");
+
+    const patchResponse = await request(app)
+      .patch("/me/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ taxpayer_cpf: "529.982.247-25" });
+
+    expect(patchResponse.status).toBe(200);
+    expect(patchResponse.body.taxpayerCpf).toBe("52998224725");
+
+    const getResponse = await request(app)
+      .get("/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body.profile.taxpayerCpf).toBe("52998224725");
   });
 
   it("atualiza parcialmente — so o campo enviado muda", async () => {

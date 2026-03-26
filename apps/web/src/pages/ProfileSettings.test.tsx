@@ -25,6 +25,7 @@ const buildMe = (overrides = {}) => ({
     salaryMonthly: 5000,
     payday: 5,
     avatarUrl: null,
+    taxpayerCpf: null,
   },
   ...overrides,
 });
@@ -50,6 +51,7 @@ describe("ProfileSettings — Dados da conta", () => {
       salaryMonthly: 5000,
       payday: 5,
       avatarUrl: null,
+      taxpayerCpf: null,
     });
   });
 
@@ -103,6 +105,37 @@ describe("ProfileSettings — Dados da conta", () => {
       expect.objectContaining({ display_name: "Novo Nome" }),
     );
   });
+
+  it("loads and submits taxpayer CPF with the profile", async () => {
+    const user = userEvent.setup();
+    vi.mocked(profileService.getMe).mockResolvedValue(
+      buildMe({
+        profile: {
+          displayName: "Jr Valerio",
+          salaryMonthly: 5000,
+          payday: 5,
+          avatarUrl: null,
+          taxpayerCpf: "52998224725",
+        },
+      }),
+    );
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("CPF do titular (IRPF)")).toBeInTheDocument());
+
+    const cpfInput = screen.getByLabelText("CPF do titular (IRPF)");
+    expect(cpfInput).toHaveValue("52998224725");
+
+    await user.clear(cpfInput);
+    await user.type(cpfInput, "529.982.247-25");
+    await user.click(screen.getByRole("button", { name: "Salvar perfil" }));
+
+    await waitFor(() =>
+      expect(profileService.updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ taxpayer_cpf: "529.982.247-25" }),
+      ),
+    );
+  });
 });
 
 describe("ProfileSettings — Preferências (Modo Discreto)", () => {
@@ -147,6 +180,7 @@ describe("ProfileSettings — Preferências (Copiloto)", () => {
       salaryMonthly: 5000,
       payday: 5,
       avatarUrl: null,
+      taxpayerCpf: null,
       aiTone: "pragmatic",
       aiInsightFrequency: "always",
     });
@@ -203,6 +237,7 @@ describe("ProfileSettings — Preferências (Copiloto)", () => {
           salaryMonthly: 5000,
           payday: 5,
           avatarUrl: null,
+          taxpayerCpf: null,
           aiTone: "sarcastic",
           aiInsightFrequency: "risk_only",
         },
