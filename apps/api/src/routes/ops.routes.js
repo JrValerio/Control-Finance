@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Router } from "express";
 import { forcePlanForEmail } from "../services/ops-force-plan.service.js";
+import { reprocessLegacyTaxDocuments } from "../services/tax-legacy-reprocess.service.js";
 
 const router = Router();
 
@@ -74,5 +75,19 @@ router.post("/force-plan", async (req, res, next) => {
   }
 });
 
-export default router;
+router.post("/tax-documents/reprocess-legacy", async (req, res, next) => {
+  try {
+    const result = await reprocessLegacyTaxDocuments({
+      dryRun: req.body?.dryRun,
+      limit: req.body?.limit,
+      userId: req.body?.userId,
+      taxYear: req.body?.taxYear,
+      afterDocumentId: req.body?.afterDocumentId,
+    });
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
 
+export default router;
