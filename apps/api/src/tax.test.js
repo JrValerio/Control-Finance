@@ -116,6 +116,16 @@ describe("Tax API foundation", () => {
     );
   });
 
+  it("POST /tax/documents/:id/reprocess retorna 401 sem token", async () => {
+    const response = await request(app).post("/tax/documents/1/reprocess");
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
   it("POST /tax/documents persiste metadata, hash e arquivo em storage local", async () => {
     const token = await registerAndLogin("tax-upload@test.dev");
     const fileBuffer = Buffer.from("%PDF-1.4\n1 0 obj\n<<>>\nendobj", "utf8");
@@ -369,6 +379,113 @@ describe("Tax API foundation", () => {
       .set("Authorization", `Bearer ${tokenB}`);
 
     expectErrorResponseWithRequestId(detailResponse, 404, "Documento fiscal nao encontrado.");
+  });
+
+  it("POST /tax/documents/:id/reprocess classifica e extrai comprovante do empregador", async () => {
+    const token = await registerAndLogin("tax-reprocess-employer@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Beneficiario Joao da Silva",
+            "CPF 123.456.789-00",
+            "Rendimentos tributaveis",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "empregador.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+    expect(reprocessResponse.body.document).toMatchObject({
+      id: uploadResponse.body.document.id,
+      documentType: "income_report_employer",
+      processingStatus: "extracted",
+    });
+    expect(reprocessResponse.body.document.latestExtraction).toMatchObject({
+      extractorName: "income-report-employer",
+      classification: "income_report_employer",
+    });
+  });
+
+  it("POST /tax/documents/:id/reprocess classifica extrato de apoio sem gerar facts", async () => {
+    const token = await registerAndLogin("tax-reprocess-bank-support@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Data;Historico;Valor",
+            "05/02/2026;Saldo anterior;100,00",
+            "06/02/2026;Lancamentos;20,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "extrato.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+    expect(reprocessResponse.body.document).toMatchObject({
+      id: uploadResponse.body.document.id,
+      documentType: "bank_statement_support",
+      processingStatus: "classified",
+    });
+    expect(reprocessResponse.body.document.latestExtraction).toMatchObject({
+      extractorName: "classifier-only",
+      classification: "bank_statement_support",
+    });
+
+    const factsCountResult = await dbQuery("SELECT COUNT(*) AS total FROM tax_facts");
+    expect(Number(factsCountResult.rows[0].total)).toBe(0);
+  });
+
+  it("POST /tax/documents/:id/reprocess retorna 404 para documento de outro usuario", async () => {
+    const tokenA = await registerAndLogin("tax-reprocess-a@test.dev");
+    const tokenB = await registerAndLogin("tax-reprocess-b@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from("Informe de Rendimentos\nBanco Inter", "utf8"), {
+        filename: "informe.csv",
+        contentType: "text/csv",
+      });
+
+    expect(uploadResponse.status).toBe(201);
+
+    const response = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${tokenB}`);
+
+    expectErrorResponseWithRequestId(response, 404, "Documento fiscal nao encontrado.");
   });
 
   it("GET /tax/rules/:taxYear retorna estrutura vazia quando ainda nao ha regras ativas", async () => {
