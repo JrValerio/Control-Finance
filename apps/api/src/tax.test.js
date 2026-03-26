@@ -2015,6 +2015,52 @@ describe("Tax API foundation", () => {
     });
   });
 
+  it("GET /tax/export/:taxYear retorna 409 quando o snapshot legado ainda nao possui facts congelados", async () => {
+    const email = "tax-export-rebuild-required@test.dev";
+    const token = await registerAndLogin(email);
+    const userResult = await dbQuery(
+      `SELECT id
+       FROM users
+       WHERE email = $1`,
+      [email],
+    );
+    const userId = Number(userResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO tax_summaries (
+         user_id,
+         tax_year,
+         snapshot_version,
+         summary_json,
+         source_counts_json
+       )
+       VALUES ($1, 2026, 1, $2::jsonb, $3::jsonb)`,
+      [
+        userId,
+        JSON.stringify({
+          annualTaxableIncome: 54321,
+          annualExclusiveIncome: 5000,
+          annualWithheldTax: 4321.09,
+        }),
+        JSON.stringify({
+          documents: 1,
+          factsPending: 0,
+          factsApproved: 3,
+        }),
+      ],
+    );
+
+    const response = await request(app)
+      .get("/tax/export/2026?format=json")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body).toMatchObject({
+      message: "Resumo fiscal precisa ser regenerado para exportar o snapshot oficial deste exercicio.",
+      code: "TAX_SUMMARY_REBUILD_REQUIRED",
+    });
+  });
+
   it("GET /tax/export/:taxYear baixa dossie JSON oficial com manifesto e facts revisados", async () => {
     const token = await registerAndLogin("tax-export-json@test.dev");
     const uploadResponse = await request(app)

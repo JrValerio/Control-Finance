@@ -224,6 +224,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
   const [taxpayerCpf, setTaxpayerCpf] = useState<string | null>(null);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [isRebuildingSummary, setIsRebuildingSummary] = useState(false);
+  const [isSyncingAppData, setIsSyncingAppData] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<"json" | "csv" | null>(null);
   const [processingFactId, setProcessingFactId] = useState<number | null>(null);
   const [processingDocumentId, setProcessingDocumentId] = useState<number | null>(null);
@@ -499,6 +500,45 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     }
   };
 
+  const handleSyncAppData = async () => {
+    setIsSyncingAppData(true);
+    setPageError("");
+
+    try {
+      const result = await taxService.syncAppData(taxYear);
+      await loadPageData();
+
+      if (result.totalFactsGenerated > 0) {
+        showSuccess(
+          result.totalFactsGenerated === 1
+            ? "Importamos 1 fato fiscal pendente a partir dos dados do app. Revise-o para entrar no cálculo oficial."
+            : `Importamos ${result.totalFactsGenerated} fatos fiscais pendentes a partir dos dados do app. Revise-os para entrarem no cálculo oficial.`,
+        );
+        return;
+      }
+
+      if (result.preservedReviewedFactsCount > 0) {
+        showSuccess(
+          "Sincronização concluída. Nenhum fato novo foi criado, mas os fatos já revisados derivados do app foram preservados.",
+        );
+        return;
+      }
+
+      showSuccess(
+        "Nenhum fato fiscal novo foi encontrado nos lançamentos e demonstrativos já alimentados no app para este exercício.",
+      );
+    } catch (error) {
+      setPageError(
+        getApiErrorMessage(
+          error,
+          "Não foi possível sincronizar os dados já alimentados no app com a Central do Leão.",
+        ),
+      );
+    } finally {
+      setIsSyncingAppData(false);
+    }
+  };
+
   const reviewFact = async (
     factId: number,
     payload:
@@ -647,6 +687,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
   }
 
   const showNoObligationInfo = !obligation.mustDeclare;
+  const canSyncFromApp = !isLoadingPage && documentsPage.total === 0;
 
   return (
     <div className="min-h-screen bg-cf-bg-page px-4 py-6 sm:px-6">
@@ -681,6 +722,14 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                 className="rounded border border-brand-1 bg-brand-1 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-2"
               >
                 Enviar documento
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSyncAppData()}
+                disabled={!canSyncFromApp || isSyncingAppData}
+                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSyncingAppData ? "Sincronizando..." : "Sincronizar do app"}
               </button>
               <button
                 type="button"
@@ -900,6 +949,11 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               <h2 className="text-lg font-bold text-cf-text-primary">Documentos do exercício</h2>
               <p className="mt-1 text-sm text-cf-text-secondary">
                 Últimos arquivos enviados para o exercício {taxYear}. O upload já dispara o processamento automático.
+              </p>
+              <p className="mt-1 text-sm text-cf-text-secondary">
+                {documentsPage.total === 0
+                  ? "Sem informe em PDF? Use “Sincronizar do app” para gerar fatos pendentes a partir das rendas e lançamentos já alimentados."
+                  : "Quando já existem documentos fiscais no exercício, a sincronização vinda do app fica bloqueada para evitar mistura entre as trilhas."}
               </p>
             </div>
             <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 text-xs font-semibold text-cf-text-secondary">

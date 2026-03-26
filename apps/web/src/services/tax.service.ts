@@ -95,6 +95,7 @@ export interface TaxObligation {
     exemptAndExclusiveIncome: number;
     assets: number;
     ruralRevenue: number;
+    stockOperations?: number;
   };
   totals: {
     annualTaxableIncome: number;
@@ -104,6 +105,18 @@ export interface TaxObligation {
     totalLegalDeductions: number;
     annualCombinedExemptAndExclusiveIncome: number;
     totalAssetBalance: number;
+    annualRuralRevenue?: number;
+    totalStockOperations?: number;
+    hasRuralLossCompensation?: boolean;
+    hasCapitalGain?: boolean;
+    hasPropertySaleExemption?: boolean;
+    hasStockTaxableGain?: boolean;
+    hasResidentStart?: boolean;
+    hasControlledEntityAbroadOption?: boolean;
+    hasForeignTrust?: boolean;
+    hasForeignFinancialIncome?: boolean;
+    hasForeignFinancialLossCompensation?: boolean;
+    hasForeignDividends?: boolean;
   };
   approvedFactsCount: number;
   taxpayerCpfConfigured?: boolean;
@@ -149,6 +162,18 @@ export interface TaxFactsListResult {
 
 export interface TaxExportDownloadResult {
   fileName: string;
+}
+
+export interface TaxAppSyncResult {
+  taxYear: number;
+  exerciseYear: number;
+  calendarYear: number;
+  sourceOrigin: "app";
+  processedStatements: number;
+  processedTransactions: number;
+  totalFactsGenerated: number;
+  preservedReviewedFactsCount: number;
+  summariesRebuilt: number;
 }
 
 interface TaxFactApiPayload {
@@ -384,6 +409,7 @@ const normalizeObligation = (value: unknown): TaxObligation => {
       exemptAndExclusiveIncome: normalizeNumber(thresholds.exemptAndExclusiveIncome),
       assets: normalizeNumber(thresholds.assets),
       ruralRevenue: normalizeNumber(thresholds.ruralRevenue),
+      stockOperations: normalizeNumber(thresholds.stockOperations),
     },
     totals: {
       annualTaxableIncome: normalizeNumber(totals.annualTaxableIncome),
@@ -395,6 +421,18 @@ const normalizeObligation = (value: unknown): TaxObligation => {
         totals.annualCombinedExemptAndExclusiveIncome,
       ),
       totalAssetBalance: normalizeNumber(totals.totalAssetBalance),
+      annualRuralRevenue: normalizeNumber(totals.annualRuralRevenue),
+      totalStockOperations: normalizeNumber(totals.totalStockOperations),
+      hasRuralLossCompensation: Boolean(totals.hasRuralLossCompensation),
+      hasCapitalGain: Boolean(totals.hasCapitalGain),
+      hasPropertySaleExemption: Boolean(totals.hasPropertySaleExemption),
+      hasStockTaxableGain: Boolean(totals.hasStockTaxableGain),
+      hasResidentStart: Boolean(totals.hasResidentStart),
+      hasControlledEntityAbroadOption: Boolean(totals.hasControlledEntityAbroadOption),
+      hasForeignTrust: Boolean(totals.hasForeignTrust),
+      hasForeignFinancialIncome: Boolean(totals.hasForeignFinancialIncome),
+      hasForeignFinancialLossCompensation: Boolean(totals.hasForeignFinancialLossCompensation),
+      hasForeignDividends: Boolean(totals.hasForeignDividends),
     },
     approvedFactsCount: normalizeNumber(raw.approvedFactsCount),
     taxpayerCpfConfigured: Boolean(raw.taxpayerCpfConfigured),
@@ -544,6 +582,28 @@ export const taxService = {
   ): Promise<TaxDocumentDetail> => {
     const { data } = await api.post(`/tax/documents/${documentId}/reprocess`, payload);
     return normalizeTaxDocumentDetail(normalizeObject(data).document);
+  },
+
+  syncAppData: async (
+    taxYear: number,
+    options: {
+      force?: boolean;
+    } = {},
+  ): Promise<TaxAppSyncResult> => {
+    const { data } = await api.post(`/tax/app-sync/${taxYear}`, options);
+    const raw = normalizeObject(data);
+
+    return {
+      taxYear: normalizeNumber(raw.taxYear),
+      exerciseYear: normalizeNumber(raw.exerciseYear),
+      calendarYear: normalizeNumber(raw.calendarYear),
+      sourceOrigin: "app",
+      processedStatements: normalizeNumber(raw.processedStatements),
+      processedTransactions: normalizeNumber(raw.processedTransactions),
+      totalFactsGenerated: normalizeNumber(raw.totalFactsGenerated),
+      preservedReviewedFactsCount: normalizeNumber(raw.preservedReviewedFactsCount),
+      summariesRebuilt: normalizeNumber(raw.summariesRebuilt),
+    };
   },
 
   deleteDocument: async (documentId: number): Promise<TaxDocumentDeleteResult> => {

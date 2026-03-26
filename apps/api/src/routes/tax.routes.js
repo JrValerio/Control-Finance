@@ -11,6 +11,7 @@ import {
 } from "../services/tax-documents.service.js";
 import { exportTaxDossierByYear } from "../services/tax-export.service.js";
 import { processTaxDocumentByIdForUser } from "../services/tax-extraction.service.js";
+import { syncAppTaxFactsByYear } from "../services/tax-app-sync.service.js";
 import { listTaxFactsByUser } from "../services/tax-facts.service.js";
 import { getTaxObligationByYear } from "../services/tax-obligation.service.js";
 import { bulkApproveTaxFactsByUser, reviewTaxFactByUser } from "../services/tax-reviews.service.js";
@@ -147,6 +148,15 @@ router.get("/facts", async (req, res, next) => {
   try {
     const facts = await listTaxFactsByUser(req.user.id, req.query ?? {});
     res.status(200).json(facts);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/app-sync/:taxYear", async (req, res, next) => {
+  try {
+    const result = await syncAppTaxFactsByYear(req.user.id, req.params.taxYear, req.body ?? {});
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

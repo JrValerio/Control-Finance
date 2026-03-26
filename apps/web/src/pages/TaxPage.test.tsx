@@ -18,6 +18,7 @@ vi.mock("../services/tax.service", () => ({
     listDocuments: vi.fn(),
     uploadDocument: vi.fn(),
     reprocessDocument: vi.fn(),
+    syncAppData: vi.fn(),
     deleteDocument: vi.fn(),
     downloadExport: vi.fn(),
     getSummary: vi.fn(),
@@ -175,6 +176,17 @@ describe("TaxPage", () => {
         },
       }),
     );
+    vi.mocked(taxService.syncAppData).mockResolvedValue({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      sourceOrigin: "app",
+      processedStatements: 1,
+      processedTransactions: 1,
+      totalFactsGenerated: 2,
+      preservedReviewedFactsCount: 0,
+      summariesRebuilt: 1,
+    });
     vi.mocked(taxService.deleteDocument).mockResolvedValue({
       deletedDocumentId: 1,
       deletedFactsCount: 1,
@@ -432,6 +444,50 @@ describe("TaxPage", () => {
       ).length,
     ).toBeGreaterThan(0);
     expect(await screen.findByText("informe-2025.pdf")).toBeInTheDocument();
+  });
+
+  it("sincroniza fatos fiscais a partir dos dados ja alimentados no app", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(taxService.listDocuments).mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 6,
+      total: 0,
+    });
+    vi.mocked(taxService.listFacts).mockResolvedValue({
+      items: [
+        buildFact({
+          id: 201,
+          sourceDocumentId: null,
+          sourceDocument: null,
+          subcategory: "app_income_statement_taxable_income",
+          payerName: "Empresa ABC",
+          amount: 4500,
+        }),
+      ],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Sincronizar do app" })).toBeEnabled();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Sincronizar do app" }));
+
+    await waitFor(() => {
+      expect(taxService.syncAppData).toHaveBeenCalledWith(2026);
+    });
+
+    expect(
+      await screen.findByText(
+        "Importamos 2 fatos fiscais pendentes a partir dos dados do app. Revise-os para entrarem no cálculo oficial.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("distingue upload concluído de falha no processamento", async () => {
