@@ -1574,6 +1574,127 @@ describe("Tax API foundation", () => {
     expect(afterApprovalResponse.body.approvedFactsCount).toBe(3);
   });
 
+  it("exclui do calculo oficial fatos revisados com CPF divergente do titular cadastrado", async () => {
+    const email = "tax-obligation-taxpayer-filter@test.dev";
+    const token = await registerAndLogin(email);
+    const userResult = await dbQuery(
+      `SELECT id
+       FROM users
+       WHERE email = $1`,
+      [email],
+    );
+    const userId = Number(userResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, taxpayer_cpf)
+       VALUES ($1, '52998224725')`,
+      [userId],
+    );
+
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Ministerio da Economia Comprovante de Rendimentos Pagos e de",
+            "Imposto sobre a Renda Retido na Fonte",
+            "Exercicio de 2026 Ano-calendario de 2025",
+            "16.727.230/0001-97 Fundo do Regime Geral de Previdencia Social",
+            "433.427.604-00 MARIA EDLEUSA MONSAO DA SILVA 1776829899",
+            "3533-PROVENTOS DE APOSENT., RESERVA, REFORMA OU PENSAO PAGOS PELA PREV. SOCIAL",
+            "1. Total dos rendimentos (inclusive ferias) 34.287,13",
+            "5. Imposto sobre a renda retido na fonte 13,36",
+            "1. Parcela isenta dos proventos de aposentadoria, reserva remunerada, reforma e pensao (65 anos ou mais), exceto a 22.847,76",
+            "2. Parcela isenta do 13o salario de aposentadoria, reserva remunerada, reforma e pensao (65 anos ou mais). 1.903,98",
+            "1. Decimo terceiro salario 2.868,57",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "inss-taxpayer-mismatch.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+
+    const factsResult = await dbQuery(
+      `SELECT id
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+    const factIds = factsResult.rows.map((row) => Number(row.id));
+
+    const bulkApproveResponse = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds,
+        action: "approve",
+      });
+
+    expect(bulkApproveResponse.status).toBe(200);
+
+    const obligationResponse = await request(app)
+      .get("/tax/obligation/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(obligationResponse.status).toBe(200);
+    expect(obligationResponse.body).toMatchObject({
+      mustDeclare: false,
+      approvedFactsCount: 0,
+      taxpayerCpfConfigured: true,
+      excludedFactsCount: 5,
+      totals: {
+        annualTaxableIncome: 0,
+        annualExemptIncome: 0,
+        annualExclusiveIncome: 0,
+        annualWithheldTax: 0,
+        totalLegalDeductions: 0,
+      },
+    });
+
+    const rebuildResponse = await request(app)
+      .post("/tax/summary/2026/rebuild")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(rebuildResponse.status).toBe(200);
+    expect(rebuildResponse.body).toMatchObject({
+      annualTaxableIncome: 0,
+      annualExemptIncome: 0,
+      annualExclusiveIncome: 0,
+      annualWithheldTax: 0,
+      warnings: [
+        {
+          code: "TAXPAYER_CPF_MISMATCH_EXCLUDED",
+          message:
+            "Ha 5 fatos revisados com CPF divergente do titular cadastrado e eles ficaram fora do resumo anual.",
+        },
+      ],
+    });
+
+    const exportResponse = await request(app)
+      .get("/tax/export/2026?format=json")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(exportResponse.status).toBe(200);
+    const exportPayload = JSON.parse(exportResponse.text);
+    expect(exportPayload.manifest.factsIncluded).toBe(0);
+    expect(exportPayload.summary.annualTaxableIncome).toBe(0);
+    expect(exportPayload.facts).toEqual([]);
+  });
+
   it("GET /tax/summary/:taxYear retorna esqueleto da trilha fiscal antes da primeira geracao", async () => {
     const token = await registerAndLogin("tax-summary@test.dev");
     const response = await request(app)

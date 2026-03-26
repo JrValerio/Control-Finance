@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { dbQuery } from "../db/index.js";
 import { createTaxError, normalizeTaxUserId, normalizeTaxYear, toISOStringOrNull } from "../domain/tax/tax.validation.js";
+import { getReviewedTaxFactsSelectionByUserAndYear } from "./tax-obligation.service.js";
 
 const TAX_EXPORT_ENGINE_VERSION = "irpf-mvp-v1";
 
@@ -36,30 +37,7 @@ const getLatestStoredSummaryRow = async (userId, taxYear) => {
   return result.rows[0] || null;
 };
 
-const listExportableTaxFactsByUserAndYear = async (userId, taxYear) => {
-  const result = await dbQuery(
-    `SELECT
-       id,
-       tax_year,
-       source_document_id,
-       fact_type,
-       category,
-       subcategory,
-       payer_name,
-       payer_document,
-       reference_period,
-       currency,
-       amount,
-       review_status
-     FROM tax_facts
-     WHERE user_id = $1
-       AND tax_year = $2
-       AND review_status IN ('approved', 'corrected')
-     ORDER BY id ASC`,
-    [userId, taxYear],
-  );
-
-  return result.rows.map((row) => ({
+const mapFactRowToExportPayload = (row) => ({
     factId: Number(row.id),
     taxYear: Number(row.tax_year),
     sourceDocumentId:
@@ -75,8 +53,7 @@ const listExportableTaxFactsByUserAndYear = async (userId, taxYear) => {
     amount: Number(row.amount),
     currency: row.currency,
     reviewStatus: row.review_status,
-  }));
-};
+  });
 
 const escapeCsvValue = (value) => {
   const normalizedValue = value == null ? "" : String(value);
@@ -148,7 +125,10 @@ export const exportTaxDossierByYear = async (userId, taxYearValue, formatValue) 
     );
   }
 
-  const facts = await listExportableTaxFactsByUserAndYear(normalizedUserId, taxYear);
+  const factSelection = await getReviewedTaxFactsSelectionByUserAndYear(normalizedUserId, taxYear);
+  const facts = [...factSelection.includedFacts]
+    .sort((leftFact, rightFact) => Number(leftFact.id) - Number(rightFact.id))
+    .map(mapFactRowToExportPayload);
   const summary = {
     taxYear,
     exerciseYear: taxYear,

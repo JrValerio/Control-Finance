@@ -61,6 +61,67 @@ const normalizeAvatarUrl = (value) => {
   return trimmed;
 };
 
+const isValidCpf = (digits) => {
+  if (!/^\d{11}$/.test(digits)) {
+    return false;
+  }
+
+  if (/^(\d)\1{10}$/.test(digits)) {
+    return false;
+  }
+
+  let sum = 0;
+
+  for (let index = 0; index < 9; index += 1) {
+    sum += Number(digits[index]) * (10 - index);
+  }
+
+  let remainder = (sum * 10) % 11;
+
+  if (remainder === 10) {
+    remainder = 0;
+  }
+
+  if (remainder !== Number(digits[9])) {
+    return false;
+  }
+
+  sum = 0;
+
+  for (let index = 0; index < 10; index += 1) {
+    sum += Number(digits[index]) * (11 - index);
+  }
+
+  remainder = (sum * 10) % 11;
+
+  if (remainder === 10) {
+    remainder = 0;
+  }
+
+  return remainder === Number(digits[10]);
+};
+
+const normalizeTaxpayerCpf = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  if (typeof value !== "string" && typeof value !== "number") {
+    throw createError(400, "taxpayer_cpf deve ser texto.");
+  }
+
+  const digits = String(value).replace(/\D/g, "");
+
+  if (!digits) {
+    return null;
+  }
+
+  if (!isValidCpf(digits)) {
+    throw createError(400, "taxpayer_cpf invalido.");
+  }
+
+  return digits;
+};
+
 const AI_TONE_VALID = ["pragmatic", "motivator", "sarcastic"];
 const AI_INSIGHT_FREQUENCY_VALID = ["always", "risk_only"];
 
@@ -91,6 +152,7 @@ const rowToProfile = (row) => ({
       : null,
   payday: row.payday !== null && row.payday !== undefined ? Number(row.payday) : null,
   avatarUrl: row.avatar_url ?? null,
+  taxpayerCpf: row.taxpayer_cpf ?? null,
   aiTone: AI_TONE_VALID.includes(row.ai_tone) ? row.ai_tone : "pragmatic",
   aiInsightFrequency: AI_INSIGHT_FREQUENCY_VALID.includes(row.ai_insight_frequency)
     ? row.ai_insight_frequency
@@ -131,7 +193,7 @@ export const getMyProfile = async (userId) => {
 
   const [profileResult, identitiesResult] = await Promise.all([
     dbQuery(
-      `SELECT display_name, salary_monthly, payday, avatar_url, ai_tone, ai_insight_frequency
+      `SELECT display_name, salary_monthly, payday, avatar_url, taxpayer_cpf, ai_tone, ai_insight_frequency
        FROM user_profiles WHERE user_id = $1 LIMIT 1`,
       [normalizedUserId],
     ),
@@ -170,6 +232,9 @@ export const updateMyProfile = async (userId, payload = {}) => {
 
   const avatarUrl = normalizeAvatarUrl(payload.avatar_url);
   if (avatarUrl !== undefined) updates.avatar_url = avatarUrl;
+
+  const taxpayerCpf = normalizeTaxpayerCpf(payload.taxpayer_cpf);
+  if (taxpayerCpf !== undefined) updates.taxpayer_cpf = taxpayerCpf;
 
   const aiTone = normalizeAiTone(payload.ai_tone);
   if (aiTone !== undefined) updates.ai_tone = aiTone;
@@ -220,7 +285,7 @@ export const updateMyProfile = async (userId, payload = {}) => {
   }
 
   const result = await dbQuery(
-    `SELECT display_name, salary_monthly, payday, avatar_url, ai_tone, ai_insight_frequency
+    `SELECT display_name, salary_monthly, payday, avatar_url, taxpayer_cpf, ai_tone, ai_insight_frequency
      FROM user_profiles WHERE user_id = $1 LIMIT 1`,
     [normalizedUserId],
   );

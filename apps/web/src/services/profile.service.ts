@@ -5,6 +5,7 @@ export interface UserProfile {
   salaryMonthly: number | null;
   payday: number | null;
   avatarUrl: string | null;
+  taxpayerCpf?: string | null;
   aiTone?: string;
   aiInsightFrequency?: string;
 }
@@ -25,6 +26,7 @@ export interface ProfileUpdatePayload {
   salary_monthly?: number | null;
   payday?: number | null;
   avatar_url?: string | null;
+  taxpayer_cpf?: string | null;
   ai_tone?: string;
   ai_insight_frequency?: string;
 }

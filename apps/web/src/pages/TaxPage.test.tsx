@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import TaxPage from "./TaxPage";
+import { profileService } from "../services/profile.service";
 import {
   taxService,
   type TaxDocument,
@@ -25,6 +26,12 @@ vi.mock("../services/tax.service", () => ({
     listFacts: vi.fn(),
     reviewFact: vi.fn(),
     bulkApproveFacts: vi.fn(),
+  },
+}));
+
+vi.mock("../services/profile.service", () => ({
+  profileService: {
+    getMe: vi.fn(),
   },
 }));
 
@@ -75,6 +82,8 @@ const buildObligation = (overrides: Partial<TaxObligation> = {}): TaxObligation 
     annualTaxableIncome: 54321,
     annualExemptIncome: 0,
     annualExclusiveIncome: 5000,
+    annualWithheldTax: 4321.09,
+    totalLegalDeductions: 0,
     annualCombinedExemptAndExclusiveIncome: 5000,
     totalAssetBalance: 0,
   },
@@ -184,6 +193,20 @@ describe("TaxPage", () => {
     vi.mocked(taxService.rebuildSummary).mockResolvedValue(buildSummary({ snapshotVersion: 2 }));
     vi.mocked(taxService.bulkApproveFacts).mockResolvedValue({ updatedCount: 1 });
     vi.mocked(taxService.reviewFact).mockResolvedValue(buildFact({ reviewStatus: "approved" }));
+    vi.mocked(profileService.getMe).mockResolvedValue({
+      id: 1,
+      name: "Jr",
+      email: "jr@example.com",
+      trialEndsAt: null,
+      trialExpired: false,
+      profile: {
+        displayName: "Jr",
+        salaryMonthly: null,
+        payday: null,
+        avatarUrl: null,
+        taxpayerCpf: "52998224725",
+      },
+    });
   });
 
   it("renderiza resumo, gatilhos e fila de revisão", async () => {
@@ -199,6 +222,70 @@ describe("TaxPage", () => {
     expect(screen.getByText("Documentos do exercício")).toBeInTheDocument();
     expect(screen.getByText("empregador.pdf")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Aprovar todos pendentes" })).toBeInTheDocument();
+  });
+
+  it("explica de forma didatica quando o usuario esta sem obrigatoriedade", async () => {
+    vi.mocked(taxService.getSummary).mockResolvedValue(
+      buildSummary({
+        status: "not_generated",
+        snapshotVersion: null,
+        annualTaxableIncome: 0,
+        annualExemptIncome: 0,
+        annualExclusiveIncome: 0,
+        annualWithheldTax: 0,
+      }),
+    );
+    vi.mocked(taxService.getObligation).mockResolvedValue(
+      buildObligation({
+        mustDeclare: false,
+        reasons: [],
+        totals: {
+          annualTaxableIncome: 34287.13,
+          annualExemptIncome: 24751.74,
+          annualExclusiveIncome: 2868.57,
+          annualWithheldTax: 13.36,
+          totalLegalDeductions: 0,
+          annualCombinedExemptAndExclusiveIncome: 27620.31,
+          totalAssetBalance: 0,
+        },
+        approvedFactsCount: 5,
+      }),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Sem obrigatoriedade hoje")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/você está sem obrigatoriedade objetiva/i)).toBeInTheDocument();
+    expect(screen.getByText("Rendimentos Isentos")).toBeInTheDocument();
+    expect(screen.getByText("R$ 24.751,74")).toBeInTheDocument();
+    expect(screen.getByText("R$ 13,36")).toBeInTheDocument();
+  });
+
+  it("sinaliza fato pendente com CPF divergente do titular cadastrado", async () => {
+    vi.mocked(taxService.listFacts).mockResolvedValue({
+      items: [
+        buildFact({
+          metadata: {
+            beneficiaryDocument: "11111111111",
+          },
+        }),
+      ],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("CPF divergente")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Titular do informe: 111.111.111-11/)).toBeInTheDocument();
+    expect(screen.getByText(/fica fora do cálculo oficial do IRPF/i)).toBeInTheDocument();
   });
 
   it("aprovar todos pendentes chama bulkApproveFacts e recarrega os dados", async () => {
