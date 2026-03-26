@@ -97,7 +97,7 @@ describe("POST /forecasts/recompute", () => {
     expect(typeof res.body.dailyAvgSpending).toBe("number");
     expect(typeof res.body.daysRemaining).toBe("number");
     expect(typeof res.body.flipDetected).toBe("boolean");
-    expect(res.body.engineVersion).toBe("v1");
+    expect(res.body.engineVersion).toBe("v2");
     expect(res.body.incomeExpected).toBeNull();
   });
 
@@ -459,5 +459,181 @@ describe("forecast — bills integration", () => {
       res.body.projectedBalance - 1450.4,
       1,
     );
+  });
+});
+
+// ─── Forecast — statement-aware income (deterministic) ───────────────────────
+
+// Helpers: insert an income_source + statement for a given user
+const insertIncomeSource = async (userId, name = "Salário") => {
+  const { rows } = await dbQuery(
+    `INSERT INTO income_sources (user_id, name) VALUES ($1, $2) RETURNING id`,
+    [userId, name],
+  );
+  return Number(rows[0].id);
+};
+
+const insertStatement = async (sourceId, { referenceMonth, netAmount, paymentDate, status = "draft" }) => {
+  const { rows } = await dbQuery(
+    `INSERT INTO income_statements
+       (income_source_id, reference_month, net_amount, total_deductions, payment_date, status)
+     VALUES ($1, $2, $3, 0, $4, $5)
+     RETURNING id`,
+    [sourceId, referenceMonth, netAmount, paymentDate ?? null, status],
+  );
+  return Number(rows[0].id);
+};
+
+describe("computeForecast — statement-aware income (deterministic)", () => {
+  // FIXED_NOW = 2026-03-10; mEnd = 2026-03-31; currentMonth = '2026-03'
+  beforeAll(async () => { await setupTestDb(); });
+  afterAll(async () => { await clearDbClientForTests(); });
+  beforeEach(resetState);
+
+  it("sem statements: fallback para salary quando payday ainda nao chegou", async () => {
+    await registerAndLogin("fc-stmt-fallback@test.dev");
+    const userId = await getUserIdByEmail("fc-stmt-fallback@test.dev");
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, salary_monthly, payday) VALUES ($1, 4000, 31)`,
+      [userId],
+    );
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.incomeExpected).toBe(4000);
+    expect(result.projectedBalance).toBe(4000); // netToDate=0, adj=4000, daily=0
+  });
+
+  it("statement posted no mes: incomeAdjustment=0, incomeExpected=net_amount", async () => {
+    await registerAndLogin("fc-stmt-posted@test.dev");
+    const userId = await getUserIdByEmail("fc-stmt-posted@test.dev");
+
+    // salary exists but statement should win
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, salary_monthly, payday) VALUES ($1, 9000, 31)`,
+      [userId],
+    );
+
+    const sid = await insertIncomeSource(userId);
+    await insertStatement(sid, {
+      referenceMonth: "2026-03",
+      netAmount: 5000,
+      paymentDate: "2026-03-05", // already past, but status=posted
+      status: "posted",
+    });
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    // incomeExpected = 5000 (statement), not 9000 (salary)
+    expect(result.incomeExpected).toBe(5000);
+    // posted statement already in transactions — no cash adjustment
+    expect(result.projectedBalance).toBe(0); // netToDate=0, adj=0, daily=0
+  });
+
+  it("statement draft com payment_date futuro: incomeAdjustment=net_amount", async () => {
+    await registerAndLogin("fc-stmt-draft-future@test.dev");
+    const userId = await getUserIdByEmail("fc-stmt-draft-future@test.dev");
+
+    const sid = await insertIncomeSource(userId);
+    await insertStatement(sid, {
+      referenceMonth: "2026-03",
+      netAmount: 3500,
+      paymentDate: "2026-03-25", // future: > 2026-03-10
+      status: "draft",
+    });
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.incomeExpected).toBe(3500);
+    expect(result.projectedBalance).toBe(3500); // netToDate=0, adj=3500, daily=0
+  });
+
+  it("statement draft com payment_date passada: incomeAdjustment=0", async () => {
+    await registerAndLogin("fc-stmt-draft-past@test.dev");
+    const userId = await getUserIdByEmail("fc-stmt-draft-past@test.dev");
+
+    const sid = await insertIncomeSource(userId);
+    await insertStatement(sid, {
+      referenceMonth: "2026-03",
+      netAmount: 3500,
+      paymentDate: "2026-03-05", // past: < 2026-03-10
+      status: "draft",
+    });
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    // incomeExpected = statement net_amount (competence)
+    expect(result.incomeExpected).toBe(3500);
+    // but no cash adjustment (payment date already passed without posting)
+    expect(result.projectedBalance).toBe(0);
+  });
+
+  it("statement draft com payment_date em abril: nao entra no caixa de marco", async () => {
+    await registerAndLogin("fc-stmt-next-month@test.dev");
+    const userId = await getUserIdByEmail("fc-stmt-next-month@test.dev");
+
+    const sid = await insertIncomeSource(userId);
+    // reference_month = 2026-03 (competência março), mas cai no caixa de abril
+    await insertStatement(sid, {
+      referenceMonth: "2026-03",
+      netAmount: 4200,
+      paymentDate: "2026-04-02", // next month: > mEnd (2026-03-31)
+      status: "draft",
+    });
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    // income_expected de março = 4200 (competência)
+    expect(result.incomeExpected).toBe(4200);
+    // mas não entra no caixa projetado de março
+    expect(result.projectedBalance).toBe(0);
+  });
+
+  it("statement draft sem payment_date: nao entra no incomeAdjustment", async () => {
+    await registerAndLogin("fc-stmt-no-date@test.dev");
+    const userId = await getUserIdByEmail("fc-stmt-no-date@test.dev");
+
+    const sid = await insertIncomeSource(userId);
+    await insertStatement(sid, {
+      referenceMonth: "2026-03",
+      netAmount: 2800,
+      paymentDate: null,
+      status: "draft",
+    });
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.incomeExpected).toBe(2800);
+    expect(result.projectedBalance).toBe(0); // sem data, sem ajuste de caixa
+  });
+
+  it("multiplas fontes: soma corretamente em income_expected e incomeAdjustment", async () => {
+    await registerAndLogin("fc-stmt-multi@test.dev");
+    const userId = await getUserIdByEmail("fc-stmt-multi@test.dev");
+
+    const sid1 = await insertIncomeSource(userId, "Emprego principal");
+    const sid2 = await insertIncomeSource(userId, "Freela");
+
+    // posted — já na transação, não entra em adjustment
+    await insertStatement(sid1, {
+      referenceMonth: "2026-03",
+      netAmount: 5000,
+      paymentDate: "2026-03-05",
+      status: "posted",
+    });
+
+    // draft com data futura — entra em adjustment
+    await insertStatement(sid2, {
+      referenceMonth: "2026-03",
+      netAmount: 1500,
+      paymentDate: "2026-03-20",
+      status: "draft",
+    });
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.incomeExpected).toBe(6500); // 5000 + 1500
+    expect(result.projectedBalance).toBe(1500); // adj = apenas draft futuro
   });
 });
