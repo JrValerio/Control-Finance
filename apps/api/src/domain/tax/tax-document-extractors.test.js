@@ -9,9 +9,10 @@ describe("tax document extractors", () => {
         "Banco Inter",
         "Informe de Rendimentos",
         "Ano-calendario 2025",
+        "CNPJ 00.000.000/0001-91",
         "Saldo em 31/12/2024 R$ 1.200,00",
         "Saldo em 31/12/2025 R$ 2.450,20",
-        "Rendimentos sujeitos a tributacao exclusiva",
+        "Rendimentos sujeitos a tributacao exclusiva R$ 13,49",
       ].join("\n"),
       classification: {
         sourceLabelSuggestion: "Banco Inter",
@@ -21,6 +22,8 @@ describe("tax document extractors", () => {
     expect(result.extractorName).toBe("income-report-bank");
     expect(result.payload.institutionName).toBe("Banco Inter");
     expect(result.payload.reportYear).toBe(2025);
+    expect(result.payload.institutionDocument).toBe("00.000.000/0001-91");
+    expect(result.payload.exclusiveTaxIncomeTotal).toBe(13.49);
     expect(result.payload.yearEndBalances).toHaveLength(2);
   });
 
@@ -33,13 +36,18 @@ describe("tax document extractors", () => {
         "CNPJ 12.345.678/0001-90",
         "Beneficiario Joao da Silva",
         "CPF 123.456.789-00",
-        "Rendimentos tributaveis",
+        "Rendimentos tributaveis R$ 54.321,00",
+        "Imposto sobre a renda retido na fonte R$ 4.321,09",
+        "Decimo terceiro R$ 5.000,00",
       ].join("\n"),
     });
 
     expect(result.extractorName).toBe("income-report-employer");
     expect(result.payload.payerDocument).toBe("12.345.678/0001-90");
     expect(result.payload.beneficiaryDocument).toBe("123.456.789-00");
+    expect(result.payload.taxableIncome).toBe(54321);
+    expect(result.payload.withheldTax).toBe(4321.09);
+    expect(result.payload.thirteenthSalary).toBe(5000);
   });
 
   it("extrai sugestao estruturada do INSS", () => {

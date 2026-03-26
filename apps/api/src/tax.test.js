@@ -381,7 +381,7 @@ describe("Tax API foundation", () => {
     expectErrorResponseWithRequestId(detailResponse, 404, "Documento fiscal nao encontrado.");
   });
 
-  it("POST /tax/documents/:id/reprocess classifica e extrai comprovante do empregador", async () => {
+  it("POST /tax/documents/:id/reprocess classifica, extrai e normaliza comprovante do empregador", async () => {
     const token = await registerAndLogin("tax-reprocess-employer@test.dev");
     const uploadResponse = await request(app)
       .post("/tax/documents")
@@ -396,7 +396,9 @@ describe("Tax API foundation", () => {
             "CNPJ 12.345.678/0001-90",
             "Beneficiario Joao da Silva",
             "CPF 123.456.789-00",
-            "Rendimentos tributaveis",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+            "Decimo terceiro R$ 5.000,00",
           ].join("\n"),
           "utf8",
         ),
@@ -416,15 +418,56 @@ describe("Tax API foundation", () => {
     expect(reprocessResponse.body.document).toMatchObject({
       id: uploadResponse.body.document.id,
       documentType: "income_report_employer",
-      processingStatus: "extracted",
+      processingStatus: "normalized",
     });
     expect(reprocessResponse.body.document.latestExtraction).toMatchObject({
       extractorName: "income-report-employer",
       classification: "income_report_employer",
     });
+
+    const factsResult = await dbQuery(
+      `SELECT
+         fact_type,
+         subcategory,
+         amount,
+         review_status,
+         dedupe_strength,
+         conflict_code
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+
+    expect(factsResult.rows).toEqual([
+      expect.objectContaining({
+        fact_type: "taxable_income",
+        subcategory: "annual_taxable_income",
+        amount: 54321,
+        review_status: "pending",
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "withheld_tax",
+        subcategory: "annual_withheld_tax",
+        amount: 4321.09,
+        review_status: "pending",
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "exclusive_tax_income",
+        subcategory: "thirteenth_salary",
+        amount: 5000,
+        review_status: "pending",
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+    ]);
   });
 
-  it("POST /tax/documents/:id/reprocess classifica extrato de apoio sem gerar facts", async () => {
+  it("POST /tax/documents/:id/reprocess normaliza extrato de apoio sem gerar facts", async () => {
     const token = await registerAndLogin("tax-reprocess-bank-support@test.dev");
     const uploadResponse = await request(app)
       .post("/tax/documents")
@@ -456,7 +499,7 @@ describe("Tax API foundation", () => {
     expect(reprocessResponse.body.document).toMatchObject({
       id: uploadResponse.body.document.id,
       documentType: "bank_statement_support",
-      processingStatus: "classified",
+      processingStatus: "normalized",
     });
     expect(reprocessResponse.body.document.latestExtraction).toMatchObject({
       extractorName: "classifier-only",
@@ -465,6 +508,121 @@ describe("Tax API foundation", () => {
 
     const factsCountResult = await dbQuery("SELECT COUNT(*) AS total FROM tax_facts");
     expect(Number(factsCountResult.rows[0].total)).toBe(0);
+  });
+
+  it("POST /tax/documents/:id/reprocess e idempotente para o mesmo documento", async () => {
+    const token = await registerAndLogin("tax-reprocess-idempotent@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "empregador-idempotente.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const firstReprocess = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+    const secondReprocess = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(firstReprocess.status).toBe(200);
+    expect(secondReprocess.status).toBe(200);
+
+    const factsCountResult = await dbQuery(
+      `SELECT COUNT(*) AS total
+       FROM tax_facts
+       WHERE source_document_id = $1`,
+      [uploadResponse.body.document.id],
+    );
+
+    expect(Number(factsCountResult.rows[0].total)).toBe(2);
+  });
+
+  it("POST /tax/documents/:id/reprocess marca fatos duplicados de outro documento como conflito fraco", async () => {
+    const token = await registerAndLogin("tax-reprocess-conflict@test.dev");
+    const sharedLines = [
+      "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+      "Fonte pagadora ACME LTDA",
+      "CNPJ 12.345.678/0001-90",
+      "Rendimentos tributaveis R$ 54.321,00",
+      "Imposto sobre a renda retido na fonte R$ 4.321,09",
+    ];
+    const firstUploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from(sharedLines.join("\n"), "utf8"), {
+        filename: "empregador-a.csv",
+        contentType: "text/csv",
+      });
+    const secondUploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from([...sharedLines, "Observacao reemitida"].join("\n"), "utf8"), {
+        filename: "empregador-b.csv",
+        contentType: "text/csv",
+      });
+
+    expect(firstUploadResponse.status).toBe(201);
+    expect(secondUploadResponse.status).toBe(201);
+
+    const firstReprocess = await request(app)
+      .post(`/tax/documents/${firstUploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+    const secondReprocess = await request(app)
+      .post(`/tax/documents/${secondUploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(firstReprocess.status).toBe(200);
+    expect(secondReprocess.status).toBe(200);
+
+    const factsResult = await dbQuery(
+      `SELECT source_document_id, dedupe_strength, conflict_code
+       FROM tax_facts
+       ORDER BY source_document_id ASC, id ASC`,
+    );
+
+    expect(factsResult.rows).toEqual([
+      expect.objectContaining({
+        source_document_id: firstUploadResponse.body.document.id,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        source_document_id: firstUploadResponse.body.document.id,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        source_document_id: secondUploadResponse.body.document.id,
+        dedupe_strength: "weak",
+        conflict_code: "TAX_FACT_DUPLICATE",
+      }),
+      expect.objectContaining({
+        source_document_id: secondUploadResponse.body.document.id,
+        dedupe_strength: "weak",
+        conflict_code: "TAX_FACT_DUPLICATE",
+      }),
+    ]);
   });
 
   it("POST /tax/documents/:id/reprocess retorna 404 para documento de outro usuario", async () => {
@@ -531,6 +689,50 @@ describe("Tax API foundation", () => {
         factsApproved: 0,
       },
       generatedAt: null,
+    });
+  });
+
+  it("GET /tax/summary/:taxYear atualiza sourceCounts apos normalizacao de facts pendentes", async () => {
+    const token = await registerAndLogin("tax-summary-counts@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+            "Decimo terceiro R$ 5.000,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "empregador-summary.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+    const summaryResponse = await request(app)
+      .get("/tax/summary/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.status).toBe("not_generated");
+    expect(summaryResponse.body.sourceCounts).toEqual({
+      documents: 1,
+      factsPending: 3,
+      factsApproved: 0,
     });
   });
 });

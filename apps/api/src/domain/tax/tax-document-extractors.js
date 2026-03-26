@@ -78,6 +78,24 @@ const extractFirstMatch = (text, regex) => {
   return match ? match[1].trim() : null;
 };
 
+const extractAmountByPatterns = (text, patterns) => {
+  for (const pattern of patterns) {
+    const match = String(text || "").match(pattern);
+
+    if (!match) {
+      continue;
+    }
+
+    const parsedAmount = parseSignedAmount(match[1]);
+
+    if (parsedAmount !== null) {
+      return Math.abs(parsedAmount);
+    }
+  }
+
+  return null;
+};
+
 const buildSectionFlags = (normalizedText, descriptors) =>
   descriptors.filter((descriptor) => normalizedText.includes(descriptor)).map((descriptor) => descriptor);
 
@@ -90,6 +108,16 @@ const extractBankIncomeReport = (text, classification) => {
     payload: {
       reportYear: extractYear(text),
       institutionName: classification.sourceLabelSuggestion,
+      institutionDocument: extractFirstMatch(text, /\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})\b/),
+      exclusiveTaxIncomeTotal: extractAmountByPatterns(text, [
+        /(?:rendimentos sujeitos a\s+)?tributacao exclusiva(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      ]),
+      exemptIncomeTotal: extractAmountByPatterns(text, [
+        /rendimentos isentos(?:\s+e\s+nao\s+tributaveis)?(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      ]),
+      withheldTaxTotal: extractAmountByPatterns(text, [
+        /imposto(?:\s+sobre\s+a\s+renda)?\s+retido\s+na\s+fonte(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      ]),
       detectedSections: buildSectionFlags(normalizedText, [
         "rendimentos sujeitos",
         "tributacao exclusiva",
@@ -117,6 +145,20 @@ const extractEmployerIncomeReport = (text) => {
       payerDocument: extractFirstMatch(text, /\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})\b/),
       beneficiaryName: extractFirstMatch(text, /benefici[aá]ri[oa][:\s]+([^\n\r]{3,120})/i),
       beneficiaryDocument: extractFirstMatch(text, /\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/),
+      taxableIncome: extractAmountByPatterns(text, [
+        /rendimentos tributaveis(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+        /total de rendimentos tributaveis(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      ]),
+      withheldTax: extractAmountByPatterns(text, [
+        /imposto(?:\s+sobre\s+a\s+renda)?\s+retido\s+na\s+fonte(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+        /\birrf(?:\s+total)?(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      ]),
+      officialSocialSecurity: extractAmountByPatterns(text, [
+        /contribuicao previdenciaria oficial(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      ]),
+      thirteenthSalary: extractAmountByPatterns(text, [
+        /(?:decimo terceiro|13o salario|13º salario)(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      ]),
       detectedSections: buildSectionFlags(normalizedText, [
         "rendimentos tributaveis",
         "imposto sobre a renda retido na fonte",

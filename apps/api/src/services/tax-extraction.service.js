@@ -3,6 +3,7 @@ import { runTaxExtractorForDocument } from "../domain/tax/tax-document-extractor
 import { createTaxError, normalizeTaxUserId } from "../domain/tax/tax.validation.js";
 import { classifyStoredTaxDocument } from "./tax-classification.service.js";
 import { getTaxDocumentByIdForUser } from "./tax-documents.service.js";
+import { normalizeProcessedTaxDocument } from "./tax-normalization.service.js";
 
 const CLASSIFIER_ONLY_EXTRACTOR_NAME = "classifier-only";
 const CLASSIFIER_ONLY_EXTRACTOR_VERSION = "1.0.0";
@@ -44,6 +45,19 @@ const getProcessableTaxDocumentByIdForUser = async (userId, documentId) => {
   return result.rows[0] || null;
 };
 
+const mapPersistedExtraction = (row) => ({
+  id: Number(row.id),
+  extractorName: row.extractor_name,
+  extractorVersion: row.extractor_version,
+  classification: row.classification,
+  confidenceScore:
+    row.confidence_score === null || typeof row.confidence_score === "undefined"
+      ? null
+      : Number(row.confidence_score),
+  rawJson: row.raw_json && typeof row.raw_json === "object" ? row.raw_json : {},
+  warnings: Array.isArray(row.warnings_json) ? row.warnings_json : [],
+});
+
 const persistSuccessfulProcessing = async ({
   userId,
   documentId,
@@ -64,8 +78,10 @@ const persistSuccessfulProcessing = async ({
         classification: classification.classificationPayload,
       };
 
+  let persistedExtraction = null;
+
   await withDbTransaction(async (client) => {
-    await client.query(
+    const extractionResult = await client.query(
       `INSERT INTO tax_document_extractions (
          document_id,
          extractor_name,
@@ -75,7 +91,15 @@ const persistSuccessfulProcessing = async ({
          raw_json,
          warnings_json
        )
-       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)`,
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb)
+       RETURNING
+         id,
+         extractor_name,
+         extractor_version,
+         classification,
+         confidence_score,
+         raw_json,
+         warnings_json`,
       [
         documentId,
         extractorName,
@@ -86,6 +110,7 @@ const persistSuccessfulProcessing = async ({
         JSON.stringify(warnings),
       ],
     );
+    persistedExtraction = mapPersistedExtraction(extractionResult.rows[0] || {});
 
     await client.query(
       `UPDATE tax_documents
@@ -106,6 +131,8 @@ const persistSuccessfulProcessing = async ({
       ],
     );
   });
+
+  return persistedExtraction;
 };
 
 const persistFailedProcessing = async ({
@@ -150,13 +177,21 @@ export const processTaxDocumentByIdForUser = async (userId, documentId) => {
       classification,
     });
     const warnings = [...classification.warnings, ...(extractorResult?.warnings || [])];
-
-    await persistSuccessfulProcessing({
+    const persistedExtraction = await persistSuccessfulProcessing({
       userId: normalizedUserId,
       documentId: normalizedDocumentId,
       classification,
       extractorResult,
       warnings,
+    });
+    await normalizeProcessedTaxDocument({
+      userId: normalizedUserId,
+      document: {
+        id: normalizedDocumentId,
+        taxYear: Number(document.tax_year),
+        documentType: classification.documentType,
+      },
+      extraction: persistedExtraction,
     });
 
     return getTaxDocumentByIdForUser(normalizedUserId, normalizedDocumentId);
