@@ -5,6 +5,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import TaxPage from "./TaxPage";
 import {
   taxService,
+  type TaxDocument,
+  type TaxDocumentDetail,
   type TaxFact,
   type TaxObligation,
   type TaxSummary,
@@ -12,6 +14,9 @@ import {
 
 vi.mock("../services/tax.service", () => ({
   taxService: {
+    listDocuments: vi.fn(),
+    uploadDocument: vi.fn(),
+    reprocessDocument: vi.fn(),
     getSummary: vi.fn(),
     rebuildSummary: vi.fn(),
     getObligation: vi.fn(),
@@ -106,6 +111,27 @@ const buildFact = (overrides: Partial<TaxFact> = {}): TaxFact => ({
   ...overrides,
 });
 
+const buildDocument = (overrides: Partial<TaxDocument> = {}): TaxDocument => ({
+  id: 1,
+  taxYear: 2026,
+  originalFileName: "empregador.pdf",
+  documentType: "income_report_employer",
+  processingStatus: "normalized",
+  sourceLabel: "ACME",
+  sourceHint: "Informe 2025",
+  uploadedAt: "2026-03-26T12:00:00.000Z",
+  ...overrides,
+});
+
+const buildDocumentDetail = (overrides: Partial<TaxDocumentDetail> = {}): TaxDocumentDetail => ({
+  ...buildDocument(overrides),
+  mimeType: "application/pdf",
+  byteSize: 12345,
+  sha256: "abc123",
+  latestExtraction: null,
+  ...overrides,
+});
+
 const renderPage = () =>
   render(
     <MemoryRouter initialEntries={["/app/tax/2026"]}>
@@ -118,6 +144,26 @@ const renderPage = () =>
 describe("TaxPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(taxService.listDocuments).mockResolvedValue({
+      items: [buildDocument()],
+      page: 1,
+      pageSize: 6,
+      total: 1,
+    });
+    vi.mocked(taxService.uploadDocument).mockResolvedValue(buildDocumentDetail());
+    vi.mocked(taxService.reprocessDocument).mockResolvedValue(
+      buildDocumentDetail({
+        processingStatus: "normalized",
+        latestExtraction: {
+          extractorName: "income-report-employer",
+          extractorVersion: "1.0.0",
+          classification: "income_report_employer",
+          confidenceScore: 0.98,
+          warnings: [],
+          createdAt: "2026-03-26T12:00:00.000Z",
+        },
+      }),
+    );
     vi.mocked(taxService.getSummary).mockResolvedValue(buildSummary());
     vi.mocked(taxService.getObligation).mockResolvedValue(buildObligation());
     vi.mocked(taxService.listFacts).mockResolvedValue({
@@ -141,6 +187,8 @@ describe("TaxPage", () => {
     expect(screen.getByText("Obrigatório declarar")).toBeInTheDocument();
     expect(screen.getByText("TAXABLE_INCOME_LIMIT")).toBeInTheDocument();
     expect(screen.getByText("ACME LTDA")).toBeInTheDocument();
+    expect(screen.getByText("Documentos do exercício")).toBeInTheDocument();
+    expect(screen.getByText("empregador.pdf")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Aprovar todos pendentes" })).toBeInTheDocument();
   });
 
@@ -179,5 +227,143 @@ describe("TaxPage", () => {
     await waitFor(() => {
       expect(taxService.rebuildSummary).toHaveBeenCalledWith(2026);
     });
+  });
+
+  it("envia documento, reprocessa e atualiza o dashboard fiscal", async () => {
+    const user = userEvent.setup();
+    const uploadedFile = new File(["conteudo fiscal"], "informe-2025.pdf", {
+      type: "application/pdf",
+    });
+
+    vi.mocked(taxService.listDocuments)
+      .mockResolvedValueOnce({
+        items: [],
+        page: 1,
+        pageSize: 6,
+        total: 0,
+      })
+      .mockResolvedValue({
+        items: [
+          buildDocument({
+            id: 55,
+            originalFileName: "informe-2025.pdf",
+            sourceLabel: "Banco Inter",
+            sourceHint: "Informe 2025",
+          }),
+        ],
+        page: 1,
+        pageSize: 6,
+        total: 1,
+      });
+
+    vi.mocked(taxService.uploadDocument).mockResolvedValueOnce(
+      buildDocumentDetail({
+        id: 55,
+        originalFileName: "informe-2025.pdf",
+        processingStatus: "uploaded",
+        sourceLabel: "Banco Inter",
+        sourceHint: "Informe 2025",
+      }),
+    );
+
+    vi.mocked(taxService.reprocessDocument).mockResolvedValueOnce(
+      buildDocumentDetail({
+        id: 55,
+        originalFileName: "informe-2025.pdf",
+        processingStatus: "normalized",
+        sourceLabel: "Banco Inter",
+        sourceHint: "Informe 2025",
+      }),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Enviar documento" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Enviar documento" }));
+    await user.upload(screen.getByLabelText("Arquivo fiscal"), uploadedFile);
+    await user.type(screen.getByLabelText("Fonte ou instituição"), "Banco Inter");
+    await user.type(screen.getByLabelText("Observação"), "Informe 2025");
+    await user.click(screen.getByRole("button", { name: "Enviar e processar" }));
+
+    await waitFor(() => {
+      expect(taxService.uploadDocument).toHaveBeenCalledWith(2026, uploadedFile, {
+        sourceLabel: "Banco Inter",
+        sourceHint: "Informe 2025",
+      });
+    });
+
+    await waitFor(() => {
+      expect(taxService.reprocessDocument).toHaveBeenCalledWith(55);
+    });
+
+    expect(
+      (
+        await screen.findAllByText(
+          "Documento enviado e processado. Se houver fatos extraídos, eles já aparecem na fila de revisão.",
+        )
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(await screen.findByText("informe-2025.pdf")).toBeInTheDocument();
+  });
+
+  it("distingue upload concluído de falha no processamento", async () => {
+    const user = userEvent.setup();
+    const uploadedFile = new File(["conteudo fiscal"], "falhou.pdf", {
+      type: "application/pdf",
+    });
+
+    vi.mocked(taxService.listDocuments)
+      .mockResolvedValueOnce({
+        items: [],
+        page: 1,
+        pageSize: 6,
+        total: 0,
+      })
+      .mockResolvedValue({
+        items: [
+          buildDocument({
+            id: 77,
+            originalFileName: "falhou.pdf",
+            processingStatus: "failed",
+            sourceLabel: "Plano de Saúde",
+          }),
+        ],
+        page: 1,
+        pageSize: 6,
+        total: 1,
+      });
+
+    vi.mocked(taxService.uploadDocument).mockResolvedValueOnce(
+      buildDocumentDetail({
+        id: 77,
+        originalFileName: "falhou.pdf",
+        processingStatus: "uploaded",
+        sourceLabel: "Plano de Saúde",
+      }),
+    );
+    vi.mocked(taxService.reprocessDocument).mockRejectedValueOnce({
+      response: {
+        data: {
+          message: "Falha ao processar documento fiscal.",
+        },
+      },
+    });
+
+    renderPage();
+
+    await screen.findByRole("button", { name: "Enviar documento" });
+    await user.click(screen.getByRole("button", { name: "Enviar documento" }));
+    await user.upload(screen.getByLabelText("Arquivo fiscal"), uploadedFile);
+    await user.click(screen.getByRole("button", { name: "Enviar e processar" }));
+
+    expect(
+      await screen.findByText(
+        "Documento enviado, mas não foi possível processar. Falha ao processar documento fiscal.",
+      ),
+    ).toBeInTheDocument();
+    expect(await screen.findByText("falhou.pdf")).toBeInTheDocument();
   });
 });

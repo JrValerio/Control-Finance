@@ -2,6 +2,46 @@ import { api } from "./api";
 
 export type TaxFactReviewStatus = "pending" | "approved" | "corrected" | "rejected";
 export type TaxFactReviewAction = "approve" | "correct" | "reject";
+export type TaxDocumentProcessingStatus =
+  | "uploaded"
+  | "classified"
+  | "extracted"
+  | "normalized"
+  | "failed";
+
+export interface TaxDocumentLatestExtraction {
+  extractorName: string;
+  extractorVersion: string;
+  classification: string;
+  confidenceScore: number | null;
+  warnings: string[];
+  createdAt: string | null;
+}
+
+export interface TaxDocument {
+  id: number;
+  taxYear: number;
+  originalFileName: string;
+  documentType: string;
+  processingStatus: TaxDocumentProcessingStatus;
+  sourceLabel: string;
+  sourceHint: string;
+  uploadedAt: string | null;
+}
+
+export interface TaxDocumentDetail extends TaxDocument {
+  mimeType: string;
+  byteSize: number;
+  sha256: string;
+  latestExtraction: TaxDocumentLatestExtraction | null;
+}
+
+export interface TaxDocumentsListResult {
+  items: TaxDocument[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
 
 export interface TaxSummaryWarning {
   code: string;
@@ -120,6 +160,21 @@ interface TaxFactApiPayload {
   sourceDocument?: unknown;
 }
 
+interface TaxDocumentApiPayload {
+  id?: unknown;
+  taxYear?: unknown;
+  originalFileName?: unknown;
+  documentType?: unknown;
+  processingStatus?: unknown;
+  sourceLabel?: unknown;
+  sourceHint?: unknown;
+  uploadedAt?: unknown;
+  mimeType?: unknown;
+  byteSize?: unknown;
+  sha256?: unknown;
+  latestExtraction?: unknown;
+}
+
 const normalizeNumber = (value: unknown): number => {
   const parsedValue = Number(value);
   return Number.isFinite(parsedValue) ? parsedValue : 0;
@@ -152,6 +207,60 @@ const normalizeWarning = (value: unknown): TaxSummaryWarning => {
   return {
     code: normalizeString(raw.code),
     message: normalizeString(raw.message),
+  };
+};
+
+const normalizeLatestExtraction = (value: unknown): TaxDocumentLatestExtraction | null => {
+  const raw = normalizeObject(value);
+
+  if (Object.keys(raw).length === 0) {
+    return null;
+  }
+
+  return {
+    extractorName: normalizeString(raw.extractorName),
+    extractorVersion: normalizeString(raw.extractorVersion),
+    classification: normalizeString(raw.classification),
+    confidenceScore: normalizeNullableNumber(raw.confidenceScore),
+    warnings: Array.isArray(raw.warnings)
+      ? raw.warnings.map((warning) => normalizeString(warning)).filter(Boolean)
+      : [],
+    createdAt: normalizeNullableString(raw.createdAt),
+  };
+};
+
+const normalizeTaxDocument = (value: unknown): TaxDocument => {
+  const raw = normalizeObject(value) as TaxDocumentApiPayload;
+  const processingStatus = normalizeString(raw.processingStatus);
+
+  return {
+    id: normalizeNumber(raw.id),
+    taxYear: normalizeNumber(raw.taxYear),
+    originalFileName: normalizeString(raw.originalFileName),
+    documentType: normalizeString(raw.documentType),
+    processingStatus:
+      processingStatus === "uploaded" ||
+      processingStatus === "classified" ||
+      processingStatus === "extracted" ||
+      processingStatus === "normalized" ||
+      processingStatus === "failed"
+        ? processingStatus
+        : "uploaded",
+    sourceLabel: normalizeString(raw.sourceLabel),
+    sourceHint: normalizeString(raw.sourceHint),
+    uploadedAt: normalizeNullableString(raw.uploadedAt),
+  };
+};
+
+const normalizeTaxDocumentDetail = (value: unknown): TaxDocumentDetail => {
+  const raw = normalizeObject(value) as TaxDocumentApiPayload;
+
+  return {
+    ...normalizeTaxDocument(raw),
+    mimeType: normalizeString(raw.mimeType),
+    byteSize: normalizeNumber(raw.byteSize),
+    sha256: normalizeString(raw.sha256),
+    latestExtraction: normalizeLatestExtraction(raw.latestExtraction),
   };
 };
 
@@ -276,6 +385,62 @@ const normalizeObligation = (value: unknown): TaxObligation => {
 };
 
 export const taxService = {
+  listDocuments: async (params: {
+    taxYear: number;
+    status?: TaxDocumentProcessingStatus;
+    page?: number;
+    pageSize?: number;
+  }): Promise<TaxDocumentsListResult> => {
+    const { data } = await api.get("/tax/documents", {
+      params: {
+        taxYear: params.taxYear,
+        status: params.status,
+        page: params.page,
+        pageSize: params.pageSize,
+      },
+    });
+    const raw = normalizeObject(data);
+
+    return {
+      items: Array.isArray(raw.items) ? raw.items.map(normalizeTaxDocument) : [],
+      page: normalizeNumber(raw.page) || 1,
+      pageSize: normalizeNumber(raw.pageSize) || 20,
+      total: normalizeNumber(raw.total),
+    };
+  },
+
+  uploadDocument: async (
+    taxYear: number,
+    file: File,
+    options: {
+      sourceLabel?: string;
+      sourceHint?: string;
+    } = {},
+  ): Promise<TaxDocumentDetail> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("taxYear", String(taxYear));
+
+    if (typeof options.sourceLabel === "string" && options.sourceLabel.trim()) {
+      formData.append("sourceLabel", options.sourceLabel.trim());
+    }
+
+    if (typeof options.sourceHint === "string" && options.sourceHint.trim()) {
+      formData.append("sourceHint", options.sourceHint.trim());
+    }
+
+    const { data } = await api.post("/tax/documents", formData);
+    return normalizeTaxDocumentDetail(normalizeObject(data).document);
+  },
+
+  reprocessDocument: async (
+    documentId: number,
+    payload: Record<string, unknown> = {},
+  ): Promise<TaxDocumentDetail> => {
+    const { data } = await api.post(`/tax/documents/${documentId}/reprocess`, payload);
+    return normalizeTaxDocumentDetail(normalizeObject(data).document);
+  },
+
   getSummary: async (taxYear: number): Promise<TaxSummary> => {
     const { data } = await api.get(`/tax/summary/${taxYear}`);
     return normalizeSummary(data);
