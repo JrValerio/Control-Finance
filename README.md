@@ -6,7 +6,7 @@
 **Control Finance: seu Copiloto Financeiro com IA.**
 
 Não é só um app para registrar entradas e saídas.
-É um cockpit financeiro pessoal para acompanhar o presente, visualizar a trajetória do mês e tomar decisões com mais clareza usando metas, projeções e insights acionáveis.
+É um cockpit financeiro pessoal para acompanhar o presente, visualizar a trajetória do mês e tomar decisões com mais clareza usando metas, projeções, insights acionáveis e uma trilha fiscal assistida para preparação do IRPF.
 
 ## Proposta de valor
 
@@ -17,6 +17,7 @@ O Control Finance evoluiu de um gerenciador de gastos para uma experiência de *
 * destaca sinais de risco antes do problema explodir
 * conecta metas de poupança ao contexto financeiro real
 * entrega um insight objetivo do **Especialista IA** no dashboard
+* organiza o **IRPF** com a Central do Leão: documentos, revisão, resumo anual e dossiê fiscal exportável
 
 ## O que o produto entrega
 
@@ -68,6 +69,15 @@ O Control Finance evoluiu de um gerenciador de gastos para uma experiência de *
   * defina suas metas de poupança
   * ouça o Especialista IA
 
+### 7. Central do Leão (IRPF MVP)
+
+* rota dedicada em `/app/tax` e `/app/tax/:taxYear`
+* upload fiscal de `PDF`, `CSV`, `PNG` e `JPG`
+* pipeline determinístico: documento -> classificação -> extração -> fatos fiscais -> revisão
+* comparação de obrigatoriedade e resumo anual por exercício
+* rebuild explícito de snapshot fiscal e export oficial de dossiê em `JSON` e `CSV`
+* guardrail de produto: prepara e organiza o IRPF, mas **não** transmite DIRPF nem substitui os canais oficiais da Receita
+
 ## Stack
 
 ### Web
@@ -117,6 +127,7 @@ API (apps/api)
   -> auth
   -> transactions
   -> goals
+  -> tax (Central do Leao / IRPF)
   -> export CSV
   -> insight de IA
   -> Postgres
@@ -144,6 +155,14 @@ API (apps/api)
 * acompanhar progresso percentual
 * visualizar valor restante
 * saber exatamente quanto precisa guardar por mês
+
+### Central do Leão
+
+* subir documentos fiscais e reprocessar quando necessário
+* revisar fatos fiscais aprovando, corrigindo ou rejeitando
+* rebuildar o resumo anual do exercício com snapshot versionado
+* baixar o dossiê oficial do produto em `JSON` e `CSV`
+* trabalhar com um fluxo honesto de preparação do IRPF sem prometer envio oficial à Receita
 
 ### Segurança e resiliência
 
@@ -201,6 +220,8 @@ AUTH_RATE_LIMIT_WINDOW_MS=
 AUTH_BRUTE_FORCE_MAX_ATTEMPTS=
 AUTH_BRUTE_FORCE_WINDOW_MS=
 AUTH_BRUTE_FORCE_LOCK_MS=
+TAX_DOCUMENTS_STORAGE_DIR=
+TAX_DOCUMENT_MAX_FILE_SIZE_BYTES=10485760
 ```
 
 ### IA
@@ -250,6 +271,7 @@ Configuração recomendada:
 * login e registro funcionam
 * `VITE_API_URL` aponta para a API pública
 * `ANTHROPIC_API_KEY` está configurada na API se a camada de IA estiver habilitada
+* `TAX_DOCUMENTS_STORAGE_DIR` aponta para storage persistente se a Central do Leão estiver habilitada em produção
 
 ## Scripts
 
@@ -290,6 +312,8 @@ npm -w apps/web run build
 
 * `docs/roadmap-execution.md` — mapa interno de execução: estado atual, próximo sprint, backlog e decisões arquiteturais
 
+* `docs/architecture/v1.31.0-central-do-leao-irpf.md`
+* `docs/architecture/v1.6.11-billing-state-machine.md`
 * `docs/architecture/v1.3.0.md`
 * `docs/architecture/v1.3.0-auth.md`
 * `docs/architecture/v1.3.1-transactions.md`
@@ -297,7 +321,7 @@ npm -w apps/web run build
 * `docs/architecture/v1.4.2-auth-hardening.md`
 * `docs/architecture/v1.4.3-transactions-crud-plus.md`
 * `docs/architecture/v1.5.0-export-csv.md`
-* `docs/architecture/v1.5.1-export-polish.md`
+* `docs/architecture/v1.6.6-web-typescript-services-and-routes.md`
 
 ## Roadmap
 
@@ -308,6 +332,7 @@ npm -w apps/web run build
 * [x] Health Overview
 * [x] Saving Goals
 * [x] Especialista IA
+* [x] Central do Leão (IRPF MVP)
 * [x] Onboarding orientado a valor
 * [ ] Importação com revisão assistida
 * [ ] Simulações "e se?"

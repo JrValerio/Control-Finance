@@ -15,6 +15,7 @@ O produto é um **Copiloto Financeiro**:
 - lê a saúde financeira de forma executiva (HealthOverview + gauge)
 - gera insights contextuais via Claude Haiku (Especialista IA)
 - acompanha metas de poupança com cálculo automático de necessidade mensal
+- prepara o IRPF com a Central do Leão sem depender da Receita no MVP
 - prepara o terreno para automações mais inteligentes sem inflar escopo cedo demais
 
 ### Regra central
@@ -23,7 +24,7 @@ O produto é um **Copiloto Financeiro**:
 
 ---
 
-## 2. Estado atual confirmado (v1.30.0)
+## 2. Estado atual confirmado (v1.31.0)
 
 ### Monorepo
 
@@ -54,6 +55,11 @@ npm run preview
 - Claude Haiku: `GET /ai/insight` com contexto de forecast + categorias + metas
 - Saving Goals: CRUD completo + `calcMonthlyNeeded` + `getGoalsSummaryForAI`
 - Billing: Stripe + trial + paywall por feature flag
+- Central do Leão:
+  - `/tax` com upload, classificação, extração, normalização e review queue
+  - regras anuais de IRPF, obrigatoriedade e resumo snapshotado
+  - lifecycle documental com retry/delete
+  - export oficial do dossiê em `JSON` e `CSV`
 - Migrations automáticas no startup com advisory lock
 - `GET /health` com status de migrations
 
@@ -66,13 +72,18 @@ npm run preview
 - Bills summary widget
 - Onboarding: WelcomeCard v2 com funil de 4 etapas
 - Modo Discreto: `DiscreetModeContext` com `isDiscreetMode`/`toggleDiscreetMode`/`useMaskedCurrency`
+- Central do Leão em `/app/tax`:
+  - upload e reprocessamento de documentos fiscais
+  - review queue de fatos fiscais
+  - rebuild do resumo por exercício
+  - export oficial via backend
 
 ### Placar de testes
 
 | Suite | Testes |
 |-------|--------|
-| API   | 552    |
-| Web   | 261    |
+| API   | 695    |
+| Web   | 291    |
 
 ---
 
@@ -162,7 +173,37 @@ Toda entrega nova deve responder a pelo menos um destes critérios:
 
 ---
 
-## 6. Melhorias incrementais de produto (backlog)
+## 6. Marco entregue depois da Sprint B — Central do Leão (mergeado em main — PR #290)
+
+### O que foi entregue
+
+**IRPF MVP** como subdomínio próprio, sem contaminar `transactions`.
+
+**Backend**
+- schema fiscal próprio com migrations `100` a `105`
+- pipeline documental: upload -> classificação -> extração -> normalização -> revisão -> summary -> export
+- review queue com trilha em `tax_reviews`
+- obrigatoriedade e resumo anual calculados a partir de fatos revisados
+- lifecycle documental com deleção lógica completa e cleanup físico `best effort`
+- export oficial do dossiê fiscal em `JSON` e `CSV`
+
+**Frontend**
+- rota protegida `/app/tax` com navegação pelo dashboard
+- dashboard da Central do Leão com warnings, resumo e fila de revisão
+- modal de upload fiscal com reprocessamento automático
+- retry/delete por documento com rebuild de snapshot
+- download oficial do dossiê pelo backend
+
+### Guardrails fixados
+
+- não transmitir DIRPF no MVP
+- não depender de API da Receita
+- export nunca recalcula snapshot escondido
+- CSV = fatos revisados; JSON = dossiê completo
+
+---
+
+## 7. Melhorias incrementais de produto (backlog)
 
 Estas melhorias são diretas, de baixo risco e de alto valor percebido.
 
@@ -188,7 +229,7 @@ Botão que navega para `/app/settings/security` — rota já existe e `SecurityS
 
 ---
 
-## 7. Roadmap de produto — próxima liga
+## 8. Roadmap de produto — próxima liga
 
 ### Simulador de Impacto ("Posso comprar isso?")
 
@@ -211,7 +252,10 @@ Reusa `transactions` sem nova infra.
 
 ---
 
-## 8. Importação Inteligente de Documentos (roadmap — não abre agora)
+## 9. Importação Inteligente de Documentos fora da trilha fiscal (roadmap — não abre agora)
+
+> Observação: a trilha fiscal IRPF já abriu seu subdomínio próprio em `/tax`.
+> Esta nota vale para futuras frentes documentais fora da Central do Leão.
 
 Se essa frente for aberta no futuro, deve nascer como **subdomínio próprio**, não como extensão de `transactions`.
 
@@ -233,7 +277,7 @@ Se essa frente for aberta no futuro, deve nascer como **subdomínio próprio**, 
 
 ---
 
-## 9. Decisões arquiteturais fixadas
+## 10. Decisões arquiteturais fixadas
 
 | Decisão | Motivo |
 |---|---|
@@ -242,18 +286,18 @@ Se essa frente for aberta no futuro, deve nascer como **subdomínio próprio**, 
 | `DiscreetModeContext` separado de `AuthContext` | Responsabilidade única; preferência de UI ≠ sessão de autenticação |
 | Fallback de assinatura neutro ("Acesso ativo") | Sem prometer entitlement que o backend não confirmou |
 | pg-mem para testes de API | Sem banco real em CI; compatível com o subset de SQL usado |
-| Squash merge sempre | Histórico limpo; cherry-pick limpo quando branches divergem |
+| Preferir merges lineares (rebase/ff) em stacks | Preserva slices encadeados e reduz merge bubble em épicos longos |
 
 ---
 
-## 10. Frase-guia para não perder o trilho
+## 11. Frase-guia para não perder o trilho
 
 > **O Control Finance já pensa como copiloto.**
 > **Os próximos passos devem fazê-lo agir como copiloto — sem sacrificar foco, clareza e qualidade estrutural.**
 
 ---
 
-## 11. Visão de produto — O Copiloto da Vida Real
+## 12. Visão de produto — O Copiloto da Vida Real
 
 O Control Finance tem potencial de ser o app financeiro mais útil para a maioria dos brasileiros:
 trabalhadores com renda mensal entre R$ 2.000 e R$ 8.000, que vivem o fluxo de caixa mês a mês,
@@ -277,7 +321,7 @@ não têm assessor financeiro, e precisam de clareza — não de palestra.
 
 ---
 
-## 12. Regra de Ouro de UX — Modo Sem Humilhação
+## 13. Regra de Ouro de UX — Modo Sem Humilhação
 
 > **Nunca fazer o usuário se sentir burro, pobre ou irresponsável.**
 
@@ -304,7 +348,7 @@ Copywriting errado quebra a relação com o produto.
 
 ---
 
-## 13. Backlog estratégico — Faixa 1: Sobrevivência e Controle de Dano
+## 14. Backlog estratégico — Faixa 1: Sobrevivência e Controle de Dano
 
 Features que evitam que o usuário "se afogue" no mês. Alto impacto emocional, baixo esforço técnico.
 
@@ -385,7 +429,7 @@ Requer: tabela `financial_calendar_events` com tipo, mês, valor estimado.
 
 ---
 
-## 14. Backlog estratégico — Faixa 2: Otimização de Fluxo de Caixa
+## 15. Backlog estratégico — Faixa 2: Otimização de Fluxo de Caixa
 
 Features que melhoram como o dinheiro flui — sem exigir disciplina extra do usuário.
 
@@ -451,7 +495,7 @@ Requer: detecção de sazonalidade + prompt especializado para IA.
 
 ---
 
-## 15. Backlog estratégico — Faixa 3: Inteligência Avançada
+## 16. Backlog estratégico — Faixa 3: Inteligência Avançada
 
 Features que transformam dados em decisões. Requerem mais dados acumulados para funcionar bem.
 
@@ -513,7 +557,7 @@ Requer: contexto enriquecido (transações + metas + forecast) + interface de ch
 
 ---
 
-## 16. Decisões de não fazer (e por quê)
+## 17. Decisões de não fazer (e por quê)
 
 | Feature | Por que não agora |
 |---|---|
@@ -526,7 +570,7 @@ Requer: contexto enriquecido (transações + metas + forecast) + interface de ch
 
 ---
 
-## 17. Notas de produto para não esquecer
+## 18. Notas de produto para não esquecer
 
 - **Payday é sagrado**: tudo no produto orbita em torno do dia de pagamento do usuário. Forecast, metas, alertas — tudo usa `payday` como âncora.
 - **O mês do usuário não é o mês do calendário**: se o usuário recebe dia 15, o "mês financeiro" dele é de 15 a 14.
