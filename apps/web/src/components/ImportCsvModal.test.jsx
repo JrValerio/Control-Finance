@@ -35,6 +35,8 @@ const buildDryRunResponse = (overrides = {}) => ({
     totalRows: 2,
     validRows: 1,
     invalidRows: 1,
+    duplicateRows: 0,
+    conflictRows: 0,
     income: 100,
     expense: 20,
   },
@@ -103,6 +105,68 @@ describe("ImportCsvModal", () => {
 
     expect(validRowsCard).toHaveTextContent("1");
     expect(invalidRowsCard).toHaveTextContent("1");
+  });
+
+  it("renders conflict rows with visible reason and blocks import when there are no valid rows", async () => {
+    const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+    transactionsService.dryRunImportCsv.mockResolvedValueOnce(
+      buildDryRunResponse({
+        summary: {
+          totalRows: 1,
+          validRows: 0,
+          invalidRows: 0,
+          duplicateRows: 0,
+          conflictRows: 1,
+          income: 0,
+          expense: 0,
+        },
+        rows: [
+          {
+            line: 2,
+            status: "conflict",
+            raw: {
+              date: "2026-03-06",
+              type: "Entrada",
+              value: "1412",
+              description: "CREDITO BENEFICIO INSS",
+              notes: "",
+              category: "",
+            },
+            normalized: null,
+            errors: [],
+            statusDetail:
+              "INSS Beneficio ja registrado no historico de renda (2026-03, 2026-03-05).",
+            conflict: {
+              type: "income_statement",
+              statementId: 15,
+              sourceName: "INSS Beneficio",
+              referenceMonth: "2026-03",
+              paymentDate: "2026-03-05",
+              netAmount: 1412,
+              status: "draft",
+              postedTransactionId: null,
+            },
+          },
+        ],
+      }),
+    );
+
+    render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Conflitos")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Conflito")).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        "INSS Beneficio ja registrado no historico de renda (2026-03, 2026-03-05).",
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Importar" })).toBeDisabled();
   });
 
   it("commits import and calls onImported callback when Fechar is clicked", async () => {

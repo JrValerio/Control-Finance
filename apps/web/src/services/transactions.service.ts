@@ -149,18 +149,33 @@ export interface ImportDryRunNormalizedRow {
   categoryId: number | null;
 }
 
+export interface ImportDryRunConflict {
+  type: "income_statement";
+  statementId: number;
+  sourceName: string | null;
+  referenceMonth: string | null;
+  paymentDate: string | null;
+  netAmount: number;
+  status: "draft" | "posted";
+  postedTransactionId: number | null;
+}
+
 export interface ImportDryRunRow {
   line: number;
-  status: "valid" | "invalid";
+  status: "valid" | "invalid" | "duplicate" | "conflict";
   raw: ImportDryRunRawRow;
   normalized: ImportDryRunNormalizedRow | null;
   errors: ImportDryRunError[];
+  statusDetail?: string | null;
+  conflict?: ImportDryRunConflict | null;
 }
 
 export interface ImportDryRunSummary {
   totalRows: number;
   validRows: number;
   invalidRows: number;
+  duplicateRows: number;
+  conflictRows: number;
   income: number;
   expense: number;
 }
@@ -309,6 +324,8 @@ interface ImportDryRunApiResponse {
     totalRows?: unknown;
     validRows?: unknown;
     invalidRows?: unknown;
+    duplicateRows?: unknown;
+    conflictRows?: unknown;
     income?: unknown;
     expense?: unknown;
   };
@@ -335,6 +352,17 @@ interface ImportDryRunApiResponse {
       field?: unknown;
       message?: unknown;
     }>;
+    statusDetail?: unknown;
+    conflict?: {
+      type?: unknown;
+      statementId?: unknown;
+      sourceName?: unknown;
+      referenceMonth?: unknown;
+      paymentDate?: unknown;
+      netAmount?: unknown;
+      status?: unknown;
+      postedTransactionId?: unknown;
+    } | null;
   }>;
 }
 
@@ -686,11 +714,22 @@ export const transactionsService = {
     const rows = Array.isArray(responseBody.rows)
       ? responseBody.rows.map((row) => {
           const normalizedStatus: ImportDryRunRow["status"] =
-            row?.status === "valid" ? "valid" : "invalid";
+            row?.status === "valid" ||
+            row?.status === "duplicate" ||
+            row?.status === "conflict"
+              ? row.status
+              : "invalid";
           const numericLine = Number(row?.line);
           const normalized = row?.normalized;
           const normalizedType = String(normalized?.type || "").trim();
           const numericNormalizedCategoryId = Number(normalized?.categoryId);
+          const conflict = row?.conflict;
+          const numericStatementId = Number(conflict?.statementId);
+          const numericPostedTransactionId = Number(conflict?.postedTransactionId);
+          const normalizedConflictType = String(conflict?.type || "").trim();
+          const normalizedConflictStatus = String(conflict?.status || "").trim();
+          const conflictStatus: ImportDryRunConflict["status"] =
+            normalizedConflictStatus === "posted" ? "posted" : "draft";
 
           return {
             line: Number.isInteger(numericLine) && numericLine >= 2 ? numericLine : 0,
@@ -724,6 +763,39 @@ export const transactionsService = {
                   message: String(error?.message || ""),
                 }))
               : [],
+            statusDetail:
+              typeof row?.statusDetail === "string" && row.statusDetail.trim()
+                ? row.statusDetail
+                : null,
+            conflict:
+              normalizedConflictType === "income_statement" &&
+              Number.isInteger(numericStatementId) &&
+              numericStatementId > 0
+                ? {
+                    type: "income_statement" as const,
+                    statementId: numericStatementId,
+                    sourceName:
+                      typeof conflict?.sourceName === "string" && conflict.sourceName.trim()
+                        ? conflict.sourceName
+                        : null,
+                    referenceMonth:
+                      typeof conflict?.referenceMonth === "string" &&
+                      conflict.referenceMonth.trim()
+                        ? conflict.referenceMonth
+                        : null,
+                    paymentDate:
+                      typeof conflict?.paymentDate === "string" && conflict.paymentDate.trim()
+                        ? conflict.paymentDate
+                        : null,
+                    netAmount: Number(conflict?.netAmount) || 0,
+                    status: conflictStatus,
+                    postedTransactionId:
+                      Number.isInteger(numericPostedTransactionId) &&
+                      numericPostedTransactionId > 0
+                        ? numericPostedTransactionId
+                        : null,
+                  }
+                : null,
           };
         })
       : [];
@@ -735,6 +807,8 @@ export const transactionsService = {
         totalRows: Number(responseBody.summary?.totalRows) || 0,
         validRows: Number(responseBody.summary?.validRows) || 0,
         invalidRows: Number(responseBody.summary?.invalidRows) || 0,
+        duplicateRows: Number(responseBody.summary?.duplicateRows) || 0,
+        conflictRows: Number(responseBody.summary?.conflictRows) || 0,
         income: Number(responseBody.summary?.income) || 0,
         expense: Number(responseBody.summary?.expense) || 0,
       },

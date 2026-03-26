@@ -31,6 +31,8 @@ const IMPORT_TTL_MINUTES = 30;
 const DEFAULT_IMPORT_CSV_MAX_ROWS = 2000;
 const DEFAULT_IMPORT_HISTORY_LIMIT = 20;
 const MAX_IMPORT_HISTORY_LIMIT = 100;
+const IMPORT_INCOME_STATEMENT_AMOUNT_TOLERANCE = 0.05;
+const IMPORT_INCOME_STATEMENT_DATE_TOLERANCE_DAYS = 10;
 const REQUIRED_HEADERS = ["date", "type", "value", "description"];
 const OPTIONAL_HEADERS = ["notes", "category"];
 const ALLOWED_HEADERS = new Set([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]);
@@ -68,6 +70,133 @@ const loadExistingFingerprints = async (userId, fingerprints) => {
     [userId, fingerprints],
   );
   return new Set(result.rows.map((row) => row.import_fingerprint));
+};
+
+const toMoneyNumber = (value) => {
+  const parsedValue = Number(value);
+  return Number.isFinite(parsedValue) ? Number(parsedValue.toFixed(2)) : 0;
+};
+
+const loadStructuredIncomeStatementsForUser = async (userId) => {
+  const result = await dbQuery(
+    `SELECT st.id,
+            st.reference_month,
+            st.net_amount,
+            st.payment_date,
+            st.status,
+            st.posted_transaction_id,
+            s.name AS source_name
+       FROM income_statements st
+       JOIN income_sources s
+         ON s.id = st.income_source_id
+      WHERE s.user_id = $1`,
+    [userId],
+  );
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    referenceMonth:
+      typeof row.reference_month === "string" && row.reference_month.trim()
+        ? row.reference_month.trim()
+        : null,
+    netAmount: toMoneyNumber(row.net_amount),
+    paymentDate: toISODateOnly(row.payment_date),
+    status: row.status === "posted" ? "posted" : "draft",
+    postedTransactionId:
+      Number.isInteger(Number(row.posted_transaction_id)) && Number(row.posted_transaction_id) > 0
+        ? Number(row.posted_transaction_id)
+        : null,
+    sourceName:
+      typeof row.source_name === "string" && row.source_name.trim()
+        ? row.source_name.trim()
+        : null,
+  }));
+};
+
+const calculateDateDiffInDays = (leftDate, rightDate) => {
+  if (!leftDate || !rightDate) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const leftMs = new Date(`${leftDate}T00:00:00Z`).getTime();
+  const rightMs = new Date(`${rightDate}T00:00:00Z`).getTime();
+
+  if (!Number.isFinite(leftMs) || !Number.isFinite(rightMs)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.abs(leftMs - rightMs) / (1000 * 60 * 60 * 24);
+};
+
+const buildStructuredIncomeConflictDetail = (statement) => {
+  const sourceLabel = statement.sourceName || "Historico de renda";
+  const referenceLabel = statement.referenceMonth || "sem competencia";
+  const paymentLabel = statement.paymentDate || "sem data de pagamento";
+
+  return `${sourceLabel} ja registrado no historico de renda (${referenceLabel}, ${paymentLabel}).`;
+};
+
+const findStructuredIncomeConflict = (normalizedRow, statements = []) => {
+  if (!normalizedRow || normalizedRow.type !== CATEGORY_ENTRY || statements.length === 0) {
+    return null;
+  }
+
+  const rowAmount = toMoneyNumber(normalizedRow.value);
+
+  if (rowAmount <= 0) {
+    return null;
+  }
+
+  const matches = statements
+    .map((statement) => {
+      if (!statement.paymentDate || statement.netAmount <= 0) {
+        return null;
+      }
+
+      const amountDiff = Math.abs(rowAmount - statement.netAmount);
+      const amountDiffRatio = statement.netAmount > 0 ? amountDiff / statement.netAmount : 1;
+
+      if (amountDiffRatio > IMPORT_INCOME_STATEMENT_AMOUNT_TOLERANCE) {
+        return null;
+      }
+
+      const dateDiffDays = calculateDateDiffInDays(normalizedRow.date, statement.paymentDate);
+
+      if (dateDiffDays > IMPORT_INCOME_STATEMENT_DATE_TOLERANCE_DAYS) {
+        return null;
+      }
+
+      return {
+        statement,
+        amountDiff,
+        dateDiffDays,
+      };
+    })
+    .filter(Boolean)
+    .sort((leftMatch, rightMatch) => {
+      if (leftMatch.dateDiffDays !== rightMatch.dateDiffDays) {
+        return leftMatch.dateDiffDays - rightMatch.dateDiffDays;
+      }
+
+      return leftMatch.amountDiff - rightMatch.amountDiff;
+    });
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  const bestMatch = matches[0].statement;
+
+  return {
+    type: "income_statement",
+    statementId: bestMatch.id,
+    sourceName: bestMatch.sourceName,
+    referenceMonth: bestMatch.referenceMonth,
+    paymentDate: bestMatch.paymentDate,
+    netAmount: bestMatch.netAmount,
+    status: bestMatch.status,
+    postedTransactionId: bestMatch.postedTransactionId,
+  };
 };
 
 const createError = (status, message) => {
@@ -567,6 +696,8 @@ const createSummary = (rows = []) => {
         }
       } else if (row.status === "duplicate") {
         summary.duplicateRows += 1;
+      } else if (row.status === "conflict") {
+        summary.conflictRows += 1;
       } else {
         summary.invalidRows += 1;
       }
@@ -578,6 +709,7 @@ const createSummary = (rows = []) => {
       validRows: 0,
       invalidRows: 0,
       duplicateRows: 0,
+      conflictRows: 0,
       income: 0,
       expense: 0,
     },
@@ -684,14 +816,40 @@ export const dryRunTransactionsImportForUser = async (userId, importFile) => {
   const fingerprintMap = new Map(
     validOnly.map((r) => [r.line, generateImportFingerprint(r.normalized)]),
   );
-  const existingSet = await loadExistingFingerprints(userId, [...fingerprintMap.values()]);
+  const [existingSet, structuredIncomeStatements] = await Promise.all([
+    loadExistingFingerprints(userId, [...fingerprintMap.values()]),
+    loadStructuredIncomeStatementsForUser(userId),
+  ]);
 
   const rows = validatedRows.map((row) => {
     if (row.status !== "valid" || !row.normalized) return row;
     const fp = fingerprintMap.get(row.line);
     if (existingSet.has(fp)) {
-      return { ...row, status: "duplicate", fingerprint: fp, normalized: null };
+      return {
+        ...row,
+        status: "duplicate",
+        statusDetail: "Ja existe uma transacao importada equivalente.",
+        fingerprint: fp,
+        normalized: null,
+      };
     }
+
+    const structuredIncomeConflict = findStructuredIncomeConflict(
+      row.normalized,
+      structuredIncomeStatements,
+    );
+
+    if (structuredIncomeConflict) {
+      return {
+        ...row,
+        status: "conflict",
+        statusDetail: buildStructuredIncomeConflictDetail(structuredIncomeConflict),
+        conflict: structuredIncomeConflict,
+        fingerprint: fp,
+        normalized: null,
+      };
+    }
+
     return { ...row, fingerprint: fp };
   });
 
