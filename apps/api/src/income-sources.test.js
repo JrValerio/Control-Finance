@@ -601,4 +601,209 @@ describe("income-sources", () => {
 
     expectErrorResponseWithRequestId(res, 409, "Extrato ja foi lancado.");
   });
+
+  // ─── Link statement to transaction ───────────────────────────────────────────
+
+  const setupStatementAndTransaction = async (email, opts = {}) => {
+    const token = await registerAndLogin(email);
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "INSS Beneficio" });
+    const sourceId = srcRes.body.id;
+
+    const netAmount = opts.netAmount ?? 1412.0;
+    const stmtRes = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: opts.referenceMonth ?? "2026-02",
+        netAmount,
+        paymentDate: opts.paymentDate ?? "2026-02-25",
+      });
+    const statementId = stmtRes.body.statement.id;
+
+    // Create matching income transaction directly in DB
+    const txDate = opts.txDate ?? "2026-02-25";
+    const txValue = opts.txValue ?? netAmount;
+    const txType = opts.txType ?? "Entrada";
+    const { rows } = await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date, description)
+       VALUES ((SELECT id FROM users WHERE email = $1), $2, $3, $4, $5)
+       RETURNING id`,
+      [email, txType, txValue, txDate, "INSS Credito"],
+    );
+    const transactionId = Number(rows[0].id);
+
+    return { token, statementId, transactionId };
+  };
+
+  it("POST /income-sources/statements/:id/link-transaction vincula com sucesso", async () => {
+    const { token, statementId, transactionId } = await setupStatementAndTransaction(
+      "inss-link-ok@test.dev",
+    );
+
+    const res = await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.statement).toMatchObject({
+      id: statementId,
+      postedTransactionId: transactionId,
+      status: "posted",
+    });
+  });
+
+  it("POST .../link-transaction e idempotente ao revincular mesma transacao", async () => {
+    const { token, statementId, transactionId } = await setupStatementAndTransaction(
+      "inss-link-idem@test.dev",
+    );
+
+    await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId });
+
+    const res = await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId });
+
+    expect(res.status).toBe(200);
+    expect(res.body.statement.postedTransactionId).toBe(transactionId);
+  });
+
+  it("POST .../link-transaction retorna 404 para extrato de outro usuario", async () => {
+    const { statementId } = await setupStatementAndTransaction("inss-link-other-stmt@test.dev");
+    const token2 = await registerAndLogin("inss-link-other-user@test.dev");
+
+    // create a transaction for user2
+    const { rows } = await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date, description)
+       VALUES ((SELECT id FROM users WHERE email = $1), $2, $3, $4, $5)
+       RETURNING id`,
+      ["inss-link-other-user@test.dev", "Entrada", 1412, "2026-02-25", "Outro"],
+    );
+    const txId = Number(rows[0].id);
+
+    const res = await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token2}`)
+      .send({ transactionId: txId });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("POST .../link-transaction retorna 404 para transacao de outro usuario", async () => {
+    const { token, statementId } = await setupStatementAndTransaction(
+      "inss-link-other-tx@test.dev",
+    );
+
+    // create a transaction for a different user
+    await registerAndLogin("inss-link-other-tx-owner@test.dev");
+    const { rows } = await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date, description)
+       VALUES ((SELECT id FROM users WHERE email = $1), $2, $3, $4, $5)
+       RETURNING id`,
+      ["inss-link-other-tx-owner@test.dev", "Entrada", 1412, "2026-02-25", "Outro"],
+    );
+    const txId = Number(rows[0].id);
+
+    const res = await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: txId });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("POST .../link-transaction retorna 422 para transacao tipo Saida", async () => {
+    const { token, statementId } = await setupStatementAndTransaction(
+      "inss-link-exit@test.dev",
+      { txType: "Saida" },
+    );
+
+    const { rows } = await dbQuery(
+      `SELECT id FROM transactions WHERE user_id = (SELECT id FROM users WHERE email = $1) LIMIT 1`,
+      ["inss-link-exit@test.dev"],
+    );
+    const txId = Number(rows[0].id);
+
+    const res = await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: txId });
+
+    expectErrorResponseWithRequestId(res, 422, "A transacao deve ser do tipo Entrada.");
+  });
+
+  it("POST .../link-transaction retorna 422 quando valor difere mais de 5%", async () => {
+    const { token, statementId } = await setupStatementAndTransaction(
+      "inss-link-amt@test.dev",
+      { netAmount: 1000, txValue: 1100 }, // 10% diff
+    );
+
+    const { rows } = await dbQuery(
+      `SELECT id FROM transactions WHERE user_id = (SELECT id FROM users WHERE email = $1) LIMIT 1`,
+      ["inss-link-amt@test.dev"],
+    );
+    const txId = Number(rows[0].id);
+
+    const res = await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: txId });
+
+    expect(res.status).toBe(422);
+  });
+
+  it("POST .../link-transaction retorna 422 quando data difere mais de 10 dias", async () => {
+    const { token, statementId } = await setupStatementAndTransaction(
+      "inss-link-date@test.dev",
+      { paymentDate: "2026-02-25", txDate: "2026-03-10" }, // 13 days diff
+    );
+
+    const { rows } = await dbQuery(
+      `SELECT id FROM transactions WHERE user_id = (SELECT id FROM users WHERE email = $1) LIMIT 1`,
+      ["inss-link-date@test.dev"],
+    );
+    const txId = Number(rows[0].id);
+
+    const res = await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: txId });
+
+    expect(res.status).toBe(422);
+  });
+
+  it("POST .../link-transaction retorna 409 ao tentar vincular outra transacao em extrato ja vinculado", async () => {
+    const { token, statementId, transactionId } = await setupStatementAndTransaction(
+      "inss-link-conflict@test.dev",
+    );
+
+    await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId });
+
+    // create a second transaction for the same user
+    const { rows } = await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date, description)
+       VALUES ((SELECT id FROM users WHERE email = $1), $2, $3, $4, $5)
+       RETURNING id`,
+      ["inss-link-conflict@test.dev", "Entrada", 1412, "2026-02-25", "Outro credito"],
+    );
+    const txId2 = Number(rows[0].id);
+
+    const res = await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: txId2 });
+
+    expectErrorResponseWithRequestId(res, 409, "Extrato ja vinculado a outra transacao.");
+  });
 });

@@ -14,6 +14,7 @@ import {
   updateStatementForSource,
   postStatementForSource,
   listStatementsForSource,
+  linkStatementToTransaction,
 } from "../services/income-sources.service.js";
 
 const router = Router();
@@ -140,6 +141,23 @@ router.post(
     try {
       const result = await postStatementForSource(req.user.id, req.params.statementId);
       res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+router.post(
+  "/statements/:statementId/link-transaction",
+  incomeSourcesWriteRateLimiter,
+  async (req, res, next) => {
+    try {
+      const statement = await linkStatementToTransaction(
+        req.user.id,
+        req.params.statementId,
+        req.body?.transactionId,
+      );
+      res.status(200).json({ statement });
     } catch (error) {
       next(error);
     }
