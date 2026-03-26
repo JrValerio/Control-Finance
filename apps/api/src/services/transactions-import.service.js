@@ -166,6 +166,16 @@ const toIsoDateString = (value) => {
   return parsedDate.toISOString();
 };
 
+const toISODateOnly = (value) => {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
 const parsePayloadJson = (payloadJson) => {
   if (!payloadJson) {
     return {};
@@ -881,7 +891,7 @@ export const commitTransactionsImportForUser = async (userId, importId, category
       `
         INSERT INTO transactions (user_id, type, value, date, description, notes, category_id, import_fingerprint, import_session_id, imported_at, import_file_name, import_document_type)
         VALUES ${insertValuesPlaceholders}
-        RETURNING type, value
+        RETURNING id, type, value, date, description
       `,
       insertParams,
     );
@@ -902,16 +912,29 @@ export const commitTransactionsImportForUser = async (userId, importId, category
       return total + Number(insertedRow.value || 0);
     }, 0);
 
+    // Zip returned rows with normalizedRows to associate each created
+    // transaction id with the original CSV line number.
+    const createdTransactions = insertResult.rows.map((row, i) => ({
+      id: Number(row.id),
+      line: normalizedRows[i]?.line ?? null,
+      type: String(row.type),
+      value: Number(row.value),
+      date: toISODateOnly(row.date),
+      description: row.description != null ? String(row.description) : null,
+    }));
+
     return {
       imported,
       income,
       expense,
+      createdTransactions,
     };
   });
 
   return {
     imported: commitOutcome.imported,
     importSessionId: normalizedImportId,
+    createdTransactions: commitOutcome.createdTransactions ?? [],
     summary: {
       income: commitOutcome.income,
       expense: commitOutcome.expense,
