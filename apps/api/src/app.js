@@ -79,6 +79,14 @@ app.use(
       return callback(corsError);
     },
     credentials: true,
+    exposedHeaders: [
+      "x-request-id",
+      "content-disposition",
+      "x-tax-export-data-hash",
+      "x-tax-export-snapshot-version",
+      "x-tax-export-facts-included",
+      "x-tax-export-engine-version",
+    ],
   }),
 );
 

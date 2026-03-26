@@ -9,6 +9,7 @@ import {
   getTaxDocumentByIdForUser,
   listTaxDocumentsByUser,
 } from "../services/tax-documents.service.js";
+import { exportTaxDossierByYear } from "../services/tax-export.service.js";
 import { processTaxDocumentByIdForUser } from "../services/tax-extraction.service.js";
 import { listTaxFactsByUser } from "../services/tax-facts.service.js";
 import { getTaxObligationByYear } from "../services/tax-obligation.service.js";
@@ -191,6 +192,31 @@ router.get("/summary/:taxYear", async (req, res, next) => {
   try {
     const summary = await getTaxSummaryByYear(req.user.id, req.params.taxYear);
     res.status(200).json(summary);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/export/:taxYear", async (req, res, next) => {
+  try {
+    const exportFile = await exportTaxDossierByYear(
+      req.user.id,
+      req.params.taxYear,
+      req.query?.format,
+    );
+
+    res.setHeader("Content-Type", exportFile.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${exportFile.fileName}"`);
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Tax-Export-Data-Hash", exportFile.manifest.dataHash);
+    res.setHeader(
+      "X-Tax-Export-Snapshot-Version",
+      String(exportFile.manifest.summarySnapshotVersion),
+    );
+    res.setHeader("X-Tax-Export-Facts-Included", String(exportFile.manifest.factsIncluded));
+    res.setHeader("X-Tax-Export-Engine-Version", exportFile.manifest.engineVersion);
+
+    res.status(200).send(exportFile.content);
   } catch (error) {
     next(error);
   }

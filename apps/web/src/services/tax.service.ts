@@ -2,6 +2,7 @@ import { api } from "./api";
 
 export type TaxFactReviewStatus = "pending" | "approved" | "corrected" | "rejected";
 export type TaxFactReviewAction = "approve" | "correct" | "reject";
+export type TaxExportFormat = "json" | "csv";
 export type TaxDocumentProcessingStatus =
   | "uploaded"
   | "classified"
@@ -140,6 +141,10 @@ export interface TaxFactsListResult {
   page: number;
   pageSize: number;
   total: number;
+}
+
+export interface TaxExportDownloadResult {
+  fileName: string;
 }
 
 interface TaxFactApiPayload {
@@ -389,6 +394,93 @@ const normalizeObligation = (value: unknown): TaxObligation => {
   };
 };
 
+const DEFAULT_EXPORT_FILE_NAMES: Record<TaxExportFormat, string> = {
+  json: "dossie-fiscal.json",
+  csv: "dossie-fiscal.csv",
+};
+
+const resolveExportFileName = (
+  contentDisposition: unknown,
+  format: TaxExportFormat,
+  taxYear: number,
+): string => {
+  const headerValue =
+    typeof contentDisposition === "string"
+      ? contentDisposition
+      : Array.isArray(contentDisposition)
+        ? normalizeString(contentDisposition[0])
+        : "";
+  const utf8Match = headerValue.match(/filename\*=UTF-8''([^;]+)/i);
+
+  if (utf8Match?.[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]).trim();
+    } catch {
+      return utf8Match[1].trim();
+    }
+  }
+
+  const quotedMatch = headerValue.match(/filename="([^"]+)"/i);
+
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1].trim();
+  }
+
+  const unquotedMatch = headerValue.match(/filename=([^;]+)/i);
+
+  if (unquotedMatch?.[1]) {
+    return unquotedMatch[1].trim();
+  }
+
+  const defaultFileName = DEFAULT_EXPORT_FILE_NAMES[format] || DEFAULT_EXPORT_FILE_NAMES.json;
+  return defaultFileName.replace(".", `-${taxYear}.`);
+};
+
+const downloadBlobFile = (blob: Blob, fileName: string) => {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return;
+  }
+
+  const objectUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(objectUrl);
+};
+
+const normalizeBlobApiError = async (error: unknown) => {
+  if (!error || typeof error !== "object") {
+    throw error;
+  }
+
+  const responseData = (error as { response?: { data?: unknown } }).response?.data;
+
+  if (!(responseData instanceof Blob)) {
+    throw error;
+  }
+
+  try {
+    const rawText = await responseData.text();
+    const parsedData = JSON.parse(rawText) as { message?: unknown; code?: unknown; requestId?: unknown };
+    const normalizedError = error as { response?: { data?: unknown } };
+
+    if (normalizedError.response) {
+      normalizedError.response.data = {
+        message: normalizeString(parsedData.message),
+        code: normalizeString(parsedData.code),
+        requestId: normalizeString(parsedData.requestId),
+      };
+    }
+  } catch {
+    // Preserve the original error when the blob is not a JSON error payload.
+  }
+
+  throw error;
+};
+
 export const taxService = {
   listDocuments: async (params: {
     taxYear: number;
@@ -454,6 +546,44 @@ export const taxService = {
       deletedDocumentId: normalizeNumber(raw.deletedDocumentId),
       deletedFactsCount: normalizeNumber(raw.deletedFactsCount),
     };
+  },
+
+  downloadExport: async (
+    taxYear: number,
+    format: TaxExportFormat,
+  ): Promise<TaxExportDownloadResult> => {
+    let response;
+
+    try {
+      response = await api.get(`/tax/export/${taxYear}`, {
+        params: { format },
+        responseType: "blob",
+      });
+    } catch (error) {
+      await normalizeBlobApiError(error);
+      throw error;
+    }
+
+    const fileName = resolveExportFileName(
+      response.headers?.["content-disposition"],
+      format,
+      taxYear,
+    );
+    const blob =
+      response.data instanceof Blob
+        ? response.data
+        : new Blob([response.data as BlobPart], {
+            type:
+              typeof response.headers?.["content-type"] === "string"
+                ? response.headers["content-type"]
+                : format === "json"
+                  ? "application/json;charset=utf-8"
+                  : "text/csv;charset=utf-8",
+          });
+
+    downloadBlobFile(blob, fileName);
+
+    return { fileName };
   },
 
   getSummary: async (taxYear: number): Promise<TaxSummary> => {
