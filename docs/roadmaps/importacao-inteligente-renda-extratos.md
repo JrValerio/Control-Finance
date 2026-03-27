@@ -40,6 +40,7 @@ Resumo executivo:
 Auditoria final deste épico:
 
 - `docs/audits/importacao-inteligente-mvp-auditoria-final.md`
+- `docs/roadmaps/importacao-inteligente-pos-mvp-backlog.md`
 
 ---
 
