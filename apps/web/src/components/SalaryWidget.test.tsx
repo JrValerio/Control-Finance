@@ -15,7 +15,9 @@ vi.mock("../services/salary.service", () => ({
 
 // ─── Builders ─────────────────────────────────────────────────────────────────
 
-const buildCltProfile = (overrides: Partial<SalaryProfile> = {}): SalaryProfile => ({
+const buildCltProfile = (overrides: Partial<SalaryProfile> = {}): SalaryProfile => {
+  const { activeStatement = null, ...restOverrides } = overrides;
+  return ({
   id:          1,
   userId:      1,
   profileType: "clt",
@@ -25,6 +27,7 @@ const buildCltProfile = (overrides: Partial<SalaryProfile> = {}): SalaryProfile 
   paymentDay:  5,
   createdAt:   "2026-02-01T00:00:00Z",
   updatedAt:   "2026-02-01T00:00:00Z",
+  activeStatement,
   consignacoes: [],
   calculation: {
     grossMonthly: 5000,
@@ -34,10 +37,19 @@ const buildCltProfile = (overrides: Partial<SalaryProfile> = {}): SalaryProfile 
     netAnnual:    49941.84,
     taxAnnual:    10058.16,
   },
-  ...overrides,
-});
+  ...restOverrides,
+  });
+};
 
-const buildBenefitProfile = (overrides: Partial<SalaryProfile> = {}): SalaryProfile => ({
+const buildBenefitProfile = (overrides: Partial<SalaryProfile> = {}): SalaryProfile => {
+  const {
+    activeStatement = {
+      referenceMonth: "2026-02",
+      paymentDate: "2026-03-05",
+    },
+    ...restOverrides
+  } = overrides;
+  return ({
   id:          2,
   userId:      1,
   profileType: "inss_beneficiary",
@@ -47,6 +59,7 @@ const buildBenefitProfile = (overrides: Partial<SalaryProfile> = {}): SalaryProf
   paymentDay:  5,
   createdAt:   "2026-02-01T00:00:00Z",
   updatedAt:   "2026-02-01T00:00:00Z",
+  activeStatement,
   consignacoes: [],
   calculation: {
     grossMonthly:        4958.67,
@@ -63,8 +76,9 @@ const buildBenefitProfile = (overrides: Partial<SalaryProfile> = {}): SalaryProf
     isOverLoanLimit:     false,
     isOverCardLimit:     false,
   },
-  ...overrides,
-});
+  ...restOverrides,
+  });
+};
 
 const renderWidget = () => render(<SalaryWidget />);
 
@@ -384,6 +398,8 @@ describe("SalaryWidget — perfil beneficiário INSS", () => {
     await waitFor(() => {
       expect(screen.getByText(/Recebe dia/)).toBeInTheDocument();
     });
+    expect(screen.getByText("02/2026")).toBeInTheDocument();
+    expect(screen.getByText("05/03/2026")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("1955")).toBeInTheDocument();
     expect(screen.getByText("Beneficiário INSS")).toBeInTheDocument();

@@ -31,6 +31,11 @@ export interface Consignacao {
   createdAt: string;
 }
 
+export interface ActiveBenefitStatement {
+  referenceMonth: string | null;
+  paymentDate: string | null;
+}
+
 export interface SalaryProfile {
   id: number;
   userId: number;
@@ -41,6 +46,7 @@ export interface SalaryProfile {
   paymentDay: number;
   createdAt: string;
   updatedAt: string;
+  activeStatement: ActiveBenefitStatement | null;
   consignacoes: Consignacao[];
   calculation: SalaryCalculation;
 }
@@ -63,6 +69,8 @@ export interface SyncImportedBenefitProfilePayload {
   gross_salary: number;
   payment_day: number;
   birth_year?: number | null;
+  reference_month?: string | null;
+  payment_date?: string | null;
   consignacoes: AddConsignacaoPayload[];
 }
 
@@ -103,6 +111,19 @@ const normalizeProfile = (raw: Record<string, unknown>): SalaryProfile => ({
   paymentDay:  Number(raw.paymentDay)  || 5,
   createdAt:   typeof raw.createdAt === "string" ? raw.createdAt : "",
   updatedAt:   typeof raw.updatedAt === "string" ? raw.updatedAt : "",
+  activeStatement:
+    raw.activeStatement && typeof raw.activeStatement === "object"
+      ? {
+          referenceMonth:
+            typeof (raw.activeStatement as Record<string, unknown>).referenceMonth === "string"
+              ? ((raw.activeStatement as Record<string, unknown>).referenceMonth as string)
+              : null,
+          paymentDate:
+            typeof (raw.activeStatement as Record<string, unknown>).paymentDate === "string"
+              ? ((raw.activeStatement as Record<string, unknown>).paymentDate as string)
+              : null,
+        }
+      : null,
   consignacoes: Array.isArray(raw.consignacoes)
     ? (raw.consignacoes as Record<string, unknown>[]).map(normalizeConsignacao)
     : [],

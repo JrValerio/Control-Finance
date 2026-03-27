@@ -28,6 +28,20 @@ const EMPTY_BENEFIT: BenefitFormState = { grossBenefit: "", birthYear: "", depen
 const CONSIGNACAO_DESCRIPTION_MAX_LENGTH = 100;
 const SALARY_PROFILE_UPDATED_EVENT = "salary-profile-updated";
 
+const formatReferenceMonthLabel = (value: string | null | undefined) => {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  return `${match[2]}/${match[1]}`;
+};
+
+const formatDateLabel = (value: string | null | undefined) => {
+  if (!value) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  return `${match[3]}/${match[2]}/${match[1]}`;
+};
+
 const profileToCltForm = (p: SalaryProfile): CltFormState => ({
   grossSalary: String(p.grossSalary),
   dependents:  String(p.dependents),
@@ -363,6 +377,8 @@ function BenefitProfileView({
   const cardLimit = calculation.cardLimitAmount ?? 0;
   const loanTotal = calculation.loanTotal ?? 0;
   const cardTotal = calculation.cardTotal ?? 0;
+  const activeReferenceMonth = formatReferenceMonthLabel(profile.activeStatement?.referenceMonth);
+  const activePaymentDate = formatDateLabel(profile.activeStatement?.paymentDate);
 
   const [addingConsig, setAddingConsig] = useState(false);
   const [consigForm, setConsigForm] = useState({ description: "", amount: "", consignacaoType: "loan" as ConsignacaoType });
@@ -452,6 +468,18 @@ function BenefitProfileView({
 
       <div className="mb-3 rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-xs text-cf-text-secondary">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          {activeReferenceMonth ? (
+            <span>
+              Competência ativa{" "}
+              <span className="font-semibold text-cf-text-primary">{activeReferenceMonth}</span>
+            </span>
+          ) : null}
+          {activePaymentDate ? (
+            <span>
+              Pagamento em{" "}
+              <span className="font-semibold text-cf-text-primary">{activePaymentDate}</span>
+            </span>
+          ) : null}
           <span>
             Recebe dia <span className="font-semibold text-cf-text-primary">{profile.paymentDay}</span>
           </span>

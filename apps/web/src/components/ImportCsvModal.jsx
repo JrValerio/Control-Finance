@@ -388,6 +388,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
           gross_salary: selectedProfileSuggestion.grossAmount,
           payment_day: profilePatch.payday,
           birth_year: selectedProfileSuggestion.birthYear ?? null,
+          reference_month: selectedProfileSuggestion.referenceMonth ?? null,
+          payment_date: selectedProfileSuggestion.paymentDate ?? null,
           consignacoes: Array.isArray(selectedProfileSuggestion.deductions)
             ? selectedProfileSuggestion.deductions.map((deduction) => ({
                 description: `${deduction.code ? `${deduction.code} ` : ""}${deduction.label}`.trim(),
