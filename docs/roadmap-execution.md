@@ -327,6 +327,36 @@ Os próximos passos devem nascer como **follow-ups pós-MVP**, não como repeti�
 
 ---
 
+## 10.1 Próximo ciclo operacional — Sprint de Confiabilidade do Produto
+
+O próximo ciclo recomendado não é abrir monetização nova.
+É fechar qualquer divergência entre:
+
+- entitlement real
+- copy in-app
+- dashboard
+- comportamento do produto
+- percepção de confiança em fluxos críticos
+
+Documento operacional:
+
+- `docs/roadmaps/sprint-confiabilidade-produto.md`
+
+Direção da sprint:
+
+1. alinhar trial, billing e bloqueios de importação ao entitlement real
+2. reorganizar a home como painel de ação e risco, não como painel decorativo
+3. consolidar a UX de cartões e faturas
+4. normalizar a narrativa textual do app para que o produto fale a verdade sobre si mesmo
+
+Regra de produto:
+
+> **Em finanças pessoais, clareza vem antes de ambição.**
+
+Essa frente deve fechar antes de qualquer reposicionamento forte de preço ou de novas promessas comerciais.
+
+---
+
 ## 11. Frase-guia para não perder o trilho
 
 > **O Control Finance já pensa como copiloto.**
