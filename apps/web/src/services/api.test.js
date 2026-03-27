@@ -236,6 +236,25 @@ describe("api service", () => {
     });
   });
 
+  it("resolve copy explicita para gate de importacao de extrato", async () => {
+    const onPaymentRequired = vi.fn();
+    setPaymentRequiredHandler(onPaymentRequired);
+
+    await expect(
+      responseErrorInterceptor({
+        response: { status: 402, data: { message: "Recurso disponivel apenas no plano Pro." } },
+        config: { url: "/transactions/import/dry-run" },
+      }),
+    ).rejects.toBeTruthy();
+
+    expect(onPaymentRequired).toHaveBeenCalledWith({
+      reason:
+        "Seu plano atual não inclui a importação de extratos. No Pro, você importa CSV, OFX e PDF com pré-visualização antes de confirmar.",
+      feature: "csv_import",
+      context: "feature_gate",
+    });
+  });
+
   it("nao falha se paymentRequiredHandler nao estiver definido (status 402)", async () => {
     await expect(
       responseErrorInterceptor({

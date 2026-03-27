@@ -168,12 +168,14 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 const PAYWALL_COPY: Array<{ pattern: RegExp; reason: string; feature: PaywallFeature }> = [
   {
     pattern: /\/transactions\/import/,
-    reason: "Importe transações de outros apps e bancos direto para o Control Finance.",
+    reason:
+      "Seu plano atual não inclui a importação de extratos. No Pro, você importa CSV, OFX e PDF com pré-visualização antes de confirmar.",
     feature: "csv_import",
   },
   {
     pattern: /\/transactions\/export/,
-    reason: "Exporte suas transações para planilhas e ferramentas financeiras.",
+    reason:
+      "Seu plano atual não inclui a exportação de transações em CSV. No Pro, você exporta seus dados para planilhas e ferramentas financeiras.",
     feature: "csv_export",
   },
   {
