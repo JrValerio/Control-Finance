@@ -25,6 +25,7 @@ vi.mock("../services/tax.service", () => ({
     rebuildSummary: vi.fn(),
     getObligation: vi.fn(),
     listFacts: vi.fn(),
+    createManualFact: vi.fn(),
     reviewFact: vi.fn(),
     bulkApproveFacts: vi.fn(),
   },
@@ -202,6 +203,16 @@ describe("TaxPage", () => {
       pageSize: 25,
       total: 1,
     });
+    vi.mocked(taxService.createManualFact).mockResolvedValue(
+      buildFact({
+        id: 301,
+        sourceDocumentId: null,
+        sourceDocument: null,
+        category: "manual_entry",
+        subcategory: "Renda manual INSS",
+        payerName: "INSS",
+      }),
+    );
     vi.mocked(taxService.rebuildSummary).mockResolvedValue(buildSummary({ snapshotVersion: 2 }));
     vi.mocked(taxService.bulkApproveFacts).mockResolvedValue({ updatedCount: 1 });
     vi.mocked(taxService.reviewFact).mockResolvedValue(buildFact({ reviewStatus: "approved" }));
@@ -494,6 +505,67 @@ describe("TaxPage", () => {
       await screen.findByText(
         "Importamos 2 fatos fiscais pendentes a partir dos dados do app. Revise-os para entrarem no cálculo oficial.",
       ),
+    ).toBeInTheDocument();
+  });
+
+  it("permite adicionar um fato fiscal manual na fila de revisao", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(taxService.listFacts)
+      .mockResolvedValueOnce({
+        items: [],
+        page: 1,
+        pageSize: 25,
+        total: 0,
+      })
+      .mockResolvedValue({
+        items: [
+          buildFact({
+            id: 301,
+            sourceDocumentId: null,
+            sourceDocument: null,
+            category: "manual_entry",
+            subcategory: "Renda manual INSS",
+            payerName: "INSS",
+          }),
+        ],
+        page: 1,
+        pageSize: 25,
+        total: 1,
+      });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Adicionar manualmente" })).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Adicionar manualmente" }));
+    await user.selectOptions(screen.getByLabelText("Tipo de fato fiscal"), "taxable_income");
+    await user.type(screen.getByLabelText("Periodo de referencia"), "2025-12");
+    await user.type(screen.getByLabelText("Descricao / subcategoria"), "Renda manual INSS");
+    await user.type(screen.getByLabelText("Fonte pagadora / origem"), "INSS");
+    await user.type(screen.getByLabelText("Documento da fonte (opcional)"), "29.979.036/0001-40");
+    await user.type(screen.getByLabelText("Valor"), "2803,52");
+    await user.type(screen.getByLabelText("Observacao (opcional)"), "Lancamento manual de apoio.");
+    await user.click(screen.getByRole("button", { name: "Adicionar fato" }));
+
+    await waitFor(() => {
+      expect(taxService.createManualFact).toHaveBeenCalledWith({
+        taxYear: 2026,
+        factType: "taxable_income",
+        subcategory: "Renda manual INSS",
+        payerName: "INSS",
+        payerDocument: "29.979.036/0001-40",
+        referencePeriod: "2025-12",
+        amount: 2803.52,
+        note: "Lancamento manual de apoio.",
+      });
+    });
+
+    expect(await screen.findByText("Fato fiscal manual adicionado a fila de revisao.")).toBeInTheDocument();
+    expect(
+      await screen.findByText((content) => content.includes("Renda manual INSS")),
     ).toBeInTheDocument();
   });
 

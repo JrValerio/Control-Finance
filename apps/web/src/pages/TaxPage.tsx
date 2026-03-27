@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import TaxUploadModal, { type TaxUploadStage } from "../components/TaxUploadModal";
+import TaxManualFactModal from "../components/TaxManualFactModal";
 import { profileService } from "../services/profile.service";
 import {
   taxService,
@@ -234,9 +235,12 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
   const [successMessage, setSuccessMessage] = useState("");
   const [correctionDraft, setCorrectionDraft] = useState<CorrectionDraft | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isManualFactModalOpen, setIsManualFactModalOpen] = useState(false);
+  const [isCreatingManualFact, setIsCreatingManualFact] = useState(false);
   const [uploadStage, setUploadStage] = useState<TaxUploadStage>("idle");
   const [uploadStatusMessage, setUploadStatusMessage] = useState("");
   const [uploadErrorMessage, setUploadErrorMessage] = useState("");
+  const [manualFactErrorMessage, setManualFactErrorMessage] = useState("");
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const showSuccess = useCallback((message: string) => {
@@ -350,6 +354,11 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     setIsUploadModalOpen(true);
   };
 
+  const handleOpenManualFactModal = () => {
+    setManualFactErrorMessage("");
+    setIsManualFactModalOpen(true);
+  };
+
   const handleCloseUploadModal = () => {
     if (uploadStage === "uploading" || uploadStage === "processing") {
       return;
@@ -357,6 +366,15 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
 
     setIsUploadModalOpen(false);
     resetUploadFlow();
+  };
+
+  const handleCloseManualFactModal = () => {
+    if (isCreatingManualFact) {
+      return;
+    }
+
+    setIsManualFactModalOpen(false);
+    setManualFactErrorMessage("");
   };
 
   const handleUploadDocument = async ({
@@ -409,6 +427,38 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       setUploadErrorMessage(
         getApiErrorMessage(uploadError, "Não foi possível enviar o documento fiscal."),
       );
+    }
+  };
+
+  const handleCreateManualFact = async (payload: {
+    taxYear: number;
+    factType: string;
+    subcategory: string;
+    payerName: string;
+    payerDocument: string;
+    referencePeriod: string;
+    amount: number;
+    note: string;
+  }) => {
+    setManualFactErrorMessage("");
+    setPageError("");
+    setIsCreatingManualFact(true);
+
+    try {
+      const createdFact = await taxService.createManualFact(payload);
+      await loadPageData();
+      setIsManualFactModalOpen(false);
+      showSuccess(
+        createdFact.conflictCode
+          ? "Fato fiscal manual adicionado com alerta de possivel duplicidade. Revise antes de aprovar."
+          : "Fato fiscal manual adicionado a fila de revisao.",
+      );
+    } catch (error) {
+      setManualFactErrorMessage(
+        getApiErrorMessage(error, "Nao foi possivel adicionar o fato fiscal manual."),
+      );
+    } finally {
+      setIsCreatingManualFact(false);
     }
   };
 
@@ -741,6 +791,13 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                 </button>
                 <button
                   type="button"
+                  onClick={handleOpenManualFactModal}
+                  className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface"
+                >
+                  Adicionar manualmente
+                </button>
+                <button
+                  type="button"
                   onClick={() => void handleSyncAppData()}
                   disabled={!canSyncFromApp || isSyncingAppData}
                   className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
@@ -1018,7 +1075,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               </p>
               <p className="mt-1 text-sm text-cf-text-secondary">
                 {documentsPage.total === 0
-                  ? "Sem informe em PDF? Use “Sincronizar do app” para gerar fatos pendentes a partir das rendas e lançamentos já alimentados."
+                  ? "Sem informe em PDF? Use “Adicionar manualmente” ou “Sincronizar do app” para gerar fatos pendentes a partir das rendas e lançamentos ja alimentados."
                   : "Quando já existem documentos fiscais no exercício, a sincronização vinda do app fica bloqueada para evitar mistura entre as trilhas."}
               </p>
             </div>
@@ -1378,6 +1435,14 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
         errorMessage={uploadErrorMessage}
         onClose={handleCloseUploadModal}
         onSubmit={handleUploadDocument}
+      />
+      <TaxManualFactModal
+        isOpen={isManualFactModalOpen}
+        taxYear={taxYear}
+        isSubmitting={isCreatingManualFact}
+        errorMessage={manualFactErrorMessage}
+        onClose={handleCloseManualFactModal}
+        onSubmit={handleCreateManualFact}
       />
     </div>
   );

@@ -176,6 +176,17 @@ export interface TaxAppSyncResult {
   summariesRebuilt: number;
 }
 
+export interface CreateManualTaxFactPayload {
+  taxYear: number;
+  factType: string;
+  subcategory: string;
+  payerName?: string;
+  payerDocument?: string;
+  referencePeriod: string;
+  amount: number;
+  note?: string;
+}
+
 interface TaxFactApiPayload {
   id?: unknown;
   taxYear?: unknown;
@@ -691,6 +702,11 @@ export const taxService = {
       pageSize: normalizeNumber(raw.pageSize) || 20,
       total: normalizeNumber(raw.total),
     };
+  },
+
+  createManualFact: async (payload: CreateManualTaxFactPayload): Promise<TaxFact> => {
+    const { data } = await api.post("/tax/facts", payload);
+    return normalizeTaxFact(normalizeObject(data).fact);
   },
 
   reviewFact: async (
