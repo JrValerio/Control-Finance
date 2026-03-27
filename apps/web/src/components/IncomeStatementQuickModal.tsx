@@ -231,7 +231,7 @@ export default function IncomeStatementQuickModal({
             } catch (linkErr) {
               setFinalizationStatus("failed");
               setFinalizationError(
-                getApiErrorMessage(linkErr, "Nao foi possivel vincular a transacao importada."),
+                getApiErrorMessage(linkErr, "Não foi possível vincular a transação importada."),
               );
               shouldNotifyCreated = false;
             }
@@ -251,7 +251,7 @@ export default function IncomeStatementQuickModal({
             } catch (postErr) {
               setFinalizationStatus("failed");
               setFinalizationError(
-                getApiErrorMessage(postErr, "Nao foi possivel lancar a entrada automaticamente."),
+                getApiErrorMessage(postErr, "Não foi possível lançar a entrada automaticamente."),
               );
               shouldNotifyCreated = false;
             }
@@ -264,7 +264,7 @@ export default function IncomeStatementQuickModal({
         onCreated?.(finalStatement);
       }
     } catch (err) {
-      setErrorMessage(getApiErrorMessage(err, "Nao foi possivel registrar o lancamento."));
+      setErrorMessage(getApiErrorMessage(err, "Não foi possível registrar o lançamento."));
     } finally {
       setIsSubmitting(false);
     }
@@ -276,128 +276,143 @@ export default function IncomeStatementQuickModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex min-h-screen items-start justify-center overflow-y-auto bg-black/50 p-2 sm:p-6 sm:items-center"
+      className="fixed inset-0 z-[60] overflow-y-auto bg-black/50 p-2 sm:p-6"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div
-        className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-lg bg-cf-surface shadow-xl sm:max-h-[calc(100dvh-3rem)]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="income-quick-modal-title"
-        data-testid="income-quick-modal-shell"
-      >
-        <div className="border-b border-cf-border px-4 py-4 sm:px-6">
-          <div className="flex items-center justify-between">
-            <h2
-              id="income-quick-modal-title"
-              className="text-base font-semibold text-cf-text-primary"
-            >
-              Registrar no histórico de renda
-            </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-cf-text-secondary hover:text-cf-text-primary"
-              aria-label="Fechar"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-
+      <div className="flex min-h-full items-center justify-center">
         <div
-          className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6"
-          data-testid="income-quick-modal-body"
+          className="flex max-h-[min(92vh,960px)] w-full max-w-md flex-col overflow-hidden rounded-lg border border-cf-border bg-cf-surface shadow-xl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="income-quick-modal-title"
+          data-testid="income-quick-modal-shell"
         >
+          <div className="border-b border-cf-border px-4 py-4 sm:px-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2
+                  id="income-quick-modal-title"
+                  className="text-base font-semibold text-cf-text-primary"
+                >
+                  Registrar no histórico de renda
+                </h2>
+                <p className="mt-1 text-sm text-cf-text-secondary">
+                  Revise a competência, o valor líquido e o destino desta renda antes de salvar.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-cf-text-secondary hover:text-cf-text-primary"
+                aria-label="Fechar"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+ 
           {success ? (
-            <div className="space-y-2">
-            <div className="rounded border border-green-200 bg-green-50 px-3 py-3 dark:border-green-800 dark:bg-green-950/40">
-              <p className="text-sm font-semibold text-green-700 dark:text-green-400">
-                {finalizationStatus === "posted"
-                  ? "Renda registrada e entrada lancada com sucesso."
-                  : "Lancamento registrado com sucesso."}
-              </p>
-
-              {statementOutcome === "replaced" ? (
-                <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
-                  A competência existente foi substituída com segurança.
-                </p>
-              ) : null}
-
-              {finalizationStatus === "linking" && (
-                <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                  Vinculando a transacao importada...
-                </p>
-              )}
-              {finalizationStatus === "linked" && (
-                <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
-                  Vinculo com a transacao importada confirmado.
-                </p>
-              )}
-              {finalizationStatus === "posting" && (
-                <p className="mt-1 text-xs text-green-600 dark:text-green-400">
-                  Lancando a entrada do mes...
-                </p>
-              )}
-              {finalizationStatus === "posted" && postedTransaction && (
-                <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
-                  Entrada gerada: R$ {postedTransaction.value.toFixed(2).replace(".", ",")}
-                </p>
-              )}
-            </div>
-
-            {finalizationStatus === "failed" && finalizationMode === "link" && (
-              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
-                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                  Historico registrado, mas o vinculo com a transacao importada nao foi concluido.
-                </p>
-                {finalizationError && (
-                  <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{finalizationError}</p>
-                )}
-                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  Voce pode vincular manualmente pelo historico de renda.
-                </p>
-              </div>
-            )}
-
-            {finalizationStatus === "failed" && finalizationMode === "post" && (
-              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
-                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                  Historico registrado, mas a entrada ainda nao foi lancada na renda mensal.
-                </p>
-                {finalizationError && (
-                  <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{finalizationError}</p>
-                )}
-                <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  Voce pode revisar o extrato e lancar a entrada depois pela area de fontes de renda.
-                </p>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={finalizationStatus === "linking" || finalizationStatus === "posting"}
-              className="rounded border border-green-400 bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-green-700 dark:bg-green-900/40 dark:text-green-300"
-            >
-              Fechar
-            </button>
-            </div>
-          ) : (
             <>
-            {isLoadingSources ? (
-              <p className="mb-3 text-sm text-cf-text-secondary">Carregando fontes de renda...</p>
-            ) : sources.length === 0 ? (
-              <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
-                Nenhuma fonte de renda cadastrada. Cadastre uma fonte antes de registrar um
-                lançamento.
-              </div>
-            ) : null}
+              <div
+                className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
+                data-testid="income-quick-modal-body"
+              >
+                <div className="space-y-2">
+                  <div className="rounded border border-green-200 bg-green-50 px-3 py-3 dark:border-green-800 dark:bg-green-950/40">
+                    <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                      {finalizationStatus === "posted"
+                        ? "Renda registrada e entrada lançada com sucesso."
+                        : "Lançamento registrado com sucesso."}
+                    </p>
 
-            <form onSubmit={handleSubmit} className="space-y-3">
+                    {statementOutcome === "replaced" ? (
+                      <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
+                        A competência existente foi substituída com segurança.
+                      </p>
+                    ) : null}
+
+                    {finalizationStatus === "linking" && (
+                      <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                        Vinculando a transação importada...
+                      </p>
+                    )}
+                    {finalizationStatus === "linked" && (
+                      <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
+                        Vínculo com a transação importada confirmado.
+                      </p>
+                    )}
+                    {finalizationStatus === "posting" && (
+                      <p className="mt-1 text-xs text-green-600 dark:text-green-400">
+                        Lançando a entrada do mês...
+                      </p>
+                    )}
+                    {finalizationStatus === "posted" && postedTransaction && (
+                      <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
+                        Entrada gerada: R$ {postedTransaction.value.toFixed(2).replace(".", ",")}
+                      </p>
+                    )}
+                  </div>
+
+                  {finalizationStatus === "failed" && finalizationMode === "link" && (
+                    <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                        Histórico registrado, mas o vínculo com a transação importada não foi concluído.
+                      </p>
+                      {finalizationError && (
+                        <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{finalizationError}</p>
+                      )}
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        Você pode vincular manualmente pelo histórico de renda.
+                      </p>
+                    </div>
+                  )}
+
+                  {finalizationStatus === "failed" && finalizationMode === "post" && (
+                    <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                        Histórico registrado, mas a entrada ainda não foi lançada na renda mensal.
+                      </p>
+                      {finalizationError && (
+                        <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">{finalizationError}</p>
+                      )}
+                      <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                        Você pode revisar o extrato e lançar a entrada depois pela área de fontes de renda.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t border-cf-border px-4 py-4 sm:px-6">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={finalizationStatus === "linking" || finalizationStatus === "posting"}
+                  className="rounded border border-green-400 bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-green-700 dark:bg-green-900/40 dark:text-green-300"
+                >
+                  Fechar
+                </button>
+              </div>
+            </>
+          ) : (
+            <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+              <div
+                className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
+                data-testid="income-quick-modal-body"
+              >
+                <div className="space-y-3">
+                  {isLoadingSources ? (
+                    <p className="text-sm text-cf-text-secondary">Carregando fontes de renda...</p>
+                  ) : sources.length === 0 ? (
+                    <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                      Nenhuma fonte de renda cadastrada. Cadastre uma fonte antes de registrar um
+                      lançamento.
+                    </div>
+                  ) : null}
+
               <div>
                 <label
                   htmlFor="income-quick-source"
@@ -577,14 +592,14 @@ export default function IncomeStatementQuickModal({
                     onChange={(e) => setComposeIncome(e.target.checked)}
                     className="mt-0.5 h-4 w-4 rounded border-cf-border accent-brand-1"
                   />
-                  <span>Este documento compoe minha renda</span>
+                  <span>Este documento compõe minha renda</span>
                 </label>
                 <p className="mt-1 text-xs text-cf-text-secondary">
                   {composeIncome
                     ? transactionId
-                      ? "Ao registrar, o historico sera vinculado a entrada importada deste extrato."
-                      : "Ao registrar, o historico sera lancado como entrada do mes."
-                    : "Ao registrar, o documento fica so no historico e nao entra na renda mensal ainda."}
+                      ? "Ao registrar, o histórico será vinculado à entrada importada deste extrato."
+                      : "Ao registrar, o histórico será lançado como entrada do mês."
+                    : "Ao registrar, o documento fica só no histórico e não entra na renda mensal ainda."}
                 </p>
               </div>
 
@@ -593,8 +608,10 @@ export default function IncomeStatementQuickModal({
                   {errorMessage}
                 </p>
               ) : null}
+                </div>
+              </div>
 
-              <div className="flex gap-2 pt-1">
+              <div className="flex flex-wrap justify-end gap-2 border-t border-cf-border px-4 py-4 sm:px-6">
                 <button
                   type="submit"
                   disabled={isSubmitting || sources.length === 0 || isCheckingExistingStatement}
@@ -607,8 +624,8 @@ export default function IncomeStatementQuickModal({
                     : composeIncome
                       ? transactionId
                         ? "Registrar e vincular entrada"
-                        : "Registrar e lancar entrada"
-                      : "Registrar somente no historico"}
+                        : "Registrar e lançar entrada"
+                      : "Registrar somente no histórico"}
                 </button>
                 <button
                   type="button"
@@ -619,7 +636,6 @@ export default function IncomeStatementQuickModal({
                 </button>
               </div>
             </form>
-            </>
           )}
         </div>
       </div>

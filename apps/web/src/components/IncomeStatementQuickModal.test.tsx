@@ -142,19 +142,19 @@ describe("IncomeStatementQuickModal", () => {
         prefill={{
           referenceMonth: "2026-02",
           netAmount: 1412,
-        deductions: [{ code: "268", label: "CONSIGNACAO - CARTAO", amount: 247.93 }],
-      }}
-      onCreated={onCreated}
+          deductions: [{ code: "268", label: "CONSIGNACAO - CARTAO", amount: 247.93 }],
+        }}
+        onCreated={onCreated}
       />,
     );
     await waitFor(() => {
       expect(screen.getByRole("combobox", { name: /Fonte de renda/i })).toHaveValue("1");
     });
     await userEvent.click(
-      screen.getByRole("button", { name: "Registrar somente no historico" }),
+      screen.getByRole("button", { name: "Registrar somente no histórico" }),
     );
     await waitFor(() => {
-      expect(screen.getByText("Lancamento registrado com sucesso.")).toBeInTheDocument();
+      expect(screen.getByText("Lançamento registrado com sucesso.")).toBeInTheDocument();
     });
     expect(onCreated).toHaveBeenCalledWith(mockStatement);
     expect(incomeSourcesService.createStatement).toHaveBeenCalledWith(1, {
@@ -189,7 +189,7 @@ describe("IncomeStatementQuickModal", () => {
       expect(screen.getByText(/competência já existente/i)).toBeInTheDocument();
     });
 
-    await userEvent.click(screen.getByRole("button", { name: "Registrar somente no historico" }));
+    await userEvent.click(screen.getByRole("button", { name: "Registrar somente no histórico" }));
 
     expect(
       screen.getByText(/Escolha se deseja ignorar ou substituir a competência existente/i),
@@ -248,7 +248,7 @@ describe("IncomeStatementQuickModal", () => {
     });
 
     await userEvent.click(screen.getByRole("button", { name: "Substituir" }));
-    await userEvent.click(screen.getByRole("button", { name: "Registrar somente no historico" }));
+    await userEvent.click(screen.getByRole("button", { name: "Registrar somente no histórico" }));
 
     await waitFor(() => {
       expect(incomeSourcesService.createStatement).toHaveBeenCalledWith(1, expect.objectContaining({
@@ -271,7 +271,7 @@ describe("IncomeStatementQuickModal", () => {
       expect(screen.getByRole("combobox", { name: /Fonte de renda/i })).toHaveValue("1");
     });
     await userEvent.click(
-      screen.getByRole("button", { name: "Registrar somente no historico" }),
+      screen.getByRole("button", { name: "Registrar somente no histórico" }),
     );
     await waitFor(() => {
       expect(screen.getByText("Falha de rede")).toBeInTheDocument();
@@ -294,7 +294,7 @@ describe("IncomeStatementQuickModal", () => {
       screen.getByRole("button", { name: "Registrar e vincular entrada" }),
     );
     await waitFor(() => {
-      expect(screen.getByText(/vinculo com a transacao importada confirmado/i)).toBeInTheDocument();
+      expect(screen.getByText(/vínculo com a transação importada confirmado/i)).toBeInTheDocument();
     });
     expect(incomeSourcesService.linkTransaction).toHaveBeenCalledWith(10, 99);
     expect(incomeSourcesService.postStatement).not.toHaveBeenCalled();
@@ -316,9 +316,9 @@ describe("IncomeStatementQuickModal", () => {
       expect(screen.getByRole("combobox", { name: /Fonte de renda/i })).toHaveValue("1");
     });
 
-    expect(screen.getByLabelText(/Este documento compoe minha renda/i)).toBeChecked();
+    expect(screen.getByLabelText(/Este documento compõe minha renda/i)).toBeChecked();
 
-    await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+    await userEvent.click(screen.getByRole("button", { name: "Registrar e lançar entrada" }));
 
     await waitFor(() => {
       expect(screen.getByText(/entrada gerada/i)).toBeInTheDocument();
@@ -363,7 +363,7 @@ describe("IncomeStatementQuickModal", () => {
     });
 
     await userEvent.click(screen.getByRole("button", { name: "Substituir" }));
-    await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+    await userEvent.click(screen.getByRole("button", { name: "Registrar e lançar entrada" }));
 
     await waitFor(() => {
       expect(screen.getByText(/competência existente foi substituída/i)).toBeInTheDocument();
@@ -392,11 +392,11 @@ describe("IncomeStatementQuickModal", () => {
     );
     await waitFor(() => {
       expect(
-        screen.getByText(/historico registrado, mas o vinculo com a transacao/i),
+        screen.getByText(/histórico registrado, mas o vínculo com a transação/i),
       ).toBeInTheDocument();
     });
     expect(screen.getByText(/vincular manualmente/i)).toBeInTheDocument();
-    expect(screen.getByText("Lancamento registrado com sucesso.")).toBeInTheDocument();
+    expect(screen.getByText("Lançamento registrado com sucesso.")).toBeInTheDocument();
   });
 
   it("shows validation error when source not selected", async () => {
@@ -410,7 +410,7 @@ describe("IncomeStatementQuickModal", () => {
     });
     await userEvent.selectOptions(screen.getByRole("combobox"), "");
     await userEvent.click(
-      screen.getByRole("button", { name: "Registrar somente no historico" }),
+      screen.getByRole("button", { name: "Registrar somente no histórico" }),
     );
     expect(screen.getByText(/selecione uma fonte/i)).toBeInTheDocument();
   });
