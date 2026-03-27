@@ -164,8 +164,8 @@ describe("CreditCardsPage", () => {
     expect(screen.getByText("Mercado")).toBeInTheDocument();
     expect(screen.getByText("Fatura Nubank 2026-03")).toBeInTheDocument();
     expect(screen.getByText("24.00% do limite")).toBeInTheDocument();
-    expect(screen.getAllByText("Em uso").length).toBeGreaterThan(0);
-    expect(screen.getByText("Fatura atual")).toBeInTheDocument();
+    expect(screen.getAllByText("Com compras no ciclo").length).toBeGreaterThan(0);
+    expect(screen.getByText("Fatura do ciclo")).toBeInTheDocument();
     expect(screen.getByText("Pendente")).toBeInTheDocument();
   });
 
@@ -226,10 +226,10 @@ describe("CreditCardsPage", () => {
     await user.type(screen.getByLabelText("Nome do cartão"), "Inter");
     await user.clear(screen.getByLabelText("Limite total"));
     await user.type(screen.getByLabelText("Limite total"), "1500");
-    await user.clear(screen.getByLabelText("Fechamento"));
-    await user.type(screen.getByLabelText("Fechamento"), "12");
-    await user.clear(screen.getByLabelText("Vencimento"));
-    await user.type(screen.getByLabelText("Vencimento"), "22");
+    await user.clear(screen.getByLabelText("Dia do fechamento"));
+    await user.type(screen.getByLabelText("Dia do fechamento"), "12");
+    await user.clear(screen.getByLabelText("Dia do vencimento"));
+    await user.type(screen.getByLabelText("Dia do vencimento"), "22");
     await user.click(screen.getByRole("button", { name: "Criar cartão" }));
 
     await waitFor(() => {
@@ -275,7 +275,7 @@ describe("CreditCardsPage", () => {
     const countInput = screen.getByRole("spinbutton", { name: "Parcelas" });
     await user.clear(countInput);
     await user.type(countInput, "3");
-    await user.click(screen.getByRole("button", { name: "Adicionar em 3x" }));
+    await user.click(screen.getByRole("button", { name: "Adicionar parcelado em 3x" }));
 
     await waitFor(() => {
       expect(creditCardsService.createInstallments).toHaveBeenCalledWith(
@@ -300,7 +300,7 @@ describe("CreditCardsPage", () => {
       expect(creditCardsService.closeInvoice).toHaveBeenCalledWith(1);
     });
 
-    await user.click(screen.getByRole("button", { name: "Pagar fatura" }));
+    await user.click(screen.getByRole("button", { name: "Registrar pagamento" }));
 
     await waitFor(() => {
       expect(billsService.markPaid).toHaveBeenCalledWith(91);

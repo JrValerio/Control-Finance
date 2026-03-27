@@ -216,14 +216,14 @@ const BillModal = ({
           {/* Title */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="bill-title" className="text-sm font-medium text-cf-text-primary">
-              Titulo <span className="text-red-500">*</span>
+              Título <span className="text-red-500">*</span>
             </label>
             <input
               id="bill-title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Conta de Agua"
+              placeholder="Ex.: Conta de água"
               className="rounded border border-cf-border-input px-3 py-2 text-sm text-cf-text-primary placeholder:text-cf-text-secondary focus:outline-none focus:ring-1 focus:ring-brand-1 bg-cf-surface"
               disabled={isSaving}
               maxLength={200}
@@ -289,7 +289,7 @@ const BillModal = ({
           {/* Provider */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="bill-provider" className="text-sm font-medium text-cf-text-primary">
-              Fornecedor <span className="text-xs font-normal text-cf-text-secondary">(opcional)</span>
+              Empresa / emissor <span className="text-xs font-normal text-cf-text-secondary">(opcional)</span>
             </label>
             <input
               id="bill-provider"
@@ -305,7 +305,7 @@ const BillModal = ({
           {/* Reference Month */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="bill-ref-month" className="text-sm font-medium text-cf-text-primary">
-              Mês de referência <span className="text-xs font-normal text-cf-text-secondary">(opcional, YYYY-MM)</span>
+              Mês de referência <span className="text-xs font-normal text-cf-text-secondary">(opcional)</span>
             </label>
             <input
               id="bill-ref-month"
@@ -315,18 +315,21 @@ const BillModal = ({
               className="rounded border border-cf-border-input px-3 py-2 text-sm text-cf-text-primary focus:outline-none focus:ring-1 focus:ring-brand-1 bg-cf-surface"
               disabled={isSaving}
             />
+            <p className="text-xs text-cf-text-secondary">
+              Use quando a conta pertence a um mês específico, mesmo que o vencimento seja em outro dia.
+            </p>
           </div>
 
           {/* Notes */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="bill-notes" className="text-sm font-medium text-cf-text-primary">
-              Notas <span className="text-xs font-normal text-cf-text-secondary">(opcional)</span>
+              Observações <span className="text-xs font-normal text-cf-text-secondary">(opcional)</span>
             </label>
             <textarea
               id="bill-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Observacoes..."
+              placeholder="Anote algo útil para lembrar depois"
               rows={2}
               className="rounded border border-cf-border-input px-3 py-2 text-sm text-cf-text-primary placeholder:text-cf-text-secondary focus:outline-none focus:ring-1 focus:ring-brand-1 bg-cf-surface resize-none"
               disabled={isSaving}
@@ -360,7 +363,7 @@ const BillModal = ({
                     className="w-16 rounded border border-cf-border-input px-2 py-1.5 text-sm text-cf-text-primary focus:outline-none focus:ring-1 focus:ring-brand-1 bg-cf-surface"
                   />
                   <span className="text-sm text-cf-text-secondary">
-                    parcelas mensais a partir de {dueDate || "—"}
+                    Gerar parcelas mensais a partir de {dueDate || "—"}
                   </span>
                 </div>
               ) : null}
