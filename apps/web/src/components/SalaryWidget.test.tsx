@@ -364,17 +364,29 @@ describe("SalaryWidget — perfil beneficiário INSS", () => {
   it("exibe título Benefício líquido", async () => {
     renderWidget();
     await waitFor(() => {
-      expect(screen.getByText("Benefício líquido")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Benefício líquido" })).toBeInTheDocument();
     });
   });
 
   it("exibe breakdown: Benefício bruto, IRRF estimado e Consignações", async () => {
     renderWidget();
     await waitFor(() => {
-      expect(screen.getByText("Benefício bruto")).toBeInTheDocument();
+      expect(screen.getAllByText("Benefício bruto").length).toBeGreaterThan(0);
     });
     expect(screen.getByText("IRRF estimado")).toBeInTheDocument();
+    expect(screen.getByText("Descontos do mês")).toBeInTheDocument();
     expect(screen.getByText("(-) Consignações")).toBeInTheDocument();
+    expect(screen.getByText("Composição do benefício")).toBeInTheDocument();
+  });
+
+  it("exibe contexto de recebimento e perfil do benefício", async () => {
+    renderWidget();
+    await waitFor(() => {
+      expect(screen.getByText(/Recebe dia/)).toBeInTheDocument();
+    });
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("1955")).toBeInTheDocument();
+    expect(screen.getByText("Beneficiário INSS")).toBeInTheDocument();
   });
 
   it("exibe alertas de limite de empréstimos e cartão", async () => {
@@ -430,6 +442,7 @@ describe("SalaryWidget — beneficiário com consignações", () => {
       expect(screen.getByText("BMG Empréstimo")).toBeInTheDocument();
     });
     expect(screen.getByText("Cartão Banco X")).toBeInTheDocument();
+    expect(screen.getByText("2 desconto(s) lançados.")).toBeInTheDocument();
   });
 
   it("exibe badge de tipo para cada consignação", async () => {
