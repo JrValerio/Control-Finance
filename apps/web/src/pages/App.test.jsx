@@ -414,6 +414,17 @@ describe("App", () => {
     expect(screen.getByText("Faturas pendentes")).toBeInTheDocument();
   });
 
+  it("prioriza o painel operacional antes da análise do período", async () => {
+    render(<App />);
+
+    const operationalHeading = await screen.findByText("Painel operacional");
+    const analyticsHeading = await screen.findByText("Análise do período");
+
+    expect(
+      operationalHeading.compareDocumentPosition(analyticsHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   it("carrega transacoes paginadas da API ao iniciar", async () => {
     transactionsService.listPage.mockResolvedValueOnce(
       buildPageResponse(
@@ -669,8 +680,33 @@ describe("App", () => {
     render(<App />);
 
     expect(
-      await screen.findByText("Sem variações por categoria para o comparativo do mês."),
+      await screen.findByText(
+        "As maiores variações aparecem quando houver despesas categorizadas em mais de um mês.",
+      ),
     ).toBeInTheDocument();
+  });
+
+  it("rebaixa analise por categoria quando o resumo so tem itens sem categoria", async () => {
+    transactionsService.getMonthlySummary.mockResolvedValueOnce(
+      buildSummaryResponse({
+        byCategory: [
+          {
+            categoryId: null,
+            categoryName: "Sem categoria",
+            expense: 350,
+          },
+        ],
+      }),
+    );
+
+    render(<App />);
+
+    expect(
+      await screen.findByText(
+        "Categorize suas saídas para liberar uma visão mais útil das despesas por categoria.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("category-treemap")).not.toBeInTheDocument();
   });
 
   it("aplica filtro por categoria ao clicar em ver transacoes no top mover", async () => {

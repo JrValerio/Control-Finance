@@ -1236,6 +1236,22 @@ const App = ({
         : [],
     [monthlySummaryCompare.byCategoryDelta],
   );
+  const hasMeaningfulCategoryBreakdown = useMemo(
+    () =>
+      summaryByCategoryExpenses.some(
+        (item) =>
+          item.categoryId !== null || item.categoryName.trim().toLowerCase() !== "sem categoria",
+      ),
+    [summaryByCategoryExpenses],
+  );
+  const hasMeaningfulCategoryMovers = useMemo(
+    () =>
+      topCategoryMovers.some(
+        (item) =>
+          item.categoryId !== null || item.categoryName.trim().toLowerCase() !== "sem categoria",
+      ),
+    [topCategoryMovers],
+  );
   const budgetAlerts = useMemo(
     () =>
       monthlyBudgets
@@ -2280,14 +2296,19 @@ const App = ({
         <div className="space-y-6">
           <section ref={summarySectionRef}>
             <div className="mb-2 flex items-center justify-between gap-2">
-          <h3 className="text-sm font-medium text-cf-text-primary">Resumo mensal</h3>
-          <input
-            type="month"
-            aria-label="Mês do resumo"
-            value={selectedSummaryMonth}
-            onChange={(event) => setSelectedSummaryMonth(event.target.value)}
-            className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-sm text-cf-text-primary"
-          />
+              <div>
+                <h3 className="text-sm font-medium text-cf-text-primary">Visão do mês</h3>
+                <p className="mt-1 text-xs text-cf-text-secondary">
+                  Saldo, entradas e saídas em destaque antes das análises detalhadas.
+                </p>
+              </div>
+              <input
+                type="month"
+                aria-label="Mês do resumo"
+                value={selectedSummaryMonth}
+                onChange={(event) => setSelectedSummaryMonth(event.target.value)}
+                className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-sm text-cf-text-primary"
+              />
             </div>
             {summaryError ? (
               <div
@@ -2306,84 +2327,84 @@ const App = ({
               </div>
             ) : null}
             <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
-            <p className="text-xs font-medium uppercase text-cf-text-secondary">Saldo</p>
-            <p className="text-xl font-semibold text-cf-text-primary">
-              {isLoadingSummary ? "Carregando..." : money(monthlySummary.balance)}
-            </p>
-            <p
-              className={`mt-1 text-xs font-medium ${
-                isLoadingSummary || summaryError || momError
-                  ? MOM_TONE_CLASSNAMES.neutral
-                  : MOM_TONE_CLASSNAMES[monthOverMonthMetrics.balance.tone]
-              }`}
-              data-testid="mom-balance"
-            >
-              {isLoadingSummary
-                ? "MoM: Calculando..."
-                : summaryError || momError
-                  ? "MoM: —"
-                  : `MoM: ${
-                      monthOverMonthMetrics.balance.direction === "up"
-                        ? "↑"
-                        : monthOverMonthMetrics.balance.direction === "down"
-                          ? "↓"
-                          : "→"
-                    } ${formatSignedPercentage(monthOverMonthMetrics.balance.deltaPercent)} (${formatSignedCurrency(monthOverMonthMetrics.balance.delta)})`}
-            </p>
-          </div>
-          <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
-            <p className="text-xs font-medium uppercase text-cf-text-secondary">Entradas</p>
-            <p className="text-xl font-semibold text-cf-text-primary">
-              {isLoadingSummary ? "Carregando..." : money(monthlySummary.income)}
-            </p>
-            <p
-              className={`mt-1 text-xs font-medium ${
-                isLoadingSummary || summaryError || momError
-                  ? MOM_TONE_CLASSNAMES.neutral
-                  : MOM_TONE_CLASSNAMES[monthOverMonthMetrics.income.tone]
-              }`}
-              data-testid="mom-income"
-            >
-              {isLoadingSummary
-                ? "MoM: Calculando..."
-                : summaryError || momError
-                  ? "MoM: —"
-                  : `MoM: ${
-                      monthOverMonthMetrics.income.direction === "up"
-                        ? "↑"
-                        : monthOverMonthMetrics.income.direction === "down"
-                          ? "↓"
-                          : "→"
-                    } ${formatSignedPercentage(monthOverMonthMetrics.income.deltaPercent)} (${formatSignedCurrency(monthOverMonthMetrics.income.delta)})`}
-            </p>
-          </div>
-          <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
-            <p className="text-xs font-medium uppercase text-cf-text-secondary">Saídas</p>
-            <p className="text-xl font-semibold text-cf-text-primary">
-              {isLoadingSummary ? "Carregando..." : money(monthlySummary.expense)}
-            </p>
-            <p
-              className={`mt-1 text-xs font-medium ${
-                isLoadingSummary || summaryError || momError
-                  ? MOM_TONE_CLASSNAMES.neutral
-                  : MOM_TONE_CLASSNAMES[monthOverMonthMetrics.expense.tone]
-              }`}
-              data-testid="mom-expense"
-            >
-              {isLoadingSummary
-                ? "MoM: Calculando..."
-                : summaryError || momError
-                  ? "MoM: —"
-                  : `MoM: ${
-                      monthOverMonthMetrics.expense.direction === "up"
-                        ? "↑"
-                        : monthOverMonthMetrics.expense.direction === "down"
-                          ? "↓"
-                          : "→"
-                    } ${formatSignedPercentage(monthOverMonthMetrics.expense.deltaPercent)} (${formatSignedCurrency(monthOverMonthMetrics.expense.delta)})`}
-            </p>
-          </div>
+              <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Saldo</p>
+                <p className="text-xl font-semibold text-cf-text-primary">
+                  {isLoadingSummary ? "Carregando..." : money(monthlySummary.balance)}
+                </p>
+                <p
+                  className={`mt-1 text-xs font-medium ${
+                    isLoadingSummary || summaryError || momError
+                      ? MOM_TONE_CLASSNAMES.neutral
+                      : MOM_TONE_CLASSNAMES[monthOverMonthMetrics.balance.tone]
+                  }`}
+                  data-testid="mom-balance"
+                >
+                  {isLoadingSummary
+                    ? "MoM: Calculando..."
+                    : summaryError || momError
+                      ? "MoM: —"
+                      : `MoM: ${
+                          monthOverMonthMetrics.balance.direction === "up"
+                            ? "↑"
+                            : monthOverMonthMetrics.balance.direction === "down"
+                              ? "↓"
+                              : "→"
+                        } ${formatSignedPercentage(monthOverMonthMetrics.balance.deltaPercent)} (${formatSignedCurrency(monthOverMonthMetrics.balance.delta)})`}
+                </p>
+              </div>
+              <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Entradas</p>
+                <p className="text-xl font-semibold text-cf-text-primary">
+                  {isLoadingSummary ? "Carregando..." : money(monthlySummary.income)}
+                </p>
+                <p
+                  className={`mt-1 text-xs font-medium ${
+                    isLoadingSummary || summaryError || momError
+                      ? MOM_TONE_CLASSNAMES.neutral
+                      : MOM_TONE_CLASSNAMES[monthOverMonthMetrics.income.tone]
+                  }`}
+                  data-testid="mom-income"
+                >
+                  {isLoadingSummary
+                    ? "MoM: Calculando..."
+                    : summaryError || momError
+                      ? "MoM: —"
+                      : `MoM: ${
+                          monthOverMonthMetrics.income.direction === "up"
+                            ? "↑"
+                            : monthOverMonthMetrics.income.direction === "down"
+                              ? "↓"
+                              : "→"
+                        } ${formatSignedPercentage(monthOverMonthMetrics.income.deltaPercent)} (${formatSignedCurrency(monthOverMonthMetrics.income.delta)})`}
+                </p>
+              </div>
+              <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Saídas</p>
+                <p className="text-xl font-semibold text-cf-text-primary">
+                  {isLoadingSummary ? "Carregando..." : money(monthlySummary.expense)}
+                </p>
+                <p
+                  className={`mt-1 text-xs font-medium ${
+                    isLoadingSummary || summaryError || momError
+                      ? MOM_TONE_CLASSNAMES.neutral
+                      : MOM_TONE_CLASSNAMES[monthOverMonthMetrics.expense.tone]
+                  }`}
+                  data-testid="mom-expense"
+                >
+                  {isLoadingSummary
+                    ? "MoM: Calculando..."
+                    : summaryError || momError
+                      ? "MoM: —"
+                      : `MoM: ${
+                          monthOverMonthMetrics.expense.direction === "up"
+                            ? "↑"
+                            : monthOverMonthMetrics.expense.direction === "down"
+                              ? "↓"
+                              : "→"
+                        } ${formatSignedPercentage(monthOverMonthMetrics.expense.deltaPercent)} (${formatSignedCurrency(monthOverMonthMetrics.expense.delta)})`}
+                </p>
+              </div>
             </div>
             {!isLoadingSummary && !summaryError && momError ? (
               <div className="mt-2 rounded border border-cf-border bg-cf-surface px-3 py-2 text-sm text-cf-text-secondary">
@@ -2395,29 +2416,287 @@ const App = ({
                 Sem dados para o mês selecionado.
               </div>
             ) : null}
-            {!isLoadingSummary && !summaryError ? (
-              <div className="mt-3">
-                <Suspense
-                  fallback={
-                    <div className="rounded border border-cf-border bg-cf-surface p-4 text-sm text-cf-text-secondary">
-                      Carregando categorias...
-                    </div>
-                  }
+          </section>
+          <section className="space-y-4" aria-labelledby="operational-overview-title">
+            <div>
+              <h3
+                id="operational-overview-title"
+                className="text-sm font-medium text-cf-text-primary"
+              >
+                Painel operacional
+              </h3>
+              <p className="mt-1 text-xs text-cf-text-secondary">
+                O que pede ação agora: projeção, pendências, cartões e renda principal.
+              </p>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-3">
+              <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+              <BillsSummaryWidget onOpenBills={handleOpenBills} />
+              <CreditCardsSummaryWidget onOpenCreditCards={handleOpenCreditCards} />
+            </div>
+          </section>
+
+          <SalaryWidget />
+
+          <Suspense fallback={null}>
+            <HealthOverview />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <GoalsSection />
+          </Suspense>
+
+          <section>
+            <div className="rounded border border-cf-border bg-cf-surface p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-medium text-cf-text-primary">Metas do mês</h3>
+                  <span className="text-xs text-cf-text-secondary">{selectedSummaryMonth}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={openCreateBudgetModal}
+                  disabled={!canCreateBudget}
+                  className="rounded border border-cf-border bg-cf-surface px-3 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <CategoryTreemap data={summaryByCategoryExpenses} />
-                </Suspense>
+                  + Nova meta
+                </button>
               </div>
-            ) : null}
-            {!isLoadingSummary && !summaryError && !momError ? (
+              {budgetsError ? (
+                <div
+                  className="mb-3 flex items-center justify-between gap-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <span>{budgetsError}</span>
+                  <button
+                    type="button"
+                    onClick={loadMonthlyBudgets}
+                    className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    Tentar novamente
+                  </button>
+                </div>
+              ) : null}
+              {!budgetsError && budgetSuccessMessage ? (
+                <div
+                  className="mb-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {budgetSuccessMessage}
+                </div>
+              ) : null}
+              {!isLoadingBudgets && !budgetsError && proactiveNearLimitBudget ? (
+                <div
+                  className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
+                  role="status"
+                  aria-live="polite"
+                  data-testid="budget-near-limit-banner"
+                >
+                  {`Alerta: você já utilizou ${formatPercentage(proactiveNearLimitBudget.percentage)} da meta de ${proactiveNearLimitBudget.categoryName} neste mês.`}
+                </div>
+              ) : null}
+              {!isLoadingBudgets && !budgetsError && budgetAlerts.length > 0 ? (
+                <div
+                  className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-3"
+                  role="region"
+                  aria-label="Alertas de orçamento"
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                      Alertas de orçamento
+                    </h4>
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                      {budgetAlerts.length}
+                    </span>
+                  </div>
+                  <ul className="space-y-2">
+                    {budgetAlerts.map((budget) => (
+                      <li
+                        key={`budget-alert-${budget.id}`}
+                        data-testid="budget-alert-item"
+                        className="rounded border border-amber-200 bg-cf-surface px-3 py-2 text-sm text-cf-text-primary"
+                      >
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <p className="font-semibold text-cf-text-primary">{budget.categoryName}</p>
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${BUDGET_STATUS_BADGE_CLASSNAMES[budget.status]}`}
+                          >
+                            {BUDGET_STATUS_LABELS[budget.status]}
+                          </span>
+                        </div>
+                        <p className="text-xs text-cf-text-secondary">
+                          Uso: {formatPercentage(budget.percentage)} ({formatCurrency(budget.actual)} de{" "}
+                          {formatCurrency(budget.budget)})
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            aria-label={`Ver transações: ${budget.categoryName}`}
+                            onClick={() => handleViewBudgetTransactions(budget)}
+                            className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                          >
+                            Ver transações
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Ajustar meta: ${budget.categoryName}`}
+                            onClick={() => openEditBudgetModal(budget)}
+                            className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                          >
+                            Ajustar meta
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {isLoadingBudgets ? (
+                <div className="space-y-2" role="status" aria-live="polite">
+                  {Array.from({ length: 3 }).map((_unusedValue, index) => (
+                    <div
+                      key={`budgets-skeleton-${index + 1}`}
+                      className="h-16 animate-pulse rounded border border-cf-border bg-cf-bg-subtle"
+                    />
+                  ))}
+                  <span className="sr-only">Carregando metas do mês...</span>
+                </div>
+              ) : null}
+              {!isLoadingBudgets && !budgetsError && !hasMonthlyBudgetsData ? (
+                <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-secondary">
+                  <p>Nenhuma meta cadastrada para o mês selecionado.</p>
+                  <button
+                    type="button"
+                    onClick={openCreateBudgetModal}
+                    disabled={!canCreateBudget}
+                    className="mt-2 rounded border border-cf-border bg-cf-surface px-3 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Criar meta
+                  </button>
+                </div>
+              ) : null}
+              {!isLoadingBudgets && !budgetsError && hasMonthlyBudgetsData ? (
+                <ul className="space-y-2">
+                  {monthlyBudgets.map((budget) => {
+                    const safeStatus =
+                      budget.status === "near_limit" || budget.status === "exceeded"
+                        ? budget.status
+                        : "ok";
+                    const progressWidth = `${Math.min(Math.max(budget.percentage, 0), 100)}%`;
+
+                    return (
+                      <li
+                        key={budget.id}
+                        className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-primary"
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <p className="font-semibold text-cf-text-primary">{budget.categoryName}</p>
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${BUDGET_STATUS_BADGE_CLASSNAMES[safeStatus]}`}
+                          >
+                            {BUDGET_STATUS_LABELS[safeStatus]}
+                          </span>
+                        </div>
+                        <div className="mb-2 h-2 w-full rounded-full bg-cf-border">
+                          <div
+                            className={`h-2 rounded-full ${BUDGET_STATUS_BAR_CLASSNAMES[safeStatus]}`}
+                            style={{ width: progressWidth }}
+                            title={safeStatus === "exceeded" ? "Acima de 100%" : undefined}
+                          />
+                        </div>
+                        <div className="grid gap-1 text-xs text-cf-text-secondary sm:grid-cols-2">
+                          <span>Orcado: {formatCurrency(budget.budget)}</span>
+                          <span>Realizado: {formatCurrency(budget.actual)}</span>
+                          <span>Restante: {formatCurrency(budget.remaining)}</span>
+                          <span>Uso: {formatPercentage(budget.percentage)}</span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            aria-label={`Editar meta: ${budget.categoryName}`}
+                            onClick={() => openEditBudgetModal(budget)}
+                            className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={`Excluir meta: ${budget.categoryName}`}
+                            onClick={() => handleDeleteBudget(budget)}
+                            className="rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                          >
+                            Excluir
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
+          </section>
+
+          <section className="space-y-4" aria-labelledby="analytics-overview-title">
+            <div>
+              <h3 id="analytics-overview-title" className="text-sm font-medium text-cf-text-primary">
+                Análise do período
+              </h3>
+              <p className="mt-1 text-xs text-cf-text-secondary">
+                Leitura complementar para depois de revisar o painel operacional e as metas do mês.
+              </p>
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="rounded border border-cf-border bg-cf-surface p-3">
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
+                  Despesas por categoria
+                </h4>
+                {isLoadingSummary ? (
+                  <p className="mt-3 text-sm text-cf-text-secondary">Carregando categorias...</p>
+                ) : summaryError ? (
+                  <p className="mt-3 text-sm text-cf-text-secondary">
+                    Nao foi possível montar a distribuição por categoria agora.
+                  </p>
+                ) : hasMeaningfulCategoryBreakdown ? (
+                  <div className="mt-3">
+                    <Suspense
+                      fallback={
+                        <div className="rounded border border-cf-border bg-cf-surface p-4 text-sm text-cf-text-secondary">
+                          Carregando categorias...
+                        </div>
+                      }
+                    >
+                      <CategoryTreemap data={summaryByCategoryExpenses} />
+                    </Suspense>
+                  </div>
+                ) : (
+                  <p className="mt-3 text-sm text-cf-text-secondary">
+                    Categorize suas saídas para liberar uma visão mais útil das despesas por
+                    categoria.
+                  </p>
+                )}
+              </div>
+
               <div
-                className="mt-3 rounded border border-cf-border bg-cf-surface p-3"
+                className="rounded border border-cf-border bg-cf-surface p-3"
                 role="region"
                 aria-label="Top variações por categoria"
               >
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
                   Top variações por categoria
                 </h4>
-                {topCategoryMovers.length > 0 ? (
+                {isLoadingSummary ? (
+                  <p className="mt-3 text-sm text-cf-text-secondary">
+                    Aguardando comparativo do mês...
+                  </p>
+                ) : summaryError || momError ? (
+                  <p className="mt-3 text-sm text-cf-text-secondary">
+                    Comparativo por categoria indisponível no momento.
+                  </p>
+                ) : hasMeaningfulCategoryMovers ? (
                   <ul className="mt-2 space-y-2">
                     {topCategoryMovers.map((item) => (
                       <li
@@ -2447,394 +2726,179 @@ const App = ({
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-2 text-sm text-cf-text-secondary">
-                    Sem variações por categoria para o comparativo do mês.
+                  <p className="mt-3 text-sm text-cf-text-secondary">
+                    As maiores variações aparecem quando houver despesas categorizadas em mais de um
+                    mês.
                   </p>
                 )}
               </div>
+            </div>
+
+            <section>
+              {trendError ? (
+                <div className="rounded border border-cf-border bg-cf-surface p-4 text-center text-sm text-cf-text-primary">
+                  {trendError}
+                </div>
+              ) : isLoadingTrend ? (
+                <div
+                  className="rounded border border-cf-border bg-cf-surface p-4"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="h-64 animate-pulse rounded bg-cf-bg-subtle" />
+                  <span className="sr-only">Carregando evolução...</span>
+                </div>
+              ) : (
+                <Suspense
+                  fallback={
+                    <div className="rounded border border-cf-border bg-cf-surface p-4 text-sm text-cf-text-primary">
+                      Carregando evolução...
+                    </div>
+                  }
+                >
+                  <TrendChart
+                    data={trend}
+                    onMonthClick={handleTrendMonthClick}
+                    selectedMonth={selectedSummaryMonth}
+                  />
+                </Suspense>
+              )}
+            </section>
+
+            <section>
+              <Suspense
+                fallback={
+                  <div className="rounded border border-cf-border bg-cf-surface p-4 text-sm text-cf-text-primary">
+                    Carregando grafico...
+                  </div>
+                }
+              >
+                <TransactionChart data={chartData} />
+              </Suspense>
+            </section>
+          </section>
+
+          <section
+            ref={listSectionRef}
+            className="rounded border border-cf-border bg-cf-surface px-4 py-3.5"
+          >
+            {requestError ? (
+              <div className="p-4 text-center">
+                <p className="text-sm font-medium text-red-600">{requestError}</p>
+                <button
+                  onClick={loadTransactions}
+                  className="mt-2 font-medium text-brand-1 hover:text-brand-2"
+                >
+                  Tentar novamente
+                </button>
+              </div>
+            ) : isLoadingTransactions ? (
+              <div className="space-y-2 p-2" role="status" aria-live="polite">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={`transactions-skeleton-${index + 1}`}
+                    className="h-20 animate-pulse rounded border border-cf-border bg-cf-bg-subtle"
+                  />
+                ))}
+                <span className="sr-only">Carregando transações...</span>
+              </div>
+            ) : filteredTransactions.length === 0 ? (
+              hasActiveFilters ? (
+                <div className="p-4 text-center text-cf-text-primary">
+                  Nenhum valor encontrado para os filtros selecionados.
+                </div>
+              ) : (
+                <div className="p-4 text-center">
+                  <p className="text-cf-text-primary">Nenhum valor cadastrado.</p>
+                  <button
+                    onClick={openCreateModal}
+                    className="font-medium text-brand-1 hover:text-brand-2"
+                  >
+                    Registrar valor
+                  </button>
+                </div>
+              )
+            ) : (
+              <TransactionList
+                transactions={transactionsWithCategoryName}
+                onDelete={requestDeleteTransaction}
+                onEdit={openEditModal}
+                onBulkDelete={handleBulkDeleteTransactions}
+              />
+            )}
+
+            {!requestError && !isLoadingTransactions ? (
+              <div className="mt-2 border-t border-cf-border px-2 pt-3 text-sm text-cf-text-primary">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    Mostrando {rangeStart}-{rangeEnd} de {paginationMeta.total}
+                  </span>
+                  <label className="flex items-center gap-2 text-xs font-semibold">
+                    Itens por pagina
+                    <select
+                      aria-label="Itens por pagina"
+                      value={pageSize}
+                      onChange={(event) => handlePageSizeChange(event.target.value)}
+                      className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-sm text-cf-text-primary"
+                    >
+                      {PAGE_SIZE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {paginationMeta.totalPages > 2 ? (
+                    <button
+                      type="button"
+                      onClick={handleFirstPage}
+                      disabled={currentPage <= 1}
+                      className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Primeira
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handlePreviousPage}
+                      disabled={currentPage <= 1}
+                      className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Anterior
+                    </button>
+                    <span>
+                      Pagina {currentPage} de {paginationMeta.totalPages}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleNextPage}
+                      disabled={currentPage >= paginationMeta.totalPages}
+                      className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Proxima
+                    </button>
+                  </div>
+                  {paginationMeta.totalPages > 2 ? (
+                    <button
+                      type="button"
+                      onClick={handleLastPage}
+                      disabled={currentPage >= paginationMeta.totalPages}
+                      className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Ultima
+                    </button>
+                  ) : (
+                    <span />
+                  )}
+                </div>
+              </div>
             ) : null}
           </section>
-        <section className="space-y-4" aria-labelledby="operational-overview-title">
-          <div>
-            <h3 id="operational-overview-title" className="text-sm font-medium text-cf-text-primary">
-              Painel operacional
-            </h3>
-            <p className="mt-1 text-xs text-cf-text-secondary">
-              Pendências, cartões, renda e projeção em um ponto só para o mês atual.
-            </p>
-          </div>
-
-          <div className="grid gap-4 xl:grid-cols-3">
-            <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
-            <BillsSummaryWidget onOpenBills={handleOpenBills} />
-            <CreditCardsSummaryWidget onOpenCreditCards={handleOpenCreditCards} />
-          </div>
-        </section>
-
-        <SalaryWidget />
-
-        <Suspense fallback={null}>
-          <HealthOverview />
-        </Suspense>
-
-        <Suspense fallback={null}>
-          <GoalsSection />
-        </Suspense>
-
-
-      <section>
-        <div className="rounded border border-cf-border bg-cf-surface p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div>
-              <h3 className="text-sm font-medium text-cf-text-primary">Metas do mês</h3>
-              <span className="text-xs text-cf-text-secondary">{selectedSummaryMonth}</span>
-            </div>
-            <button
-              type="button"
-              onClick={openCreateBudgetModal}
-              disabled={!canCreateBudget}
-              className="rounded border border-cf-border bg-cf-surface px-3 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              + Nova meta
-            </button>
-          </div>
-          {budgetsError ? (
-            <div
-              className="mb-3 flex items-center justify-between gap-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-              role="status"
-              aria-live="polite"
-            >
-              <span>{budgetsError}</span>
-              <button
-                type="button"
-                onClick={loadMonthlyBudgets}
-                className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
-              >
-                Tentar novamente
-              </button>
-            </div>
-          ) : null}
-          {!budgetsError && budgetSuccessMessage ? (
-            <div
-              className="mb-3 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700"
-              role="status"
-              aria-live="polite"
-            >
-              {budgetSuccessMessage}
-            </div>
-          ) : null}
-          {!isLoadingBudgets && !budgetsError && proactiveNearLimitBudget ? (
-            <div
-              className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
-              role="status"
-              aria-live="polite"
-              data-testid="budget-near-limit-banner"
-            >
-              {`Alerta: você já utilizou ${formatPercentage(proactiveNearLimitBudget.percentage)} da meta de ${proactiveNearLimitBudget.categoryName} neste mês.`}
-            </div>
-          ) : null}
-          {!isLoadingBudgets && !budgetsError && budgetAlerts.length > 0 ? (
-            <div
-              className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-3"
-              role="region"
-              aria-label="Alertas de orçamento"
-            >
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700">
-                  Alertas de orçamento
-                </h4>
-                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                  {budgetAlerts.length}
-                </span>
-              </div>
-              <ul className="space-y-2">
-                {budgetAlerts.map((budget) => (
-                  <li
-                    key={`budget-alert-${budget.id}`}
-                    data-testid="budget-alert-item"
-                    className="rounded border border-amber-200 bg-cf-surface px-3 py-2 text-sm text-cf-text-primary"
-                  >
-                    <div className="mb-1 flex items-center justify-between gap-2">
-                      <p className="font-semibold text-cf-text-primary">{budget.categoryName}</p>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${BUDGET_STATUS_BADGE_CLASSNAMES[budget.status]}`}
-                      >
-                        {BUDGET_STATUS_LABELS[budget.status]}
-                      </span>
-                    </div>
-                    <p className="text-xs text-cf-text-secondary">
-                      Uso: {formatPercentage(budget.percentage)} ({formatCurrency(budget.actual)} de{" "}
-                      {formatCurrency(budget.budget)})
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        aria-label={`Ver transações: ${budget.categoryName}`}
-                        onClick={() => handleViewBudgetTransactions(budget)}
-                        className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                      >
-                        Ver transações
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Ajustar meta: ${budget.categoryName}`}
-                        onClick={() => openEditBudgetModal(budget)}
-                        className="rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
-                      >
-                        Ajustar meta
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          {isLoadingBudgets ? (
-            <div className="space-y-2" role="status" aria-live="polite">
-              {Array.from({ length: 3 }).map((_unusedValue, index) => (
-                <div
-                  key={`budgets-skeleton-${index + 1}`}
-                  className="h-16 animate-pulse rounded border border-cf-border bg-cf-bg-subtle"
-                />
-              ))}
-              <span className="sr-only">Carregando metas do mês...</span>
-            </div>
-          ) : null}
-          {!isLoadingBudgets && !budgetsError && !hasMonthlyBudgetsData ? (
-            <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-secondary">
-              <p>Nenhuma meta cadastrada para o mês selecionado.</p>
-              <button
-                type="button"
-                onClick={openCreateBudgetModal}
-                disabled={!canCreateBudget}
-                className="mt-2 rounded border border-cf-border bg-cf-surface px-3 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Criar meta
-              </button>
-            </div>
-          ) : null}
-          {!isLoadingBudgets && !budgetsError && hasMonthlyBudgetsData ? (
-            <ul className="space-y-2">
-              {monthlyBudgets.map((budget) => {
-                const safeStatus =
-                  budget.status === "near_limit" || budget.status === "exceeded"
-                    ? budget.status
-                    : "ok";
-                const progressWidth = `${Math.min(Math.max(budget.percentage, 0), 100)}%`;
-
-                return (
-                  <li
-                    key={budget.id}
-                    className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-primary"
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="font-semibold text-cf-text-primary">{budget.categoryName}</p>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${BUDGET_STATUS_BADGE_CLASSNAMES[safeStatus]}`}
-                      >
-                        {BUDGET_STATUS_LABELS[safeStatus]}
-                      </span>
-                    </div>
-                    <div className="mb-2 h-2 w-full rounded-full bg-cf-border">
-                      <div
-                        className={`h-2 rounded-full ${BUDGET_STATUS_BAR_CLASSNAMES[safeStatus]}`}
-                        style={{ width: progressWidth }}
-                        title={safeStatus === "exceeded" ? "Acima de 100%" : undefined}
-                      />
-                    </div>
-                    <div className="grid gap-1 text-xs text-cf-text-secondary sm:grid-cols-2">
-                      <span>Orcado: {formatCurrency(budget.budget)}</span>
-                      <span>Realizado: {formatCurrency(budget.actual)}</span>
-                      <span>Restante: {formatCurrency(budget.remaining)}</span>
-                      <span>Uso: {formatPercentage(budget.percentage)}</span>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        aria-label={`Editar meta: ${budget.categoryName}`}
-                        onClick={() => openEditBudgetModal(budget)}
-                        className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Excluir meta: ${budget.categoryName}`}
-                        onClick={() => handleDeleteBudget(budget)}
-                        className="rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : null}
-        </div>
-      </section>
-
-      <section>
-        <Suspense
-          fallback={
-            <div className="rounded border border-cf-border bg-cf-surface p-4 text-sm text-cf-text-primary">
-              Carregando grafico...
-            </div>
-          }
-        >
-          <TransactionChart data={chartData} />
-        </Suspense>
-      </section>
-
-      <section>
-        {trendError ? (
-          <div className="rounded border border-cf-border bg-cf-surface p-4 text-center text-sm text-cf-text-primary">
-            {trendError}
-          </div>
-        ) : isLoadingTrend ? (
-          <div
-            className="rounded border border-cf-border bg-cf-surface p-4"
-            role="status"
-            aria-live="polite"
-          >
-            <div className="h-64 animate-pulse rounded bg-cf-bg-subtle" />
-            <span className="sr-only">Carregando evolução...</span>
-          </div>
-        ) : (
-          <Suspense
-            fallback={
-              <div className="rounded border border-cf-border bg-cf-surface p-4 text-sm text-cf-text-primary">
-                Carregando evolução...
-              </div>
-            }
-          >
-            <TrendChart
-                data={trend}
-                onMonthClick={handleTrendMonthClick}
-                selectedMonth={selectedSummaryMonth}
-              />
-          </Suspense>
-        )}
-      </section>
-
-      <section ref={listSectionRef} className="rounded border border-cf-border bg-cf-surface px-4 py-3.5">
-        {requestError ? (
-          <div className="p-4 text-center">
-            <p className="text-sm font-medium text-red-600">{requestError}</p>
-            <button
-              onClick={loadTransactions}
-              className="mt-2 font-medium text-brand-1 hover:text-brand-2"
-            >
-              Tentar novamente
-            </button>
-          </div>
-        ) : isLoadingTransactions ? (
-          <div className="space-y-2 p-2" role="status" aria-live="polite">
-            {Array.from({ length: 4 }).map((_, index) => (
-              <div
-                key={`transactions-skeleton-${index + 1}`}
-                className="h-20 animate-pulse rounded border border-cf-border bg-cf-bg-subtle"
-              />
-            ))}
-            <span className="sr-only">Carregando transações...</span>
-          </div>
-        ) : filteredTransactions.length === 0 ? (
-          hasActiveFilters ? (
-            <div className="p-4 text-center text-cf-text-primary">
-              Nenhum valor encontrado para os filtros selecionados.
-            </div>
-          ) : (
-            <div className="p-4 text-center">
-              <p className="text-cf-text-primary">Nenhum valor cadastrado.</p>
-              <button
-                onClick={openCreateModal}
-                className="font-medium text-brand-1 hover:text-brand-2"
-              >
-                Registrar valor
-              </button>
-            </div>
-          )
-        ) : (
-          <TransactionList
-            transactions={transactionsWithCategoryName}
-            onDelete={requestDeleteTransaction}
-            onEdit={openEditModal}
-            onBulkDelete={handleBulkDeleteTransactions}
-          />
-        )}
-
-        {!requestError && !isLoadingTransactions ? (
-          <div className="mt-2 border-t border-cf-border px-2 pt-3 text-sm text-cf-text-primary">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <span>
-                Mostrando {rangeStart}-{rangeEnd} de {paginationMeta.total}
-              </span>
-              <label className="flex items-center gap-2 text-xs font-semibold">
-                Itens por pagina
-                <select
-                  aria-label="Itens por pagina"
-                  value={pageSize}
-                  onChange={(event) => handlePageSizeChange(event.target.value)}
-                  className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-sm text-cf-text-primary"
-                >
-                  {PAGE_SIZE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {paginationMeta.totalPages > 2 ? (
-                <button
-                  type="button"
-                  onClick={handleFirstPage}
-                  disabled={currentPage <= 1}
-                  className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Primeira
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handlePreviousPage}
-                disabled={currentPage <= 1}
-                className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Anterior
-              </button>
-              <span>
-                Pagina {currentPage} de {paginationMeta.totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={handleNextPage}
-                disabled={currentPage >= paginationMeta.totalPages}
-                className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Proxima
-              </button>
-              </div>
-              {paginationMeta.totalPages > 2 ? (
-                <button
-                  type="button"
-                  onClick={handleLastPage}
-                  disabled={currentPage >= paginationMeta.totalPages}
-                  className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  Ultima
-                </button>
-              ) : (
-                <span />
-              )}
-            </div>
-          </div>
-        ) : null}
-      </section>
         </div>
       </main>
 
