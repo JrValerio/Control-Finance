@@ -90,6 +90,22 @@ describe("Tax API foundation", () => {
     );
   });
 
+  it("POST /tax/facts retorna 401 sem token", async () => {
+    const response = await request(app).post("/tax/facts").send({
+      taxYear: 2026,
+      factType: "taxable_income",
+      subcategory: "Renda manual",
+      referencePeriod: "2025-12",
+      amount: 1200,
+    });
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
   it("POST /tax/documents retorna 401 sem token", async () => {
     const response = await request(app)
       .post("/tax/documents")
@@ -1254,6 +1270,79 @@ describe("Tax API foundation", () => {
         }),
       }),
     ]);
+  });
+
+  it("POST /tax/facts cria fato manual pendente para a fila de revisao", async () => {
+    const token = await registerAndLogin("tax-facts-manual@test.dev");
+    const userResult = await dbQuery(
+      `SELECT id
+       FROM users
+       WHERE email = $1
+       LIMIT 1`,
+      ["tax-facts-manual@test.dev"],
+    );
+    const userId = Number(userResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, taxpayer_cpf)
+       VALUES ($1, $2)`,
+      [userId, "52998224725"],
+    );
+
+    const createResponse = await request(app)
+      .post("/tax/facts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        taxYear: 2026,
+        factType: "taxable_income",
+        subcategory: "Renda manual INSS",
+        payerName: "INSS",
+        payerDocument: "29.979.036/0001-40",
+        referencePeriod: "2025-12",
+        amount: 2803.52,
+        note: "Lancamento manual de apoio.",
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body.fact).toMatchObject({
+      factType: "taxable_income",
+      category: "manual_entry",
+      subcategory: "Renda manual INSS",
+      payerName: "INSS",
+      payerDocument: "29979036000140",
+      referencePeriod: "2025-12",
+      amount: 2803.52,
+      reviewStatus: "pending",
+      sourceDocument: null,
+      conflictCode: null,
+    });
+    expect(createResponse.body.fact.metadata).toMatchObject({
+      sourceOrigin: "manual_entry",
+      ownerDocument: "52998224725",
+      note: "Lancamento manual de apoio.",
+    });
+
+    const persistedFactResult = await dbQuery(
+      `SELECT
+         category,
+         review_status,
+         metadata_json
+       FROM tax_facts
+       WHERE user_id = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [userId],
+    );
+
+    expect(persistedFactResult.rows[0]).toMatchObject({
+      category: "manual_entry",
+      review_status: "pending",
+    });
+    expect(persistedFactResult.rows[0].metadata_json).toMatchObject({
+      sourceOrigin: "manual_entry",
+      ownerDocument: "52998224725",
+      note: "Lancamento manual de apoio.",
+    });
   });
 
   it("PATCH /tax/facts/:id/review aprova fato e registra trilha em tax_reviews", async () => {
