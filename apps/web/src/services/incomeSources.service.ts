@@ -44,8 +44,27 @@ export interface IncomeStatement {
   status: "draft" | "posted";
   postedTransactionId: number | null;
   sourceImportSessionId: string | null;
+  reconciliation: IncomeStatementReconciliation | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface IncomeStatementReconciliationTransaction {
+  id: number;
+  type: string;
+  value: number;
+  date: string;
+  description: string | null;
+  importSessionId: string | null;
+  importDocumentType: string | null;
+  deletedAt: string | null;
+}
+
+export interface IncomeStatementReconciliation {
+  status: "reconciled" | "manual_entry" | "candidate" | "conflict" | "pending";
+  summary: string;
+  linkedTransaction: IncomeStatementReconciliationTransaction | null;
+  candidates: IncomeStatementReconciliationTransaction[];
 }
 
 export interface IncomeSourceWithDeductions extends IncomeSource {
@@ -140,8 +159,27 @@ interface RawStatement {
   status?: unknown;
   postedTransactionId?: unknown;
   sourceImportSessionId?: unknown;
+  reconciliation?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
+}
+
+interface RawStatementReconciliationTransaction {
+  id?: unknown;
+  type?: unknown;
+  value?: unknown;
+  date?: unknown;
+  description?: unknown;
+  importSessionId?: unknown;
+  importDocumentType?: unknown;
+  deletedAt?: unknown;
+}
+
+interface RawStatementReconciliation {
+  status?: unknown;
+  summary?: unknown;
+  linkedTransaction?: unknown;
+  candidates?: unknown;
 }
 
 // ─── Normalization ─────────────────────────────────────────────────────────────
@@ -196,9 +234,56 @@ const normalizeStatement = (raw: RawStatement): IncomeStatement => ({
   status: raw.status === "posted" ? "posted" : "draft",
   postedTransactionId: normalizeIntOrNull(raw.postedTransactionId),
   sourceImportSessionId: normalizeStringOrNull(raw.sourceImportSessionId),
+  reconciliation: normalizeStatementReconciliation(raw.reconciliation),
   createdAt: normalizeISOString(raw.createdAt),
   updatedAt: normalizeISOString(raw.updatedAt),
 });
+
+const normalizeStatementReconciliationTransaction = (
+  raw: RawStatementReconciliationTransaction,
+): IncomeStatementReconciliationTransaction => ({
+  id: Number(raw.id) || 0,
+  type: typeof raw.type === "string" ? raw.type : "",
+  value: Number(raw.value) || 0,
+  date: normalizeISOString(raw.date),
+  description: normalizeStringOrNull(raw.description),
+  importSessionId: normalizeStringOrNull(raw.importSessionId),
+  importDocumentType: normalizeStringOrNull(raw.importDocumentType),
+  deletedAt: normalizeStringOrNull(raw.deletedAt),
+});
+
+const normalizeStatementReconciliation = (
+  raw: unknown,
+): IncomeStatementReconciliation | null => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+
+  const parsed = raw as RawStatementReconciliation;
+  const normalizedStatus = String(parsed.status || "").trim();
+
+  return {
+    status:
+      normalizedStatus === "reconciled" ||
+      normalizedStatus === "manual_entry" ||
+      normalizedStatus === "candidate" ||
+      normalizedStatus === "conflict"
+        ? (normalizedStatus as IncomeStatementReconciliation["status"])
+        : "pending",
+    summary: typeof parsed.summary === "string" ? parsed.summary : "",
+    linkedTransaction:
+      parsed.linkedTransaction && typeof parsed.linkedTransaction === "object"
+        ? normalizeStatementReconciliationTransaction(
+            parsed.linkedTransaction as RawStatementReconciliationTransaction,
+          )
+        : null,
+    candidates: Array.isArray(parsed.candidates)
+      ? (parsed.candidates as RawStatementReconciliationTransaction[]).map(
+          normalizeStatementReconciliationTransaction,
+        )
+      : [],
+  };
+};
 
 const normalizeSource = (raw: RawSource): IncomeSourceWithDeductions => {
   const deductions = Array.isArray(raw.deductions)

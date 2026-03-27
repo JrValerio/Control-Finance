@@ -6,7 +6,9 @@ import { categoriesService } from "../services/categories.service";
 import {
   incomeSourcesService,
   type IncomeDeduction,
+  type IncomeStatementReconciliation,
   type IncomeSourceWithDeductions,
+  type IncomeStatement,
   type PostStatementResult,
 } from "../services/incomeSources.service";
 import { formatCurrency } from "../utils/formatCurrency";
@@ -21,14 +23,47 @@ interface IncomeSourcesPageProps {
   onBack?: () => void;
 }
 
+const getReconciliationBadge = (status: IncomeStatementReconciliation["status"]) => {
+  switch (status) {
+    case "reconciled":
+      return {
+        label: "Conciliado",
+        className: "border-green-200 bg-green-50 text-green-700",
+      };
+    case "manual_entry":
+      return {
+        label: "Lancado no app",
+        className: "border-blue-200 bg-blue-50 text-blue-700",
+      };
+    case "candidate":
+      return {
+        label: "Conciliar",
+        className: "border-amber-200 bg-amber-50 text-amber-700",
+      };
+    case "conflict":
+      return {
+        label: "Conflito",
+        className: "border-red-200 bg-red-50 text-red-700",
+      };
+    default:
+      return {
+        label: "Pendente",
+        className: "border-cf-border bg-cf-bg-subtle text-cf-text-secondary",
+      };
+  }
+};
+
 const IncomeSourcesPage = ({
   onBack = undefined,
 }: IncomeSourcesPageProps): JSX.Element => {
   const [sources, setSources] = useState<IncomeSourceWithDeductions[]>([]);
+  const [statementsBySource, setStatementsBySource] = useState<Record<number, IncomeStatement[]>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingStatements, setIsLoadingStatements] = useState(false);
   const [pageError, setPageError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [linkingStatementId, setLinkingStatementId] = useState<number | null>(null);
 
   // Source modal state
   const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
@@ -53,18 +88,51 @@ const IncomeSourcesPage = ({
 
   // ─── Data loading ─────────────────────────────────────────────────────────────
 
-  const loadSources = useCallback(async () => {
+  const loadStatementsForSources = useCallback(async (sourceList: IncomeSourceWithDeductions[]) => {
+    if (sourceList.length === 0) {
+      setStatementsBySource({});
+      return;
+    }
+
+    setIsLoadingStatements(true);
+    try {
+      const statementLists = await Promise.all(
+        sourceList.map(async (source) => ({
+          sourceId: source.id,
+          statements: await incomeSourcesService.listStatements(source.id),
+        })),
+      );
+
+      setStatementsBySource(
+        statementLists.reduce<Record<number, IncomeStatement[]>>((acc, item) => {
+          acc[item.sourceId] = item.statements;
+          return acc;
+        }, {}),
+      );
+    } catch (error) {
+      setStatementsBySource({});
+      setPageError((current) =>
+        current || getApiErrorMessage(error, "Não foi possível carregar o histórico de renda."),
+      );
+    } finally {
+      setIsLoadingStatements(false);
+    }
+  }, []);
+
+  const reloadIncomeData = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await incomeSourcesService.list();
       setSources(data);
+      await loadStatementsForSources(data);
     } catch (error) {
       setSources([]);
+      setStatementsBySource({});
       setPageError(getApiErrorMessage(error, "Não foi possível carregar as fontes de renda."));
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [loadStatementsForSources]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -76,9 +144,9 @@ const IncomeSourcesPage = ({
   }, []);
 
   useEffect(() => {
-    void loadSources();
+    void reloadIncomeData();
     void loadCategories();
-  }, [loadSources, loadCategories]);
+  }, [reloadIncomeData, loadCategories]);
 
   // ─── Success helper ────────────────────────────────────────────────────────────
 
@@ -108,7 +176,7 @@ const IncomeSourcesPage = ({
   const handleSourceSaved = () => {
     closeSourceModal();
     showSuccess(editingSource ? "Fonte atualizada." : "Fonte criada.");
-    void loadSources();
+    void reloadIncomeData();
   };
 
   // ─── Deduction modal ──────────────────────────────────────────────────────────
@@ -131,7 +199,7 @@ const IncomeSourcesPage = ({
   const handleDeductionSaved = () => {
     closeDeductionModal();
     showSuccess(deductionContext?.deduction ? "Desconto atualizado." : "Desconto adicionado.");
-    void loadSources();
+    void reloadIncomeData();
   };
 
   // ─── Delete deduction ─────────────────────────────────────────────────────────
@@ -142,7 +210,7 @@ const IncomeSourcesPage = ({
     try {
       await incomeSourcesService.removeDeduction(deductionId);
       showSuccess("Desconto removido.");
-      void loadSources();
+      void reloadIncomeData();
     } catch (error) {
       setPageError(getApiErrorMessage(error, "Não foi possível remover o desconto."));
     }
@@ -156,7 +224,7 @@ const IncomeSourcesPage = ({
     try {
       await incomeSourcesService.remove(sourceId);
       showSuccess("Fonte removida.");
-      void loadSources();
+      void reloadIncomeData();
     } catch (error) {
       setPageError(getApiErrorMessage(error, "Não foi possível remover a fonte."));
     }
@@ -177,7 +245,7 @@ const IncomeSourcesPage = ({
   const handleDraftSaved = () => {
     closeStatementModal();
     showSuccess("Rascunho salvo.");
-    void loadSources();
+    void reloadIncomeData();
   };
 
   const handlePosted = (result: PostStatementResult) => {
@@ -185,7 +253,21 @@ const IncomeSourcesPage = ({
     showSuccess(
       `Entrada lancada: ${formatCurrency(result.transaction.value)} — ${result.transaction.description ?? ""}`,
     );
-    void loadSources();
+    void reloadIncomeData();
+  };
+
+  const handleLinkCandidate = async (statementId: number, transactionId: number) => {
+    setLinkingStatementId(statementId);
+    setPageError("");
+    try {
+      await incomeSourcesService.linkTransaction(statementId, transactionId);
+      showSuccess("Credito bancario conciliado com sucesso.");
+      await reloadIncomeData();
+    } catch (error) {
+      setPageError(getApiErrorMessage(error, "Não foi possível conciliar o crédito bancário."));
+    } finally {
+      setLinkingStatementId(null);
+    }
   };
 
   // ─── Render ────────────────────────────────────────────────────────────────────
@@ -375,6 +457,97 @@ const IncomeSourcesPage = ({
                   ) : (
                     <p className="mt-1 text-xs text-cf-text-secondary">
                       Nenhum desconto cadastrado.
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase text-cf-text-secondary">
+                      Extratos recentes ({(statementsBySource[source.id] ?? []).length})
+                    </p>
+                    {isLoadingStatements ? (
+                      <span className="text-xs text-cf-text-secondary">Atualizando...</span>
+                    ) : null}
+                  </div>
+
+                  {(statementsBySource[source.id] ?? []).length > 0 ? (
+                    <div className="mt-2 space-y-2">
+                      {(statementsBySource[source.id] ?? []).slice(0, 3).map((statement) => {
+                        const reconciliation = statement.reconciliation;
+                        const badge = getReconciliationBadge(reconciliation?.status ?? "pending");
+
+                        return (
+                          <div
+                            key={statement.id}
+                            className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-3"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div>
+                                <p className="text-sm font-semibold text-cf-text-primary">
+                                  Competência {statement.referenceMonth}
+                                </p>
+                                <p className="text-xs text-cf-text-secondary">
+                                  Líquido {formatCurrency(statement.netAmount)}
+                                  {statement.paymentDate ? ` · Pago em ${statement.paymentDate}` : ""}
+                                </p>
+                              </div>
+                              <span
+                                className={`rounded border px-2 py-0.5 text-xs font-semibold ${badge.className}`}
+                              >
+                                {badge.label}
+                              </span>
+                            </div>
+
+                            {reconciliation ? (
+                              <div className="mt-2 space-y-2">
+                                <p className="text-xs text-cf-text-secondary">
+                                  {reconciliation.summary}
+                                </p>
+
+                                {reconciliation.linkedTransaction ? (
+                                  <div className="rounded border border-cf-border bg-cf-surface px-2 py-2 text-xs text-cf-text-secondary">
+                                    <p className="font-medium text-cf-text-primary">
+                                      {reconciliation.linkedTransaction.importSessionId
+                                        ? "Crédito conciliado"
+                                        : "Entrada vinculada"}
+                                    </p>
+                                    <p>
+                                      {formatCurrency(reconciliation.linkedTransaction.value)} em{" "}
+                                      {reconciliation.linkedTransaction.date}
+                                      {reconciliation.linkedTransaction.description
+                                        ? ` · ${reconciliation.linkedTransaction.description}`
+                                        : ""}
+                                    </p>
+                                  </div>
+                                ) : null}
+
+                                {(reconciliation.status === "candidate" ||
+                                  reconciliation.status === "conflict") &&
+                                reconciliation.candidates.length > 0 ? (
+                                  <div className="space-y-1">
+                                    {reconciliation.candidates.slice(0, 3).map((candidate) => (
+                                      <button
+                                        key={candidate.id}
+                                        type="button"
+                                        onClick={() => void handleLinkCandidate(statement.id, candidate.id)}
+                                        disabled={linkingStatementId === statement.id}
+                                        className="w-full rounded border border-brand-1 px-2 py-1.5 text-left text-xs font-semibold text-brand-1 hover:bg-brand-1/10 disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        Vincular crédito de {candidate.date} · {formatCurrency(candidate.value)}
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-xs text-cf-text-secondary">
+                      Nenhum extrato registrado para esta fonte ainda.
                     </p>
                   )}
                 </div>

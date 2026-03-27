@@ -232,6 +232,230 @@ const mapTransactionRow = (row) => ({
   categoryId: row.category_id != null ? Number(row.category_id) : null,
 });
 
+const mapReconciliationTransactionRow = (row) => ({
+  id: Number(row.id),
+  type: String(row.type),
+  value: toMoney(row.value),
+  date: toISODate(row.date),
+  description: row.description != null ? String(row.description) : null,
+  importSessionId: row.import_session_id != null ? String(row.import_session_id) : null,
+  importDocumentType:
+    row.import_document_type != null ? String(row.import_document_type) : null,
+  deletedAt: row.deleted_at != null ? toISODateTime(row.deleted_at) : null,
+});
+
+const mapStatementWithReconciliationRow = (row, reconciliation = null) => ({
+  ...mapStatementRow(row),
+  reconciliation,
+});
+
+const addDaysToISODate = (value, days) => {
+  const date = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return value;
+  date.setUTCDate(date.getUTCDate() + days);
+  return toISODate(date);
+};
+
+const getImportedTransactionWindowForStatements = (statementRows = []) => {
+  const paymentDates = statementRows
+    .map((row) => (row.payment_date != null ? toISODate(row.payment_date) : null))
+    .filter(Boolean);
+
+  if (paymentDates.length === 0) {
+    return null;
+  }
+
+  const sortedDates = [...paymentDates].sort();
+  return {
+    from: addDaysToISODate(sortedDates[0], -LINK_DATE_TOLERANCE_DAYS),
+    to: addDaysToISODate(sortedDates[sortedDates.length - 1], LINK_DATE_TOLERANCE_DAYS),
+  };
+};
+
+const buildStatementCandidateMatch = (statementRow, transactionRow) => {
+  if (!statementRow || !transactionRow || statementRow.payment_date == null) {
+    return null;
+  }
+
+  const paymentDate = toISODate(statementRow.payment_date);
+  const transactionDate = toISODate(transactionRow.date);
+  const dateDiffDays = Math.abs(
+    new Date(`${paymentDate}T00:00:00Z`).getTime() -
+      new Date(`${transactionDate}T00:00:00Z`).getTime(),
+  ) / (1000 * 60 * 60 * 24);
+
+  if (dateDiffDays > LINK_DATE_TOLERANCE_DAYS) {
+    return null;
+  }
+
+  const statementAmount = toMoney(statementRow.net_amount);
+  const transactionAmount = toMoney(transactionRow.value);
+
+  if (statementAmount <= 0) {
+    return null;
+  }
+
+  const amountDiff = Math.abs(statementAmount - transactionAmount);
+  const amountDiffRatio = amountDiff / statementAmount;
+
+  if (amountDiffRatio > LINK_AMOUNT_TOLERANCE) {
+    return null;
+  }
+
+  return {
+    transaction: transactionRow,
+    dateDiffDays,
+    amountDiff,
+  };
+};
+
+const buildStatementReconciliation = ({
+  statementRow,
+  linkedTransactionRow,
+  importedTransactionRows = [],
+}) => {
+  const linkedTransaction = linkedTransactionRow
+    ? mapReconciliationTransactionRow(linkedTransactionRow)
+    : null;
+
+  const candidates = statementRow.payment_date != null
+    ? importedTransactionRows
+        .filter((transactionRow) => Number(transactionRow.id) !== Number(statementRow.posted_transaction_id))
+        .map((transactionRow) => buildStatementCandidateMatch(statementRow, transactionRow))
+        .filter(Boolean)
+        .sort((leftMatch, rightMatch) => {
+          if (leftMatch.dateDiffDays !== rightMatch.dateDiffDays) {
+            return leftMatch.dateDiffDays - rightMatch.dateDiffDays;
+          }
+          return leftMatch.amountDiff - rightMatch.amountDiff;
+        })
+        .map((match) => mapReconciliationTransactionRow(match.transaction))
+    : [];
+
+  if (linkedTransactionRow) {
+    if (linkedTransactionRow.deleted_at != null) {
+      return {
+        status: "pending",
+        summary: "A entrada vinculada foi removida. Revise a conciliacao deste extrato.",
+        linkedTransaction,
+        candidates,
+      };
+    }
+
+    if (linkedTransaction.importSessionId) {
+      return {
+        status: "reconciled",
+        summary: "Credito bancario conciliado com este extrato.",
+        linkedTransaction,
+        candidates: [],
+      };
+    }
+
+    return {
+      status: "manual_entry",
+      summary: "Extrato lancado como entrada manual no app.",
+      linkedTransaction,
+      candidates: [],
+    };
+  }
+
+  if (statementRow.payment_date == null) {
+    return {
+      status: "pending",
+      summary: "Defina a data de pagamento para buscar credito bancario compativel.",
+      linkedTransaction: null,
+      candidates: [],
+    };
+  }
+
+  if (candidates.length === 1) {
+    return {
+      status: "candidate",
+      summary: "1 credito bancario compativel encontrado para conciliacao.",
+      linkedTransaction: null,
+      candidates,
+    };
+  }
+
+  if (candidates.length > 1) {
+    return {
+      status: "conflict",
+      summary: `${candidates.length} creditos bancarios compativeis encontrados para conciliacao.`,
+      linkedTransaction: null,
+      candidates,
+    };
+  }
+
+  return {
+    status: "pending",
+    summary: "Nenhum credito bancario compativel encontrado ate agora.",
+    linkedTransaction: null,
+    candidates: [],
+  };
+};
+
+const decorateStatementsWithReconciliation = async (userId, statementRows = []) => {
+  if (!Array.isArray(statementRows) || statementRows.length === 0) {
+    return [];
+  }
+
+  const linkedTransactionIds = [...new Set(
+    statementRows
+      .map((row) => Number(row.posted_transaction_id))
+      .filter((value) => Number.isInteger(value) && value > 0),
+  )];
+
+  const transactionWindow = getImportedTransactionWindowForStatements(
+    statementRows.filter((row) => row.posted_transaction_id == null),
+  );
+  const linkedTransactionPlaceholders = linkedTransactionIds
+    .map((_, index) => `$${index + 2}`)
+    .join(", ");
+
+  const [linkedTransactionsResult, importedTransactionsResult] = await Promise.all([
+    linkedTransactionIds.length > 0
+      ? dbQuery(
+          `SELECT id, type, value, date, description, import_session_id, import_document_type, deleted_at
+             FROM transactions
+            WHERE user_id = $1
+              AND id IN (${linkedTransactionPlaceholders})`,
+          [userId, ...linkedTransactionIds],
+        )
+      : Promise.resolve({ rows: [] }),
+    transactionWindow
+      ? dbQuery(
+          `SELECT id, type, value, date, description, import_session_id, import_document_type, deleted_at
+             FROM transactions
+            WHERE user_id = $1
+              AND deleted_at IS NULL
+              AND type = $2
+              AND import_session_id IS NOT NULL
+              AND date BETWEEN $3 AND $4
+            ORDER BY date DESC, id DESC`,
+          [userId, TRANSACTION_TYPE_ENTRY, transactionWindow.from, transactionWindow.to],
+        )
+      : Promise.resolve({ rows: [] }),
+  ]);
+
+  const linkedTransactionsById = new Map(
+    linkedTransactionsResult.rows.map((row) => [Number(row.id), row]),
+  );
+
+  return statementRows.map((row) =>
+    mapStatementWithReconciliationRow(
+      row,
+      buildStatementReconciliation({
+        statementRow: row,
+        linkedTransactionRow:
+          row.posted_transaction_id != null
+            ? linkedTransactionsById.get(Number(row.posted_transaction_id)) ?? null
+            : null,
+        importedTransactionRows: importedTransactionsResult.rows,
+      }),
+    ),
+  );
+};
+
 // ─── Income Sources ────────────────────────────────────────────────────────────
 
 export const createIncomeSourceForUser = async (userId, payload) => {
@@ -530,8 +754,10 @@ export const getStatementWithDeductions = async (userId, statementId) => {
     ),
   ]);
 
+  const [statementWithReconciliation] = await decorateStatementsWithReconciliation(uid, stmtRows);
+
   return {
-    statement: mapStatementRow(stmtRows[0]),
+    statement: statementWithReconciliation,
     deductions: dedRows.map(mapStatementDeductionRow),
   };
 };
@@ -751,5 +977,5 @@ export const listStatementsForSource = async (userId, sourceId) => {
     [sid],
   );
 
-  return rows.map(mapStatementRow);
+  return decorateStatementsWithReconciliation(uid, rows);
 };

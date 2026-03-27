@@ -6,6 +6,7 @@ import IncomeSourcesPage from "./IncomeSourcesPage";
 import {
   incomeSourcesService,
   type IncomeDeduction,
+  type IncomeStatement,
   type IncomeSourceWithDeductions,
   type IncomeStatementWithDeductions,
   type PostStatementResult,
@@ -26,6 +27,7 @@ vi.mock("../services/incomeSources.service", () => ({
     createStatement: vi.fn(),
     updateStatement: vi.fn(),
     postStatement: vi.fn(),
+    linkTransaction: vi.fn(),
     listStatements: vi.fn(),
   },
 }));
@@ -76,6 +78,7 @@ const buildStatementResult = (): IncomeStatementWithDeductions => ({
     status: "draft",
     postedTransactionId: null,
     sourceImportSessionId: null,
+    reconciliation: null,
     createdAt: "2026-02-23T00:00:00.000Z",
     updatedAt: "2026-02-23T00:00:00.000Z",
   },
@@ -97,6 +100,7 @@ const buildPostResult = (): PostStatementResult => ({
     status: "posted",
     postedTransactionId: 99,
     sourceImportSessionId: null,
+    reconciliation: null,
     createdAt: "2026-02-23T00:00:00.000Z",
     updatedAt: "2026-02-23T00:00:00.000Z",
   },
@@ -108,6 +112,40 @@ const buildPostResult = (): PostStatementResult => ({
     description: "Pensao INSS – 2026-02",
     categoryId: null,
   },
+});
+
+const buildListedStatement = (overrides: Partial<IncomeStatement> = {}): IncomeStatement => ({
+  id: 10,
+  incomeSourceId: 1,
+  referenceMonth: "2026-02",
+  netAmount: 2803.52,
+  totalDeductions: 300,
+  grossAmount: null,
+  details: null,
+  paymentDate: "2026-02-23",
+  status: "draft",
+  postedTransactionId: null,
+  sourceImportSessionId: "import-session-1",
+  reconciliation: {
+    status: "candidate",
+    summary: "1 credito bancario compativel encontrado para conciliacao.",
+    linkedTransaction: null,
+    candidates: [
+      {
+        id: 501,
+        type: "Entrada",
+        value: 2803.52,
+        date: "2026-02-23",
+        description: "Credito INSS",
+        importSessionId: "bank-import-1",
+        importDocumentType: "bank_statement",
+        deletedAt: null,
+      },
+    ],
+  },
+  createdAt: "2026-02-23T00:00:00.000Z",
+  updatedAt: "2026-02-23T00:00:00.000Z",
+  ...overrides,
 });
 
 // ─── Render helper ────────────────────────────────────────────────────────────
@@ -125,6 +163,7 @@ describe("IncomeSourcesPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(incomeSourcesService.list).mockResolvedValue([buildSource()]);
+    vi.mocked(incomeSourcesService.listStatements).mockResolvedValue([]);
     vi.mocked(categoriesService.listCategories).mockResolvedValue([]);
   });
 
@@ -213,6 +252,46 @@ describe("IncomeSourcesPage", () => {
 
     await waitFor(() => {
       expect(screen.getByRole("status")).toBeInTheDocument();
+    });
+  });
+
+  it("exibe conciliacao explicita e permite vincular credito bancario compativel", async () => {
+    const user = userEvent.setup();
+    vi.mocked(incomeSourcesService.listStatements).mockResolvedValueOnce([
+      buildListedStatement(),
+    ]).mockResolvedValue([]);
+    vi.mocked(incomeSourcesService.linkTransaction).mockResolvedValue(
+      buildListedStatement({
+        postedTransactionId: 501,
+        status: "posted",
+        reconciliation: {
+          status: "reconciled",
+          summary: "Credito bancario conciliado com este extrato.",
+          linkedTransaction: {
+            id: 501,
+            type: "Entrada",
+            value: 2803.52,
+            date: "2026-02-23",
+            description: "Credito INSS",
+            importSessionId: "bank-import-1",
+            importDocumentType: "bank_statement",
+            deletedAt: null,
+          },
+          candidates: [],
+        },
+      }),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText(/1 credito bancario compativel encontrado/i)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: /vincular crédito de 2026-02-23/i }));
+
+    await waitFor(() => {
+      expect(incomeSourcesService.linkTransaction).toHaveBeenCalledWith(10, 501);
     });
   });
 
