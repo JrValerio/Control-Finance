@@ -1056,6 +1056,8 @@ describe("ImportCsvModal", () => {
         gross_salary: 1800,
         payment_day: 25,
         birth_year: null,
+        reference_month: "2026-02",
+        payment_date: "2026-02-25",
         consignacoes: [],
       });
       expect(forecastService.recompute).toHaveBeenCalled();

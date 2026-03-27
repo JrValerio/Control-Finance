@@ -5,6 +5,8 @@ import { calculateNetSalary } from "../domain/salary/salary.calculator.js";
 const PAYMENT_DAY_MIN = 1;
 const PAYMENT_DAY_MAX = 31;
 const CONSIGNACAO_DESCRIPTION_MAX_LENGTH = 100;
+const REFERENCE_MONTH_REGEX = /^\d{4}-\d{2}$/;
+const ISO_DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 const createError = (status, message) => {
   const err = new Error(message);
@@ -13,6 +15,15 @@ const createError = (status, message) => {
 };
 
 const toMoney = (value) => Number(Number(value || 0).toFixed(2));
+const toISODateOnly = (value) => {
+  if (value == null) return null;
+  const normalized = String(value).trim().slice(0, 10);
+  if (ISO_DATE_ONLY_REGEX.test(normalized)) return normalized;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString().slice(0, 10);
+};
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
@@ -79,6 +90,30 @@ const validateConsignacaoInput = ({ description, amount, consignacaoType }) => {
   }
 };
 
+const normalizeActiveStatementInput = ({ referenceMonth, paymentDate }) => {
+  const normalizedReferenceMonth =
+    typeof referenceMonth === "string" && referenceMonth.trim()
+      ? referenceMonth.trim()
+      : null;
+  const normalizedPaymentDate = toISODateOnly(paymentDate);
+
+  if (
+    normalizedReferenceMonth != null &&
+    !REFERENCE_MONTH_REGEX.test(normalizedReferenceMonth)
+  ) {
+    throw createError(422, "reference_month deve estar no formato YYYY-MM.");
+  }
+
+  if (paymentDate != null && normalizedPaymentDate == null) {
+    throw createError(422, "payment_date deve estar no formato YYYY-MM-DD.");
+  }
+
+  return {
+    referenceMonth: normalizedReferenceMonth,
+    paymentDate: normalizedPaymentDate,
+  };
+};
+
 const normalizeImportedConsignacoes = (value) => {
   if (value == null) return [];
   if (!Array.isArray(value)) {
@@ -118,6 +153,16 @@ const toProfile = (row) => ({
   paymentDay:  Number(row.payment_day),
   createdAt:   row.created_at,
   updatedAt:   row.updated_at,
+  activeStatement:
+    row.active_statement_reference_month != null || row.active_statement_payment_date != null
+      ? {
+          referenceMonth:
+            typeof row.active_statement_reference_month === "string"
+              ? row.active_statement_reference_month
+              : null,
+          paymentDate: toISODateOnly(row.active_statement_payment_date),
+        }
+      : null,
 });
 
 const toConsignacao = (row) => ({
@@ -162,6 +207,7 @@ const withCalculation = (profile, consignacoes = []) => {
 
 const FIND_SQL = `
   SELECT id, user_id, gross_salary, dependents, payment_day, profile_type, birth_year,
+         active_statement_reference_month, active_statement_payment_date,
          created_at, updated_at
   FROM   salary_profiles
   WHERE  user_id = $1
@@ -177,9 +223,11 @@ const FIND_CONSIGNACOES_SQL = `
 
 const INSERT_SQL = `
   INSERT INTO salary_profiles
-    (user_id, gross_salary, dependents, payment_day, profile_type, birth_year)
-  VALUES ($1, $2, $3, $4, $5, $6)
+    (user_id, gross_salary, dependents, payment_day, profile_type, birth_year,
+     active_statement_reference_month, active_statement_payment_date)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
   RETURNING id, user_id, gross_salary, dependents, payment_day, profile_type, birth_year,
+            active_statement_reference_month, active_statement_payment_date,
             created_at, updated_at
 `;
 
@@ -190,9 +238,12 @@ const UPDATE_SQL = `
       payment_day  = $3,
       profile_type = $4,
       birth_year   = $5,
+      active_statement_reference_month = $6,
+      active_statement_payment_date = $7,
       updated_at   = NOW()
-  WHERE user_id = $6
+  WHERE user_id = $8
   RETURNING id, user_id, gross_salary, dependents, payment_day, profile_type, birth_year,
+            active_statement_reference_month, active_statement_payment_date,
             created_at, updated_at
 `;
 
@@ -227,19 +278,43 @@ export const upsertSalaryProfileForUser = async (userId, body = {}) => {
 
   validateProfileInput({ grossSalary, dependents, paymentDay, profileType, birthYear });
 
+  const existing = await dbQuery(FIND_SQL, [userId]);
+
   const gross = Number(grossSalary);
   const dep   = Number(dependents);
   const day   = Number(paymentDay);
   const type  = profileType;
   const year  = birthYear != null ? Number(birthYear) : null;
+  const existingProfile = existing.rows[0] ? toProfile(existing.rows[0]) : null;
+  const activeStatementReferenceMonth =
+    type === "inss_beneficiary" ? existingProfile?.activeStatement?.referenceMonth ?? null : null;
+  const activeStatementPaymentDate =
+    type === "inss_beneficiary" ? existingProfile?.activeStatement?.paymentDate ?? null : null;
 
-  const existing = await dbQuery(FIND_SQL, [userId]);
   let result;
 
   if (existing.rows[0]) {
-    result = await dbQuery(UPDATE_SQL, [gross, dep, day, type, year, userId]);
+    result = await dbQuery(UPDATE_SQL, [
+      gross,
+      dep,
+      day,
+      type,
+      year,
+      activeStatementReferenceMonth,
+      activeStatementPaymentDate,
+      userId,
+    ]);
   } else {
-    result = await dbQuery(INSERT_SQL, [userId, gross, dep, day, type, year]);
+    result = await dbQuery(INSERT_SQL, [
+      userId,
+      gross,
+      dep,
+      day,
+      type,
+      year,
+      activeStatementReferenceMonth,
+      activeStatementPaymentDate,
+    ]);
   }
 
   const profile = toProfile(result.rows[0]);
@@ -287,6 +362,8 @@ export const syncImportedBenefitProfileForUser = async (userId, body = {}) =>
       birth_year: birthYear = existingProfile?.birthYear ?? null,
       dependents = existingProfile?.dependents ?? 0,
       consignacoes = [],
+      reference_month: rawReferenceMonth = existingProfile?.activeStatement?.referenceMonth ?? null,
+      payment_date: rawPaymentDate = existingProfile?.activeStatement?.paymentDate ?? null,
     } = body;
 
     validateProfileInput({
@@ -298,6 +375,10 @@ export const syncImportedBenefitProfileForUser = async (userId, body = {}) =>
     });
 
     const normalizedConsignacoes = normalizeImportedConsignacoes(consignacoes);
+    const activeStatement = normalizeActiveStatementInput({
+      referenceMonth: rawReferenceMonth,
+      paymentDate: rawPaymentDate,
+    });
     const gross = Number(grossSalary);
     const dep = Number(dependents);
     const day = Number(paymentDay);
@@ -305,9 +386,27 @@ export const syncImportedBenefitProfileForUser = async (userId, body = {}) =>
 
     let profileRows;
     if (existingProfile) {
-      profileRows = await client.query(UPDATE_SQL, [gross, dep, day, "inss_beneficiary", year, userId]);
+      profileRows = await client.query(UPDATE_SQL, [
+        gross,
+        dep,
+        day,
+        "inss_beneficiary",
+        year,
+        activeStatement.referenceMonth,
+        activeStatement.paymentDate,
+        userId,
+      ]);
     } else {
-      profileRows = await client.query(INSERT_SQL, [userId, gross, dep, day, "inss_beneficiary", year]);
+      profileRows = await client.query(INSERT_SQL, [
+        userId,
+        gross,
+        dep,
+        day,
+        "inss_beneficiary",
+        year,
+        activeStatement.referenceMonth,
+        activeStatement.paymentDate,
+      ]);
     }
 
     const profile = toProfile(profileRows.rows[0]);

@@ -128,6 +128,8 @@ describe("salary-profile", () => {
         gross_salary: 4958.67,
         payment_day: 7,
         birth_year: 1955,
+        reference_month: "2026-03",
+        payment_date: "2026-04-07",
         consignacoes: [
           {
             description: "216 CONSIGNACAO EMPRESTIMO BANCARIO",
@@ -153,6 +155,10 @@ describe("salary-profile", () => {
       dependents: 2,
       paymentDay: 7,
       birthYear: 1955,
+      activeStatement: {
+        referenceMonth: "2026-03",
+        paymentDate: "2026-04-07",
+      },
     });
     expect(res.body.consignacoes).toEqual([
       expect.objectContaining({
@@ -175,6 +181,8 @@ describe("salary-profile", () => {
       gross_salary: 4958.67,
       payment_day: 7,
       birth_year: 1955,
+      reference_month: "2026-03",
+      payment_date: "2026-04-07",
       consignacoes: [
         {
           description: "216 CONSIGNACAO EMPRESTIMO BANCARIO",
@@ -205,10 +213,39 @@ describe("salary-profile", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.consignacoes).toHaveLength(2);
+    expect(res.body.activeStatement).toEqual({
+      referenceMonth: "2026-03",
+      paymentDate: "2026-04-07",
+    });
     expect(res.body.consignacoes.map((item) => item.description)).toEqual([
       "216 CONSIGNACAO EMPRESTIMO BANCARIO",
       "217 EMPRESTIMO SOBRE A RMC",
     ]);
+  });
+
+  it("PUT /salary/profile limpando para CLT remove a competência ativa do benefício", async () => {
+    const token = await registerAndLogin("sal-clear-active-statement@test.dev");
+
+    await request(app)
+      .put("/salary/profile/imported-benefit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        gross_salary: 4958.67,
+        payment_day: 7,
+        birth_year: 1955,
+        reference_month: "2026-03",
+        payment_date: "2026-04-07",
+        consignacoes: [],
+      });
+
+    const res = await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "clt", payment_day: 5 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.profileType).toBe("clt");
+    expect(res.body.activeStatement).toBeNull();
   });
 
   it("segundo upsert mantém mesmo id", async () => {
