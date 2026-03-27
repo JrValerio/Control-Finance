@@ -276,37 +276,44 @@ export default function IncomeStatementQuickModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex min-h-screen items-start justify-center bg-black/50 p-6 sm:items-center"
+      className="fixed inset-0 z-[60] flex min-h-screen items-start justify-center overflow-y-auto bg-black/50 p-2 sm:p-6 sm:items-center"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className="w-full max-w-md rounded-lg bg-cf-surface p-4 sm:p-6"
+        className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-lg bg-cf-surface shadow-xl sm:max-h-[calc(100dvh-3rem)]"
         role="dialog"
         aria-modal="true"
         aria-labelledby="income-quick-modal-title"
+        data-testid="income-quick-modal-shell"
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2
-            id="income-quick-modal-title"
-            className="text-base font-semibold text-cf-text-primary"
-          >
-            Registrar no histórico de renda
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-cf-text-secondary hover:text-cf-text-primary"
-            aria-label="Fechar"
-          >
-            ✕
-          </button>
+        <div className="border-b border-cf-border px-4 py-4 sm:px-6">
+          <div className="flex items-center justify-between">
+            <h2
+              id="income-quick-modal-title"
+              className="text-base font-semibold text-cf-text-primary"
+            >
+              Registrar no histórico de renda
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-cf-text-secondary hover:text-cf-text-primary"
+              aria-label="Fechar"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
-        {success ? (
-          <div className="space-y-2">
+        <div
+          className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6"
+          data-testid="income-quick-modal-body"
+        >
+          {success ? (
+            <div className="space-y-2">
             <div className="rounded border border-green-200 bg-green-50 px-3 py-3 dark:border-green-800 dark:bg-green-950/40">
               <p className="text-sm font-semibold text-green-700 dark:text-green-400">
                 {finalizationStatus === "posted"
@@ -378,9 +385,9 @@ export default function IncomeStatementQuickModal({
             >
               Fechar
             </button>
-          </div>
-        ) : (
-          <>
+            </div>
+          ) : (
+            <>
             {isLoadingSources ? (
               <p className="mb-3 text-sm text-cf-text-secondary">Carregando fontes de renda...</p>
             ) : sources.length === 0 ? (
@@ -612,8 +619,9 @@ export default function IncomeStatementQuickModal({
                 </button>
               </div>
             </form>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

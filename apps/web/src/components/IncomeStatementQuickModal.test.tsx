@@ -84,6 +84,17 @@ describe("IncomeStatementQuickModal", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("keeps the income statement modal shell scrollable inside the viewport", async () => {
+    render(<IncomeStatementQuickModal isOpen onClose={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("income-quick-modal-shell")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("income-quick-modal-shell")).toHaveClass("flex", "flex-col", "overflow-hidden");
+    expect(screen.getByTestId("income-quick-modal-body")).toHaveClass("min-h-0", "overflow-y-auto");
+  });
+
   it("shows guidance when no income sources exist", async () => {
     vi.mocked(incomeSourcesService.list).mockResolvedValue([]);
     render(<IncomeStatementQuickModal isOpen onClose={vi.fn()} />);

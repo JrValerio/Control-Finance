@@ -189,26 +189,29 @@ const BillModal = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center bg-black/50 p-6 sm:items-center"
+      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center overflow-y-auto bg-black/50 p-2 sm:p-6 sm:items-center"
       onClick={handleBackdropClick}
       role="presentation"
     >
-      <div className="w-full max-w-md rounded-lg bg-cf-surface p-4 sm:p-6">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-md flex-col overflow-hidden rounded-lg bg-cf-surface shadow-xl sm:max-h-[calc(100dvh-3rem)]">
         {/* Header */}
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-cf-text-primary">
-            {isEditing ? "Editar pendência" : "Nova pendência"}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-cf-text-secondary transition-colors hover:text-cf-text-primary"
-            aria-label="Fechar modal"
-          >
-            X
-          </button>
+        <div className="border-b border-cf-border px-4 py-4 sm:px-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-cf-text-primary">
+              {isEditing ? "Editar pendência" : "Nova pendência"}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-cf-text-secondary transition-colors hover:text-cf-text-primary"
+              aria-label="Fechar modal"
+            >
+              X
+            </button>
+          </div>
         </div>
 
+        <div className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6">
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Title */}
           <div className="flex flex-col gap-1.5">
@@ -397,6 +400,7 @@ const BillModal = ({
             </button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );

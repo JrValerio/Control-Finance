@@ -134,6 +134,17 @@ describe("ImportCsvModal", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("keeps the import modal shell scrollable inside the viewport", async () => {
+    render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(categoriesService.listCategories).toHaveBeenCalled();
+    });
+
+    expect(screen.getByTestId("import-csv-modal-shell")).toHaveClass("flex", "flex-col", "overflow-hidden");
+    expect(screen.getByTestId("import-csv-modal-body")).toHaveClass("min-h-0", "overflow-y-auto");
+  });
+
   it("shows validation message when preview is requested without file", async () => {
     render(<ImportCsvModal isOpen onClose={vi.fn()} />);
 
