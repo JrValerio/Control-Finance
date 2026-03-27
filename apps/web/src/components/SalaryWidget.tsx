@@ -70,6 +70,33 @@ function BreakdownRow({
   );
 }
 
+function SummaryMetric({
+  label,
+  value,
+  tone = "default",
+  helper,
+}: {
+  label: string;
+  value: number;
+  tone?: "default" | "negative" | "highlight";
+  helper?: string;
+}) {
+  const valueClass =
+    tone === "highlight"
+      ? "text-brand-1"
+      : tone === "negative"
+        ? "text-red-600"
+        : "text-cf-text-primary";
+
+  return (
+    <div className="rounded border border-cf-border bg-cf-surface px-3 py-2.5">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-cf-text-secondary">{label}</p>
+      <p className={`mt-1 text-base font-bold ${valueClass}`}>{formatCurrency(value)}</p>
+      {helper ? <p className="mt-1 text-xs text-cf-text-secondary">{helper}</p> : null}
+    </div>
+  );
+}
+
 // ─── CLT form ─────────────────────────────────────────────────────────────────
 
 function CltForm({
@@ -399,26 +426,59 @@ function BenefitProfileView({
         </button>
       </div>
 
-      {/* Main card */}
-      <div className="mb-3 rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
-        <p className="text-xs text-cf-text-secondary">Líquido mensal</p>
-        <p className="text-lg font-bold text-cf-text-primary">
-          {formatCurrency(calculation.netMonthly)}
-        </p>
-        <p className="text-xs text-cf-text-secondary">
-          {calculation.netAnnual == null
-            ? "Líquido anual: disponível no Pro"
-            : `${formatCurrency(calculation.netAnnual)} / ano`}
-        </p>
+      <div className="mb-3 grid gap-2 sm:grid-cols-3">
+        <SummaryMetric
+          label="Benefício bruto"
+          value={calculation.grossMonthly}
+          helper="Valor base do benefício neste mês."
+        />
+        <SummaryMetric
+          label="Descontos do mês"
+          value={calculation.consignacoesMonthly ?? 0}
+          tone="negative"
+          helper={consignacoes.length === 0 ? "Nenhum desconto identificado." : `${consignacoes.length} desconto(s) lançados.`}
+        />
+        <SummaryMetric
+          label="Benefício líquido"
+          value={calculation.netMonthly}
+          tone="highlight"
+          helper={
+            calculation.netAnnual == null
+              ? "Líquido anual: disponível no Pro"
+              : `${formatCurrency(calculation.netAnnual)} / ano`
+          }
+        />
       </div>
 
-      {/* Breakdown */}
-      <div className="space-y-1.5">
-        <BreakdownRow label="Benefício bruto"       value={calculation.grossMonthly}                           highlight />
-        <BreakdownRow label="(-) Consignações"      value={calculation.consignacoesMonthly ?? 0}               negative />
-        <div className="my-1.5 border-t border-cf-border" />
-        <BreakdownRow label="= Líquido mensal"      value={calculation.netMonthly}                             highlight />
-        <BreakdownRow label="IRRF estimado"         value={calculation.irrfMonthly} />
+      <div className="mb-3 rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-xs text-cf-text-secondary">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span>
+            Recebe dia <span className="font-semibold text-cf-text-primary">{profile.paymentDay}</span>
+          </span>
+          {profile.birthYear ? (
+            <span>
+              Nasc. <span className="font-semibold text-cf-text-primary">{profile.birthYear}</span>
+            </span>
+          ) : null}
+          <span>
+            Perfil <span className="font-semibold text-cf-text-primary">Beneficiário INSS</span>
+          </span>
+        </div>
+      </div>
+
+      <div className="rounded border border-cf-border bg-cf-bg-subtle p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs font-medium text-cf-text-primary">Composição do benefício</p>
+          <span className="text-[11px] text-cf-text-secondary">Resumo mensal consolidado</span>
+        </div>
+
+        <div className="space-y-1.5">
+          <BreakdownRow label="Benefício bruto" value={calculation.grossMonthly} highlight />
+          <BreakdownRow label="(-) Consignações" value={calculation.consignacoesMonthly ?? 0} negative />
+          <BreakdownRow label="IRRF estimado" value={calculation.irrfMonthly} />
+          <div className="my-1.5 border-t border-cf-border" />
+          <BreakdownRow label="= Benefício líquido" value={calculation.netMonthly} highlight />
+        </div>
       </div>
 
       {/* Margin alerts */}
@@ -459,7 +519,10 @@ function BenefitProfileView({
       {/* Consignações list */}
       <div className="mt-4">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-medium text-cf-text-primary">Descontos consignados</p>
+          <div>
+            <p className="text-xs font-medium text-cf-text-primary">Descontos consignados</p>
+            <p className="text-[11px] text-cf-text-secondary">Cada rubrica segue separada para manter a composição auditável.</p>
+          </div>
           {!addingConsig ? (
             <button
               type="button"
@@ -481,16 +544,18 @@ function BenefitProfileView({
             {consignacoes.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between gap-2 rounded border border-cf-border bg-cf-surface px-2.5 py-1.5"
+                className="flex items-center justify-between gap-2 rounded border border-cf-border bg-cf-surface px-2.5 py-2"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs text-cf-text-primary">{c.description}</p>
-                  <span className={`inline-block rounded border px-1.5 py-0.5 text-xs ${CONSIG_TYPE_CLASS[c.consignacaoType]}`}>
-                    {CONSIG_TYPE_LABEL[c.consignacaoType]}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={`inline-block rounded border px-1.5 py-0.5 text-xs ${CONSIG_TYPE_CLASS[c.consignacaoType]}`}>
+                      {CONSIG_TYPE_LABEL[c.consignacaoType]}
+                    </span>
+                    <p className="truncate text-xs font-medium text-cf-text-primary">{c.description}</p>
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-medium text-cf-text-primary">{formatCurrency(c.amount)}</span>
+                  <span className="text-xs font-semibold text-cf-text-primary">{formatCurrency(c.amount)}</span>
                   <button
                     type="button"
                     disabled={deletingId === c.id}
