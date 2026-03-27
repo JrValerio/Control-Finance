@@ -14,27 +14,27 @@ const PRICE_MONTHLY = "R$ 9,90";
 
 const FEATURES: { label: string; free: string; pro: string }[] = [
   { label: "Transações e categorias", free: "✓", pro: "✓" },
-  { label: "Metas mensais",           free: "✓", pro: "✓" },
-  { label: "Histórico de analytics",  free: "6 meses", pro: "24 meses" },
-  { label: "Previsão financeira",     free: "—", pro: "✓" },
-  { label: "Controle salarial",       free: "—", pro: "✓" },
+  { label: "Metas mensais", free: "✓", pro: "✓" },
+  { label: "Histórico do painel", free: "6 meses", pro: "24 meses" },
+  { label: "Projeção do mês", free: "—", pro: "✓" },
+  { label: "Renda e benefício", free: "—", pro: "✓" },
   { label: "Exportar transações em CSV", free: "—", pro: "✓" },
   { label: "Importar extratos (CSV, OFX e PDF)", free: "—", pro: "✓" },
 ];
 
 const BENEFITS = [
-  "Saiba quanto vai ter no saldo no fim do mês",
-  "Entenda exatamente para onde seu dinheiro está indo",
-  "Planeje seu salário com cálculo real de INSS e IRRF",
-  "Importe extratos com revisão antes de confirmar",
+  "Veja quanto deve sobrar no saldo até o fim do mês",
+  "Entenda melhor para onde seu dinheiro está indo",
+  "Planeje salário, INSS e IRRF no mesmo lugar",
+  "Importe extratos com prévia antes de confirmar",
 ];
 
 const FEATURE_TITLES: Partial<Record<PaywallFeature, string>> = {
   csv_import: "Importação disponível no Pro",
   csv_export: "Exportação disponível no Pro",
   forecast: "Projeção disponível no Pro",
-  analytics_trend: "Histórico avançado disponível no Pro",
-  salary: "Controle salarial disponível no Pro",
+  analytics_trend: "Histórico do painel disponível no Pro",
+  salary: "Renda e benefício disponíveis no Pro",
 };
 
 const UpgradeModal = ({
@@ -67,12 +67,12 @@ const UpgradeModal = ({
   const featureTitle = FEATURE_TITLES[feature];
   const title = isTrialExpired
     ? "Seu período de teste encerrou"
-    : featureTitle || "Desbloqueie o Control Finance Pro";
+    : featureTitle || "Desbloqueie os recursos do Pro";
   const subtitle = isTrialExpired
-    ? "Continue com acesso total por menos de R$ 0,33 por dia."
+    ? "Continue com os recursos do Pro por menos de R$ 0,33 por dia."
     : reason;
-  const ctaLabel = isTrialExpired ? "Reativar acesso Pro" : "Começar meu plano Pro";
-  const dismissLabel = isTrialExpired ? "Agora não" : "Continuar no plano gratuito";
+  const ctaLabel = isTrialExpired ? "Reativar acesso Pro" : "Assinar Pro";
+  const dismissLabel = isTrialExpired ? "Agora não" : "Voltar por enquanto";
 
   const handleUpgrade = () => {
     trackPaywallEvent({ feature, action: "clicked_upgrade", context });
@@ -111,7 +111,7 @@ const UpgradeModal = ({
         {/* Price anchor */}
         <div className="mt-5">
           <span className="inline-block rounded bg-brand-1 px-2 py-0.5 text-xs font-medium text-white">
-            Mais escolhido
+            Plano recomendado
           </span>
           <div className="mt-1 flex items-baseline gap-1">
             <span className="text-4xl font-bold text-cf-text-primary">
@@ -138,7 +138,7 @@ const UpgradeModal = ({
             <thead>
               <tr className="bg-cf-bg-subtle">
                 <th className="px-3 py-2 text-left font-medium text-cf-text-primary">Recurso</th>
-                <th className="px-3 py-2 text-center font-medium text-cf-text-secondary">Gratuito</th>
+                <th className="px-3 py-2 text-center font-medium text-cf-text-secondary">Atual</th>
                 <th className="bg-brand-1/5 px-3 py-2 text-center font-semibold text-brand-1">Pro</th>
               </tr>
             </thead>

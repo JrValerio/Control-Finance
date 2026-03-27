@@ -224,13 +224,13 @@ describe("ImportCsvModal", () => {
     await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     await waitFor(() => {
-      expect(screen.getAllByText("Conflitos")[0]).toBeInTheDocument();
+      expect(screen.getAllByText("Para revisar")[0]).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Conflito")).toBeInTheDocument();
+    expect(screen.getByText("Revisar")).toBeInTheDocument();
     expect(
       screen.getAllByText(
-        "INSS Beneficio ja registrado no historico de renda (2026-03, 2026-03-05).",
+        "Esta renda já existe no histórico: INSS Beneficio, competência 03/2026, pagamento em 05/03/2026.",
       ).length,
     ).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Importar" })).toBeDisabled();

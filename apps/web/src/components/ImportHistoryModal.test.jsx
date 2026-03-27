@@ -56,15 +56,15 @@ describe("ImportHistoryModal", () => {
 
     render(<ImportHistoryModal isOpen onClose={vi.fn()} />);
 
-    expect(await screen.findByText("Reverted")).toBeInTheDocument();
+    expect(await screen.findByText("Desfeita")).toBeInTheDocument();
     expect(screen.getByText("itau-90-dias.ofx")).toBeInTheDocument();
     expect(screen.getByText("Extrato bancário")).toBeInTheDocument();
-    expect(screen.getByText("Duplicadas: 1")).toBeInTheDocument();
-    expect(screen.getByText("Conflitos: 1")).toBeInTheDocument();
-    expect(screen.getByText("Sem ação")).toBeInTheDocument();
+    expect(screen.getByText("Já existentes: 1")).toBeInTheDocument();
+    expect(screen.getByText("Para revisar: 1")).toBeInTheDocument();
+    expect(screen.getByText("Sem ação disponível")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: 1 conta derivada.",
+        "Esta importação já gerou uma conta vinculada. Revise ou remova esse item antes de desfazer.",
       ),
     ).toBeInTheDocument();
   });
@@ -139,7 +139,7 @@ describe("ImportHistoryModal", () => {
       />,
     );
 
-    expect(await screen.findByText("Committed")).toBeInTheDocument();
+    expect(await screen.findByText("Importada")).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Desfazer" }));
 
@@ -154,6 +154,6 @@ describe("ImportHistoryModal", () => {
     });
 
     expect(await screen.findByText("Importação desfeita com sucesso.")).toBeInTheDocument();
-    expect(screen.getByText("Reverted")).toBeInTheDocument();
+    expect(screen.getByText("Desfeita")).toBeInTheDocument();
   });
 });

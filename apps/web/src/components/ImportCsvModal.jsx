@@ -43,6 +43,66 @@ const getCurrentMonthValue = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 };
 
+const formatReferenceMonth = (value) => {
+  const [year, month] = String(value || "").split("-");
+  if (year && month) {
+    return `${month}/${year}`;
+  }
+  return String(value || "");
+};
+
+const formatIsoDate = (value) => {
+  const [year, month, day] = String(value || "").split("-");
+  if (year && month && day) {
+    return `${day}/${month}/${year}`;
+  }
+  return String(value || "");
+};
+
+const getPreviewStatusLabel = (status) => {
+  switch (status) {
+    case "valid":
+      return "Pronta";
+    case "duplicate":
+      return "Já existente";
+    case "conflict":
+      return "Revisar";
+    default:
+      return "Inválida";
+  }
+};
+
+const getPreviewStatusDetail = (row) => {
+  if (!row) {
+    return "";
+  }
+
+  if (row.conflict?.type === "income_statement") {
+    const sourceName = row.conflict.sourceName || "Histórico de renda";
+    const referenceMonth = row.conflict.referenceMonth
+      ? `, competência ${formatReferenceMonth(row.conflict.referenceMonth)}`
+      : "";
+    const paymentDate = row.conflict.paymentDate
+      ? `, pagamento em ${formatIsoDate(row.conflict.paymentDate)}`
+      : "";
+    return `Esta renda já existe no histórico: ${sourceName}${referenceMonth}${paymentDate}.`;
+  }
+
+  if (row.status === "duplicate") {
+    return "Já existe um lançamento equivalente com esses dados.";
+  }
+
+  if (row.status === "conflict") {
+    return row.statusDetail || "Este item precisa de revisão antes de ser importado.";
+  }
+
+  if (row.status === "invalid") {
+    return row.statusDetail || "Não foi possível entender esta linha com segurança.";
+  }
+
+  return row.statusDetail || "";
+};
+
 const getProfileSuggestionTiming = (suggestion) => {
   const effectiveMonth = suggestion?.paymentDate?.slice(0, 7) || suggestion?.referenceMonth || "";
   if (!effectiveMonth) {
@@ -408,7 +468,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
         setPlanningUpdateError(
           getApiErrorMessage(
             forecastError,
-            "Perfil atualizado, mas nao foi possivel atualizar o planejamento agora.",
+            "Perfil atualizado, mas não foi possível atualizar o planejamento agora.",
           ),
         );
       }
@@ -636,7 +696,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
     } catch (error) {
       setRuleFeedback({
         type: "error",
-        message: getApiErrorMessage(error, "Nao foi possivel salvar a regra."),
+        message: getApiErrorMessage(error, "Não foi possível salvar a regra."),
       });
     } finally {
       setIsSavingImportRule(false);
@@ -664,7 +724,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
     } catch (error) {
       setRuleFeedback({
         type: "error",
-        message: getApiErrorMessage(error, "Nao foi possivel remover a regra."),
+        message: getApiErrorMessage(error, "Não foi possível remover a regra."),
       });
     } finally {
       setDeletingImportRuleId(null);
@@ -1167,11 +1227,11 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                 <p className="text-sm font-semibold text-cf-text-primary">{dryRunResult.summary.invalidRows}</p>
               </div>
               <div className={`rounded border px-3 py-2 ${hasDuplicates ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40" : "border-cf-border bg-cf-bg-subtle"}`}>
-                <p className="text-xs font-medium uppercase text-cf-text-secondary">Duplicadas</p>
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Já existentes</p>
                 <p className={`text-sm font-semibold ${hasDuplicates ? "text-red-600 dark:text-red-400" : "text-cf-text-primary"}`}>{dryRunResult.summary.duplicateRows ?? 0}</p>
               </div>
               <div className={`rounded border px-3 py-2 ${hasConflicts ? "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40" : "border-cf-border bg-cf-bg-subtle"}`}>
-                <p className="text-xs font-medium uppercase text-cf-text-secondary">Conflitos</p>
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Para revisar</p>
                 <p className={`text-sm font-semibold ${hasConflicts ? "text-amber-700 dark:text-amber-400" : "text-cf-text-primary"}`}>{dryRunResult.summary.conflictRows ?? 0}</p>
               </div>
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
@@ -1232,8 +1292,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                     >
                       <option value="all">Todos</option>
                       <option value="valid">Válidas</option>
-                      <option value="duplicate">Duplicadas</option>
-                      <option value="conflict">Conflitos</option>
+                      <option value="duplicate">Já existentes</option>
+                      <option value="conflict">Para revisar</option>
                       <option value="invalid">Inválidas</option>
                     </select>
                   </div>
@@ -1433,15 +1493,18 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                             </th>
                             <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Linha</th>
                             <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Status</th>
-                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Descricao</th>
+                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Descrição</th>
                             <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Valor</th>
                             <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Data</th>
                             <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Categoria</th>
-                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Erros</th>
+                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Observações</th>
                           </tr>
                         </thead>
                         <tbody>
-                    {renderedPreviewRows.map((row) => (
+                      {renderedPreviewRows.map((row) => {
+                        const statusDetailCopy = getPreviewStatusDetail(row);
+
+                        return (
                         <tr key={`import-row-${row.line}`} className="align-top">
                           <td className="border-b border-cf-border px-2 py-2">
                             {row.status === "valid" ? (
@@ -1467,16 +1530,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                                     : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
                               }`}
                             >
-                              {row.status === "valid"
-                                ? "Valida"
-                                : row.status === "duplicate"
-                                  ? "Duplicada"
-                                  : row.status === "conflict"
-                                    ? "Conflito"
-                                  : "Invalida"}
+                              {getPreviewStatusLabel(row.status)}
                             </span>
-                            {(row.status === "duplicate" || row.status === "conflict") && row.statusDetail && (
-                              <span className="ml-1.5 text-xs text-cf-text-secondary">{row.statusDetail}</span>
+                            {(row.status === "duplicate" || row.status === "conflict") && statusDetailCopy && (
+                              <span className="ml-1.5 text-xs text-cf-text-secondary">{statusDetailCopy}</span>
                             )}
                           </td>
                           <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
@@ -1562,12 +1619,13 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                         <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
                           {row.errors.length > 0
                             ? row.errors.map((error) => error.message).join(" | ")
-                            : row.statusDetail
-                              ? row.statusDetail
+                            : statusDetailCopy
+                              ? statusDetailCopy
                             : "-"}
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                       </tbody>
                     </table>
                   </>

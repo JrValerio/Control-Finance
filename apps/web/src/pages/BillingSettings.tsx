@@ -29,11 +29,11 @@ const daysRemaining = (isoDate: string | null | undefined): number => {
 
 const resolvePlanSupportCopy = (summary: SubscriptionSummary): string => {
   if (summary.entitlementSource === "trial") {
-    return "Durante o trial, você acompanha painel financeiro, metas, cartões, renda e a Central do Leão. Importação e exportação de extratos fazem parte do plano Pro.";
+    return "Durante o período de teste, você acompanha painel financeiro, metas, cartões, renda e a Central do Leão. Importação e exportação de extratos fazem parte do plano Pro.";
   }
 
   if (summary.entitlementSource === "free" && summary.trialExpired) {
-    return "Seu trial terminou. Faça upgrade para liberar importação e exportação de extratos e manter a experiência completa do Pro em cartões, renda e apoio fiscal.";
+    return "Seu período de teste terminou. Faça upgrade para liberar importação e exportação de extratos e voltar a usar os recursos do Pro em cartões, renda e apoio fiscal.";
   }
 
   if (
@@ -41,7 +41,7 @@ const resolvePlanSupportCopy = (summary: SubscriptionSummary): string => {
     summary.entitlementSource === "subscription_grace" ||
     summary.entitlementSource === "prepaid"
   ) {
-    return "Seu plano Pro libera importação e exportação de extratos, projeção financeira e os módulos avançados para uma experiência financeira mais completa.";
+    return "Seu plano Pro libera importação e exportação de extratos, projeção do mês e os recursos avançados do Control Finance.";
   }
 
   return "Consulte abaixo o que está disponível agora e o que o plano Pro adiciona ao seu controle financeiro.";
@@ -55,7 +55,7 @@ const resolvePlanBadge = (summary: import("../services/billing.service").Subscri
   if (source === "trial") {
     const days = daysRemaining(summary.trialEndsAt);
     return {
-      label: `Trial — ${days} dia${days !== 1 ? "s" : ""} restante${days !== 1 ? "s" : ""}`,
+      label: `Período de teste — ${days} dia${days !== 1 ? "s" : ""} restante${days !== 1 ? "s" : ""}`,
       className: "border-blue-200 bg-blue-50 text-blue-700",
     };
   }
@@ -172,7 +172,7 @@ const BillingSettings = ({
   const showCheckoutPendingNotice =
     checkoutStatus === "success" && !isLoading && !loadError && !isPro;
   const showCheckoutCanceledNotice = checkoutStatus === "cancel";
-  const planTitle = source === "trial" ? "Trial do Control Finance" : summary?.displayName ?? "";
+  const planTitle = source === "trial" ? "Período de teste do Control Finance" : summary?.displayName ?? "";
 
   return (
     <div className="min-h-screen bg-cf-bg-page py-6">
@@ -232,13 +232,13 @@ const BillingSettings = ({
             <div className="mt-4 space-y-4">
               {showCheckoutPendingNotice ? (
                 <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
-                  Pagamento recebido. Confirmando liberação do plano Pro. Em métodos como boleto, a confirmação pode levar alguns minutos.
+                  Pagamento recebido. Estamos confirmando a liberação do plano Pro. Em métodos como boleto, essa atualização pode levar alguns minutos.
                 </div>
               ) : null}
 
               {showCheckoutCanceledNotice ? (
                 <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-                  Checkout cancelado. Nenhuma cobranca foi confirmada.
+                  Checkout cancelado. Nenhuma cobrança foi processada.
                 </div>
               ) : null}
 
@@ -283,10 +283,10 @@ const BillingSettings = ({
                       {isActionLoading
                         ? "Aguarde..."
                         : source === "trial"
-                        ? "Assinar PRO agora"
+                        ? "Assinar Pro agora"
                         : source === "free" && summary?.trialExpired
                         ? "Reativar acesso Pro"
-                        : "Assinar PRO"}
+                        : "Assinar Pro"}
                     </button>
                   )}
                 </div>

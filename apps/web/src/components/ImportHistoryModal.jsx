@@ -24,7 +24,7 @@ const formatDateTime = (value) => {
 const resolveImportStatus = (item) => {
   if (item.committedAt) {
     return {
-      label: item.summary.imported > 0 ? "Committed" : "Reverted",
+      label: item.summary.imported > 0 ? "Importada" : "Desfeita",
       className:
         item.summary.imported > 0
           ? "bg-green-100 text-green-700"
@@ -36,15 +36,38 @@ const resolveImportStatus = (item) => {
 
   if (Number.isFinite(expiresAtTimestamp) && Date.now() > expiresAtTimestamp) {
     return {
-      label: "Expired",
+      label: "Expirada",
       className: "bg-red-100 text-red-700",
     };
   }
 
   return {
-    label: "Pending",
+    label: "Aguardando confirmação",
     className: "bg-yellow-100 text-yellow-700",
   };
+};
+
+const humanizeUndoBlockedReason = (value) => {
+  const message = String(value || "").trim();
+  if (!message) {
+    return "";
+  }
+
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("conta derivada")) {
+    return "Esta importação já gerou uma conta vinculada. Revise ou remova esse item antes de desfazer.";
+  }
+
+  if (normalized.includes("historico de renda") || normalized.includes("extrato de renda")) {
+    return "Esta importação já gerou um lançamento no histórico de renda. Revise esse item antes de desfazer.";
+  }
+
+  if (normalized.includes("derivados ativos vinculados")) {
+    return "Esta importação já gerou itens vinculados. Revise esses itens antes de desfazer.";
+  }
+
+  return message;
 };
 
 const formatDocumentType = (value) => {
@@ -89,7 +112,7 @@ const ImportHistoryModal = ({ isOpen, onClose, onImportSessionReverted = undefin
       setOffset(Number(response.pagination?.offset) || 0);
     } catch (error) {
       setItems([]);
-      setErrorMessage(getApiErrorMessage(error, "Não foi possível carregar o histórico de imports."));
+      setErrorMessage(getApiErrorMessage(error, "Não foi possível carregar o histórico de importações."));
     } finally {
       setIsLoading(false);
     }
@@ -213,14 +236,14 @@ const ImportHistoryModal = ({ isOpen, onClose, onImportSessionReverted = undefin
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 id="import-history-modal-title" className="text-lg font-semibold text-cf-text-primary">
-            Histórico de imports
+            Histórico de importações
           </h2>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
             className="text-ui-200 transition-colors hover:text-ui-100"
-            aria-label="Fechar modal de histórico de imports"
+            aria-label="Fechar modal de histórico de importações"
           >
             X
           </button>
@@ -247,20 +270,20 @@ const ImportHistoryModal = ({ isOpen, onClose, onImportSessionReverted = undefin
 
         {isLoading ? (
           <div className="rounded border border-cf-border bg-cf-surface px-3 py-3 text-sm text-cf-text-secondary">
-            Carregando histórico...
+            Carregando histórico de importações...
           </div>
         ) : null}
 
         {!isLoading && !errorMessage && rowsWithStatus.length === 0 ? (
           <div className="rounded border border-cf-border bg-cf-surface px-3 py-3 text-sm text-cf-text-secondary">
-            Sem imports para exibir.
+            Nenhuma importação para mostrar.
           </div>
         ) : null}
 
         {!isLoading && !errorMessage && rowsWithStatus.length > 0 ? (
           <div className="space-y-3">
             <div className="text-xs text-cf-text-secondary">
-              Mostrando {rangeStart}-{rangeEnd}
+              Mostrando {rangeStart} a {rangeEnd}
             </div>
             <div className="max-h-96 overflow-auto rounded border border-cf-border">
               <table className="min-w-full border-collapse text-left text-xs">
@@ -295,9 +318,9 @@ const ImportHistoryModal = ({ isOpen, onClose, onImportSessionReverted = undefin
                       </td>
                       <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
                         <div className="space-y-1 text-[11px]">
-                          <p>Válidas: {item.summary.validRows}</p>
-                          <p>Duplicadas: {item.summary.duplicateRows}</p>
-                          <p>Conflitos: {item.summary.conflictRows}</p>
+                          <p>Prontas para importar: {item.summary.validRows}</p>
+                          <p>Já existentes: {item.summary.duplicateRows}</p>
+                          <p>Para revisar: {item.summary.conflictRows}</p>
                           <p>Inválidas: {item.summary.invalidRows}</p>
                           <p>Importadas: {item.summary.imported}</p>
                         </div>
@@ -320,10 +343,10 @@ const ImportHistoryModal = ({ isOpen, onClose, onImportSessionReverted = undefin
                           </button>
                         ) : (
                           <div className="space-y-1">
-                            <span className="text-[11px] text-cf-text-secondary">Sem ação</span>
+                            <span className="text-[11px] text-cf-text-secondary">Sem ação disponível</span>
                             {item.undoBlockedReason ? (
                               <p className="max-w-48 text-[11px] text-cf-text-secondary">
-                                {item.undoBlockedReason}
+                                {humanizeUndoBlockedReason(item.undoBlockedReason)}
                               </p>
                             ) : null}
                           </div>
@@ -349,7 +372,7 @@ const ImportHistoryModal = ({ isOpen, onClose, onImportSessionReverted = undefin
                 disabled={!hasNextPage || isLoading}
                 className="rounded border border-cf-border bg-cf-surface px-3 py-1.5 text-sm font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Proxima
+                Próxima
               </button>
             </div>
           </div>

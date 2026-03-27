@@ -169,28 +169,28 @@ const PAYWALL_COPY: Array<{ pattern: RegExp; reason: string; feature: PaywallFea
   {
     pattern: /\/transactions\/import/,
     reason:
-      "Seu plano atual não inclui a importação de extratos. No Pro, você importa CSV, OFX e PDF com pré-visualização antes de confirmar.",
+      "Importação de extratos é um recurso do Pro. No Pro, você importa CSV, OFX e PDF com prévia antes de confirmar.",
     feature: "csv_import",
   },
   {
     pattern: /\/transactions\/export/,
     reason:
-      "Seu plano atual não inclui a exportação de transações em CSV. No Pro, você exporta seus dados para planilhas e ferramentas financeiras.",
+      "Exportação de transações em CSV é um recurso do Pro. No Pro, você leva seus dados para planilhas e outras ferramentas financeiras.",
     feature: "csv_export",
   },
   {
     pattern: /\/forecasts/,
-    reason: "Saiba exatamente quanto vai ter no saldo no fim do mês.",
+    reason: "A projeção do mês é um recurso do Pro. Veja quanto deve sobrar no saldo até o fim do mês.",
     feature: "forecast",
   },
   {
     pattern: /\/analytics\/trend/,
-    reason: "Acesse até 24 meses de histórico e veja sua evolução financeira completa.",
+    reason: "O histórico do painel é um recurso do Pro. Acompanhe até 24 meses da sua evolução financeira.",
     feature: "analytics_trend",
   },
   {
     pattern: /\/salary/,
-    reason: "Planeje seu salário com cálculo real de INSS e IRRF.",
+    reason: "Renda e benefício são recursos do Pro. Planeje salário, INSS e IRRF no mesmo lugar.",
     feature: "salary",
   },
 ];

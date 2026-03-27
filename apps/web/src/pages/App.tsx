@@ -1793,7 +1793,7 @@ const App = ({
                       onClick={handleOpenImportHistoryModal}
                       className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                     >
-                      Histórico de imports
+                      Histórico de importações
                     </button>
                     {(onOpenProfileSettings || onOpenBillingSettings || onOpenSecuritySettings) ? (
                       <div className="my-1 h-px bg-cf-border" role="separator" />
@@ -1968,7 +1968,7 @@ const App = ({
                   onClick={handleOpenImportHistoryModal}
                   className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                 >
-                  Histórico de imports
+                  Histórico de importações
                 </button>
                 {onOpenBills ? (
                   <button

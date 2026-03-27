@@ -17,7 +17,7 @@ describe("UpgradeModal", () => {
       <MemoryRouter>
         <UpgradeModal
           isOpen
-          reason="Seu plano atual não inclui a importação de extratos. No Pro, você importa CSV, OFX e PDF com pré-visualização antes de confirmar."
+          reason="Importação de extratos é um recurso do Pro. No Pro, você importa CSV, OFX e PDF com prévia antes de confirmar."
           feature="csv_import"
           context="feature_gate"
           onClose={vi.fn()}
@@ -27,7 +27,7 @@ describe("UpgradeModal", () => {
 
     expect(screen.getByText("Importação disponível no Pro")).toBeInTheDocument();
     expect(
-      screen.getByText(/Seu plano atual não inclui a importação de extratos/i),
+      screen.getByText(/Importação de extratos é um recurso do Pro/i),
     ).toBeInTheDocument();
     expect(
       screen.getByText("Importar extratos (CSV, OFX e PDF)"),
