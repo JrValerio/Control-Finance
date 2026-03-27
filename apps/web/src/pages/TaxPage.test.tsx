@@ -546,7 +546,7 @@ describe("TaxPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("permite adicionar um fato fiscal manual na fila de revisao", async () => {
+  it("permite adicionar um fato fiscal manual à fila de revisão", async () => {
     const user = userEvent.setup();
 
     vi.mocked(taxService.listFacts)
@@ -580,13 +580,13 @@ describe("TaxPage", () => {
 
     await user.click(screen.getByRole("button", { name: "Adicionar manualmente" }));
     await user.selectOptions(screen.getByLabelText("Tipo de fato fiscal"), "taxable_income");
-    await user.type(screen.getByLabelText("Periodo de referencia"), "2025-12");
-    await user.type(screen.getByLabelText("Descricao / subcategoria"), "Renda manual INSS");
+    await user.type(screen.getByLabelText("Período de referência"), "2025-12");
+    await user.type(screen.getByLabelText("Descrição ou subcategoria fiscal"), "Renda manual INSS");
     await user.type(screen.getByLabelText("Fonte pagadora / origem"), "INSS");
     await user.type(screen.getByLabelText("Documento da fonte (opcional)"), "29.979.036/0001-40");
     await user.type(screen.getByLabelText("Valor"), "2803,52");
-    await user.type(screen.getByLabelText("Observacao (opcional)"), "Lancamento manual de apoio.");
-    await user.click(screen.getByRole("button", { name: "Adicionar fato" }));
+    await user.type(screen.getByLabelText("Observação (opcional)"), "Lancamento manual de apoio.");
+    await user.click(screen.getByRole("button", { name: "Adicionar à revisão" }));
 
     await waitFor(() => {
       expect(taxService.createManualFact).toHaveBeenCalledWith({
@@ -601,7 +601,7 @@ describe("TaxPage", () => {
       });
     });
 
-    expect(await screen.findByText("Fato fiscal manual adicionado a fila de revisao.")).toBeInTheDocument();
+    expect(await screen.findByText("Fato manual adicionado à fila de revisão.")).toBeInTheDocument();
     expect(
       await screen.findByText((content) => content.includes("Renda manual INSS")),
     ).toBeInTheDocument();
@@ -780,7 +780,7 @@ describe("TaxPage", () => {
     });
 
     expect(
-      await screen.findByText("Documento excluído. 2 fato(s) fiscal(is) vinculado(s) foram removidos."),
+      await screen.findByText("Documento excluído. 2 fatos fiscais vinculados foram removidos."),
     ).toBeInTheDocument();
 
     confirmSpy.mockRestore();

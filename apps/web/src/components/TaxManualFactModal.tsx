@@ -19,14 +19,14 @@ interface TaxManualFactModalProps {
 }
 
 const FACT_TYPE_OPTIONS = [
-  { value: "taxable_income", label: "Rendimento tributavel" },
+  { value: "taxable_income", label: "Rendimento tributável" },
   { value: "exempt_income", label: "Rendimento isento" },
-  { value: "exclusive_tax_income", label: "Tributacao exclusiva" },
+  { value: "exclusive_tax_income", label: "Tributação exclusiva" },
   { value: "withheld_tax", label: "IR retido na fonte" },
   { value: "asset_balance", label: "Bens e direitos" },
-  { value: "debt_balance", label: "Dividas e onus" },
-  { value: "medical_deduction", label: "Deducao medica" },
-  { value: "education_deduction", label: "Deducao de instrucao" },
+  { value: "debt_balance", label: "Dívidas e ônus" },
+  { value: "medical_deduction", label: "Dedução médica" },
+  { value: "education_deduction", label: "Dedução de instrução" },
   { value: "other", label: "Outro fato fiscal" },
 ] as const;
 
@@ -82,17 +82,17 @@ const TaxManualFactModal = ({
     const parsedAmount = parseMoney(amount);
 
     if (!subcategory.trim()) {
-      setLocalError("Informe a descricao do fato fiscal.");
+      setLocalError("Informe a descrição do fato fiscal.");
       return;
     }
 
     if (!referencePeriod.trim()) {
-      setLocalError("Informe o periodo de referencia.");
+      setLocalError("Informe o período de referência.");
       return;
     }
 
     if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      setLocalError("Informe um valor valido.");
+      setLocalError("Informe um valor válido.");
       return;
     }
 
@@ -126,7 +126,8 @@ const TaxManualFactModal = ({
             <div>
               <h2 className="text-lg font-semibold text-cf-text-primary">Adicionar fato manual</h2>
               <p className="mt-1 text-sm text-cf-text-secondary">
-                Exercício {taxYear}. Use quando o dado do IRPF ainda não entrou por documento ou sincronização.
+                Exercício {taxYear}. Use quando a informação do IRPF ainda não entrou por documento
+                ou sincronização.
               </p>
             </div>
             <button
@@ -167,7 +168,7 @@ const TaxManualFactModal = ({
 
                 <label className="block">
                   <span className="mb-1 block text-sm font-semibold text-cf-text-primary">
-                    Periodo de referencia
+                    Período de referência
                   </span>
                   <input
                     type="text"
@@ -182,14 +183,14 @@ const TaxManualFactModal = ({
 
               <label className="block">
                 <span className="mb-1 block text-sm font-semibold text-cf-text-primary">
-                  Descricao / subcategoria
+                  Descrição ou subcategoria fiscal
                 </span>
                 <input
                   type="text"
                   value={subcategory}
                   onChange={(event) => setSubcategory(event.target.value)}
                   disabled={isSubmitting}
-                  placeholder="Ex.: aluguel recebido, plano de saude, INSS complementar"
+                  placeholder="Ex.: aluguel recebido, plano de saúde, INSS complementar"
                   className="w-full rounded border border-cf-border-input bg-cf-surface px-3 py-2 text-sm text-cf-text-primary outline-none focus:border-brand-1"
                 />
               </label>
@@ -238,14 +239,14 @@ const TaxManualFactModal = ({
 
               <label className="block">
                 <span className="mb-1 block text-sm font-semibold text-cf-text-primary">
-                  Observacao (opcional)
+                  Observação (opcional)
                 </span>
                 <textarea
                   value={note}
                   onChange={(event) => setNote(event.target.value)}
                   disabled={isSubmitting}
                   rows={4}
-                  placeholder="Contexto para a revisao fiscal desse fato."
+                  placeholder="Contexto para a revisão fiscal deste fato."
                   className="w-full rounded border border-cf-border-input bg-cf-surface px-3 py-2 text-sm text-cf-text-primary outline-none focus:border-brand-1"
                 />
               </label>
@@ -277,7 +278,7 @@ const TaxManualFactModal = ({
                 disabled={isSubmitting}
                 className="rounded border border-brand-1 bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {isSubmitting ? "Salvando..." : "Adicionar fato"}
+                {isSubmitting ? "Salvando..." : "Adicionar à revisão"}
               </button>
             </div>
           </form>
