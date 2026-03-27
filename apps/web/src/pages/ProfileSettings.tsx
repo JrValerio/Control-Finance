@@ -79,6 +79,7 @@ const ProfileSettings = ({
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [salaryMonthly, setSalaryMonthly] = useState("");
+  const [bankLimitTotal, setBankLimitTotal] = useState("");
   const [payday, setPayday] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [taxpayerCpf, setTaxpayerCpf] = useState("");
@@ -118,6 +119,11 @@ const ProfileSettings = ({
       setSalaryMonthly(
         p?.salaryMonthly !== null && p?.salaryMonthly !== undefined
           ? String(p.salaryMonthly)
+          : "",
+      );
+      setBankLimitTotal(
+        p?.bankLimitTotal !== null && p?.bankLimitTotal !== undefined
+          ? String(p.bankLimitTotal)
           : "",
       );
       setPayday(
@@ -161,12 +167,14 @@ const ProfileSettings = ({
     setSaveSuccess(false);
 
     const salaryNum = salaryMonthly.trim() ? Number(salaryMonthly) : null;
+    const bankLimitNum = bankLimitTotal.trim() ? Number(bankLimitTotal) : null;
     const paydayNum = payday.trim() ? Number(payday) : null;
 
     try {
       await profileService.updateProfile({
         display_name: displayName.trim() || null,
         salary_monthly: salaryNum,
+        bank_limit_total: bankLimitNum,
         payday: paydayNum,
         avatar_url: avatarUrl.trim() || null,
         taxpayer_cpf: taxpayerCpf.trim() || null,
@@ -353,7 +361,7 @@ const ProfileSettings = ({
                 </div>
 
                 {/* Salary + Payday */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div>
                     <label
                       htmlFor="salary_monthly"
@@ -371,6 +379,27 @@ const ProfileSettings = ({
                       placeholder="0,00"
                       className="mt-1 w-full rounded border border-cf-border-input bg-cf-surface px-3 py-1.5 text-sm text-cf-text-primary placeholder:text-cf-text-secondary focus:outline-none focus:ring-1 focus:ring-brand-1"
                     />
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="bank_limit_total"
+                      className="block text-sm font-semibold text-cf-text-primary"
+                    >
+                      Limite bancário (R$)
+                    </label>
+                    <input
+                      id="bank_limit_total"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={bankLimitTotal}
+                      onChange={(e) => setBankLimitTotal(e.target.value)}
+                      placeholder="Cheque especial"
+                      className="mt-1 w-full rounded border border-cf-border-input bg-cf-surface px-3 py-1.5 text-sm text-cf-text-primary placeholder:text-cf-text-secondary focus:outline-none focus:ring-1 focus:ring-brand-1"
+                    />
+                    <p className="mt-0.5 text-xs text-cf-text-secondary">
+                      Usado para mostrar quanto da projeção do mês entraria no limite da conta.
+                    </p>
                   </div>
                   <div>
                     <label
