@@ -179,9 +179,13 @@ describe("transaction imports", () => {
         olderImportId,
         userAId,
         JSON.stringify({
+          fileName: "older.csv",
+          documentType: "bank_statement",
           summary: {
             totalRows: 4,
             validRows: 3,
+            duplicateRows: 1,
+            conflictRows: 0,
             invalidRows: 1,
             income: 1000,
             expense: 150.5,
@@ -193,9 +197,13 @@ describe("transaction imports", () => {
         newerImportId,
         userAId,
         JSON.stringify({
+          fileName: "newer.ofx",
+          documentType: "bank_statement",
           summary: {
             totalRows: 2,
             validRows: 2,
+            duplicateRows: 0,
+            conflictRows: 0,
             invalidRows: 0,
             income: 700,
             expense: 220.25,
@@ -219,6 +227,24 @@ describe("transaction imports", () => {
         "2026-04-01T11:30:00.000Z",
         null,
       ],
+    );
+
+    await dbQuery(
+      `
+        INSERT INTO transactions (
+          user_id,
+          type,
+          value,
+          date,
+          description,
+          import_session_id,
+          imported_at
+        )
+        VALUES
+          ($1, 'Entrada', 500, '2026-04-01', 'Importada A', $2, NOW()),
+          ($1, 'Entrada', 200, '2026-04-01', 'Importada B', $2, NOW())
+      `,
+      [userAId, newerImportId],
     );
 
     const response = await request(app)
@@ -245,9 +271,14 @@ describe("transaction imports", () => {
       createdAt: "2026-04-01T10:00:00.000Z",
       expiresAt: "2026-04-01T10:30:00.000Z",
       committedAt: "2026-04-01T10:10:00.000Z",
+      fileName: "newer.ofx",
+      documentType: "bank_statement",
+      canUndo: true,
       summary: {
         totalRows: 2,
         validRows: 2,
+        duplicateRows: 0,
+        conflictRows: 0,
         invalidRows: 0,
         income: 700,
         expense: 220.25,
@@ -259,9 +290,14 @@ describe("transaction imports", () => {
       createdAt: "2026-04-01T09:00:00.000Z",
       expiresAt: "2026-04-01T09:30:00.000Z",
       committedAt: null,
+      fileName: "older.csv",
+      documentType: "bank_statement",
+      canUndo: false,
       summary: {
         totalRows: 4,
         validRows: 3,
+        duplicateRows: 1,
+        conflictRows: 0,
         invalidRows: 1,
         income: 1000,
         expense: 150.5,
@@ -1398,6 +1434,19 @@ describe("transaction imports", () => {
     expect(undoResponse.body.importSessionId).toBe(sessionId);
     expect(undoResponse.body.deletedCount).toBe(2);
     expect(undoResponse.body.success).toBe(true);
+
+    const historyResponse = await request(app)
+      .get("/transactions/imports")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(historyResponse.status).toBe(200);
+    expect(historyResponse.body.items[0]).toMatchObject({
+      id: sessionId,
+      canUndo: false,
+      summary: {
+        imported: 0,
+      },
+    });
 
     // Transacoes devem estar soft-deleted (GET retorna zero)
     const listResponse = await request(app)
