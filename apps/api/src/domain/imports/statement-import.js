@@ -500,11 +500,30 @@ const resolveReferenceMonth = (raw) => {
   return null;
 };
 
+const toISOReferenceMonth = (raw) => {
+  const resolved = resolveReferenceMonth(raw);
+  if (!resolved) return null;
+  const [monthPart, yearPart] = resolved.split("/");
+  return `${yearPart}-${monthPart}`;
+};
+
 const normalizeForExtraction = (text) =>
   String(text || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+
+const extractAmountByPatterns = (normalizedText, patterns) => {
+  for (const pattern of patterns) {
+    const match = normalizedText.match(pattern);
+    if (!match) continue;
+    const parsedValue = parseSignedAmount(match[1]);
+    if (parsedValue !== null) {
+      return Math.abs(parsedValue);
+    }
+  }
+  return null;
+};
 
 export const extractInssSuggestion = (text) => {
   const normalized = normalizeForExtraction(text);
@@ -521,7 +540,7 @@ export const extractInssSuggestion = (text) => {
   const entryMatch = normalized.match(/^(\d{2}\/\d{4})\s+r\$\s*([\d.,]+)/m);
   if (!entryMatch) return null;
 
-  const referenceMonth = entryMatch[1];
+  const referenceMonth = toISOReferenceMonth(entryMatch[1]);
   const netAmount = parseSignedAmount(entryMatch[2]);
   if (netAmount === null) return null;
 
@@ -549,6 +568,7 @@ export const extractInssSuggestion = (text) => {
 
   return {
     type: "profile",
+    profileKind: "inss",
     benefitId,
     benefitKind,
     referenceMonth,
@@ -556,6 +576,64 @@ export const extractInssSuggestion = (text) => {
     netAmount: Math.abs(netAmount),
     grossAmount: grossAmount !== null ? Math.abs(grossAmount) : null,
     deductions,
+  };
+};
+
+export const extractPayrollSuggestion = (text) => {
+  const normalized = normalizeForExtraction(text);
+  const referenceMonthMatch = text.match(
+    /(?:competencia|referencia|mes de referencia|periodo de referencia)[:\s]+([a-z]+[\s/]+\d{4}|\d{1,2}\/\d{4})/i,
+  );
+  const paymentDateMatch = text.match(
+    /(?:data de pagamento|pagamento)[:\s]+(\d{2}\/\d{2}\/\d{4})/i,
+  );
+  const employerMatch = text.match(
+    /(?:empresa|empregador|razao social)[:\s]+([^\n\r]+)/i,
+  );
+
+  const netAmount = extractAmountByPatterns(normalized, [
+    /liquido a receber[:\s]*r?\$?\s*([\d.,]+)/i,
+    /valor liquido[:\s]*r?\$?\s*([\d.,]+)/i,
+    /total liquido[:\s]*r?\$?\s*([\d.,]+)/i,
+    /liquido[:\s]*r?\$?\s*([\d.,]+)/i,
+  ]);
+
+  if (netAmount === null) {
+    return null;
+  }
+
+  const grossAmount = extractAmountByPatterns(normalized, [
+    /total de proventos[:\s]*r?\$?\s*([\d.,]+)/i,
+    /total proventos[:\s]*r?\$?\s*([\d.,]+)/i,
+    /proventos[:\s]*r?\$?\s*([\d.,]+)/i,
+    /salario base[:\s]*r?\$?\s*([\d.,]+)/i,
+  ]);
+
+  const totalDeductions = extractAmountByPatterns(normalized, [
+    /total de descontos[:\s]*r?\$?\s*([\d.,]+)/i,
+    /total descontos[:\s]*r?\$?\s*([\d.,]+)/i,
+  ]);
+
+  const paymentDate = paymentDateMatch ? toIsoDateString(paymentDateMatch[1]) : null;
+  const referenceMonth = referenceMonthMatch
+    ? toISOReferenceMonth(referenceMonthMatch[1])
+    : paymentDate
+      ? paymentDate.slice(0, 7)
+      : null;
+  const employerName = employerMatch ? collapseWhitespace(employerMatch[1]) : null;
+
+  return {
+    type: "profile",
+    profileKind: "clt",
+    employerName,
+    referenceMonth,
+    paymentDate,
+    netAmount,
+    grossAmount,
+    deductions:
+      totalDeductions != null
+        ? [{ label: "descontos_folha", amount: totalDeductions }]
+        : [],
   };
 };
 

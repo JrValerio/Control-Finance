@@ -153,7 +153,7 @@ describe("tax document extractors", () => {
     });
 
     expect(result.extractorName).toBe("income-report-inss");
-    expect(result.payload.profileSuggestion.referenceMonth).toBe("01/2026");
+    expect(result.payload.profileSuggestion.referenceMonth).toBe("2026-01");
     expect(Array.isArray(result.payload.previewLines)).toBe(true);
   });
 

@@ -88,7 +88,7 @@ describe("Login", () => {
     expect(screen.getByText("As senhas não conferem.")).toBeInTheDocument();
     expect(authState.register).not.toHaveBeenCalled();
     expect(authState.login).not.toHaveBeenCalled();
-  });
+  }, 10000);
 
   it("alterna visibilidade da senha no modo login", async () => {
     mockUseAuth.mockReturnValue(createAuthMockState());

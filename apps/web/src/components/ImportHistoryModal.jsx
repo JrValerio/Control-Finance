@@ -53,6 +53,8 @@ const formatDocumentType = (value) => {
       return "Extrato bancário";
     case "income_statement_inss":
       return "Comprovante INSS";
+    case "income_statement_payroll":
+      return "Holerite / CLT";
     case "utility_bill_energy":
       return "Conta de energia";
     case "utility_bill_water":

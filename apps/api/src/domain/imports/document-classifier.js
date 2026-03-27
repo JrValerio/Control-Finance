@@ -17,6 +17,28 @@ const INSS_SIGNALS = [
   "nb:",
 ];
 
+const PAYROLL_PRIMARY_SIGNALS = [
+  "holerite",
+  "contracheque",
+  "demonstrativo de pagamento",
+  "demonstrativo de pagamento de salario",
+  "recibo de pagamento",
+  "folha de pagamento",
+];
+
+const PAYROLL_SECONDARY_SIGNALS = [
+  "salario base",
+  "total de proventos",
+  "total proventos",
+  "total de descontos",
+  "liquido a receber",
+  "valor liquido",
+  "matricula",
+  "empresa",
+  "empregador",
+  "admissao",
+];
+
 const ENERGY_SIGNALS = [
   "neoenergia",
   "elektro",
@@ -75,6 +97,13 @@ export const detectDocumentType = ({ text = "", extension = "" }) => {
     countMatches(normalized, INSS_SIGNALS) >= 2
   ) {
     return "income_statement_inss";
+  }
+
+  if (
+    PAYROLL_PRIMARY_SIGNALS.some((signal) => normalized.includes(signal)) &&
+    countMatches(normalized, [...PAYROLL_PRIMARY_SIGNALS, ...PAYROLL_SECONDARY_SIGNALS]) >= 3
+  ) {
+    return "income_statement_payroll";
   }
 
   // Energy bill — 2+ signals

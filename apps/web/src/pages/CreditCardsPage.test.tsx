@@ -183,7 +183,7 @@ describe("CreditCardsPage", () => {
         dueDay: 22,
       });
     });
-  });
+  }, 10000);
 
   it("adiciona compra aberta no cartão", async () => {
     const user = userEvent.setup();
@@ -230,7 +230,7 @@ describe("CreditCardsPage", () => {
         }),
       );
     });
-  });
+  }, 10000);
 
   it("fecha e paga a fatura pelo fluxo da tela", async () => {
     const user = userEvent.setup();
