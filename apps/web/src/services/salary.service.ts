@@ -59,6 +59,13 @@ export interface AddConsignacaoPayload {
   consignacao_type: ConsignacaoType;
 }
 
+export interface SyncImportedBenefitProfilePayload {
+  gross_salary: number;
+  payment_day: number;
+  birth_year?: number | null;
+  consignacoes: AddConsignacaoPayload[];
+}
+
 // ─── Normalization ────────────────────────────────────────────────────────────
 
 const normalizeCalculation = (raw: Record<string, unknown>): SalaryCalculation => ({
@@ -120,6 +127,13 @@ export const salaryService = {
 
   upsertProfile: async (payload: UpsertSalaryProfilePayload): Promise<SalaryProfile> => {
     const { data } = await api.put("/salary/profile", payload);
+    return normalizeProfile(data as Record<string, unknown>);
+  },
+
+  syncImportedBenefitProfile: async (
+    payload: SyncImportedBenefitProfilePayload,
+  ): Promise<SalaryProfile> => {
+    const { data } = await api.put("/salary/profile/imported-benefit", payload);
     return normalizeProfile(data as Record<string, unknown>);
   },
 

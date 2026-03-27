@@ -29,6 +29,7 @@ describe("salary-profile", () => {
     resetImportRateLimiterState();
     resetWriteRateLimiterState();
     resetHttpMetricsForTests();
+    await dbQuery("DELETE FROM salary_consignacoes");
     await dbQuery("DELETE FROM salary_profiles");
     await dbQuery("DELETE FROM users");
   });
@@ -110,6 +111,104 @@ describe("salary-profile", () => {
       dependents:  1,
       paymentDay:  15,
     });
+  });
+
+  it("PUT /salary/profile/imported-benefit sincroniza perfil INSS e substitui consignacoes", async () => {
+    const token = await registerAndLogin("sal-imported-benefit@test.dev");
+
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 3000, dependents: 2, payment_day: 5, profile_type: "clt" });
+
+    await request(app)
+      .put("/salary/profile/imported-benefit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        gross_salary: 4958.67,
+        payment_day: 7,
+        birth_year: 1955,
+        consignacoes: [
+          {
+            description: "216 CONSIGNACAO EMPRESTIMO BANCARIO",
+            amount: 156,
+            consignacao_type: "loan",
+          },
+          {
+            description: "268 CONSIGNACAO - CARTAO",
+            amount: 247.93,
+            consignacao_type: "card",
+          },
+        ],
+      });
+
+    const res = await request(app)
+      .get("/salary/profile")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      profileType: "inss_beneficiary",
+      grossSalary: 4958.67,
+      dependents: 2,
+      paymentDay: 7,
+      birthYear: 1955,
+    });
+    expect(res.body.consignacoes).toEqual([
+      expect.objectContaining({
+        description: "216 CONSIGNACAO EMPRESTIMO BANCARIO",
+        amount: 156,
+        consignacaoType: "loan",
+      }),
+      expect.objectContaining({
+        description: "268 CONSIGNACAO - CARTAO",
+        amount: 247.93,
+        consignacaoType: "card",
+      }),
+    ]);
+  });
+
+  it("PUT /salary/profile/imported-benefit nao duplica consignacoes ao ressincronizar", async () => {
+    const token = await registerAndLogin("sal-imported-benefit-idempotent@test.dev");
+
+    const payload = {
+      gross_salary: 4958.67,
+      payment_day: 7,
+      birth_year: 1955,
+      consignacoes: [
+        {
+          description: "216 CONSIGNACAO EMPRESTIMO BANCARIO",
+          amount: 156,
+          consignacao_type: "loan",
+        },
+        {
+          description: "217 EMPRESTIMO SOBRE A RMC",
+          amount: 238,
+          consignacao_type: "loan",
+        },
+      ],
+    };
+
+    await request(app)
+      .put("/salary/profile/imported-benefit")
+      .set("Authorization", `Bearer ${token}`)
+      .send(payload);
+
+    await request(app)
+      .put("/salary/profile/imported-benefit")
+      .set("Authorization", `Bearer ${token}`)
+      .send(payload);
+
+    const res = await request(app)
+      .get("/salary/profile")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.consignacoes).toHaveLength(2);
+    expect(res.body.consignacoes.map((item) => item.description)).toEqual([
+      "216 CONSIGNACAO EMPRESTIMO BANCARIO",
+      "217 EMPRESTIMO SOBRE A RMC",
+    ]);
   });
 
   it("segundo upsert mantém mesmo id", async () => {

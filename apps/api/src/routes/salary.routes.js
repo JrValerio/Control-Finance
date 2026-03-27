@@ -5,6 +5,7 @@ import {
   addConsignacaoForUser,
   deleteConsignacaoForUser,
   getSalaryProfileForUser,
+  syncImportedBenefitProfileForUser,
   upsertSalaryProfileForUser,
 } from "../services/salary-profile.service.js";
 
@@ -39,6 +40,16 @@ router.get("/profile", attachEntitlements, async (req, res, next) => {
 router.put("/profile", attachEntitlements, async (req, res, next) => {
   try {
     const profile = await upsertSalaryProfileForUser(req.user.id, req.body || {});
+    const hasAnnual = req.entitlements?.salary_annual !== false;
+    res.status(200).json(applyAnnualGate(profile, hasAnnual));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.put("/profile/imported-benefit", attachEntitlements, async (req, res, next) => {
+  try {
+    const profile = await syncImportedBenefitProfileForUser(req.user.id, req.body || {});
     const hasAnnual = req.entitlements?.salary_annual !== false;
     res.status(200).json(applyAnnualGate(profile, hasAnnual));
   } catch (error) {

@@ -7,11 +7,20 @@ import {
 } from "../services/incomeSources.service";
 import { getApiErrorMessage } from "../utils/apiError";
 
+interface IncomeStatementPrefillDeduction {
+  code?: string | null;
+  label: string;
+  amount: number;
+  isVariable?: boolean;
+  consignacaoType?: "loan" | "card" | "other" | null;
+}
+
 export interface IncomeStatementPrefill {
   referenceMonth?: string;
   netAmount?: number;
   paymentDate?: string;
   grossAmount?: number | null;
+  deductions?: IncomeStatementPrefillDeduction[];
   details?: Record<string, unknown> | null;
   sourceImportSessionId?: string | null;
 }
@@ -118,6 +127,13 @@ export default function IncomeStatementQuickModal({
         netAmount: parsedNet,
         paymentDate: paymentDate.trim() || null,
         grossAmount: prefill?.grossAmount ?? null,
+        deductions: Array.isArray(prefill?.deductions)
+          ? prefill.deductions.map((deduction) => ({
+              label: `${deduction.code ? `${deduction.code} ` : ""}${deduction.label}`.trim(),
+              amount: deduction.amount,
+              isVariable: Boolean(deduction.isVariable),
+            }))
+          : undefined,
         details: prefill?.details ?? null,
         sourceImportSessionId: prefill?.sourceImportSessionId ?? null,
       });
@@ -357,6 +373,49 @@ export default function IncomeStatementQuickModal({
                   className="w-full rounded border border-cf-border bg-cf-surface px-2 py-1.5 text-sm text-cf-text-primary"
                 />
               </div>
+
+              {Array.isArray(prefill?.deductions) && prefill.deductions.length > 0 ? (
+                <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
+                  <p className="text-xs font-semibold uppercase text-cf-text-secondary">
+                    Composição do benefício
+                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    {prefill?.grossAmount != null ? (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-cf-text-primary">101 Valor total do período</span>
+                        <span className="font-semibold text-cf-text-primary">
+                          R$ {prefill.grossAmount.toFixed(2).replace(".", ",")}
+                        </span>
+                      </div>
+                    ) : null}
+                    {prefill.deductions.map((deduction, index) => (
+                      <div
+                        key={`${deduction.code || deduction.label}-${index}`}
+                        className="flex items-center justify-between gap-3 text-xs"
+                      >
+                        <span className="text-cf-text-secondary">
+                          {deduction.code ? `${deduction.code} ` : ""}
+                          {deduction.label}
+                        </span>
+                        <span className="font-medium text-red-500">
+                          - R$ {deduction.amount.toFixed(2).replace(".", ",")}
+                        </span>
+                      </div>
+                    ))}
+                    {prefill.netAmount != null ? (
+                      <>
+                        <div className="border-t border-cf-border" />
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-cf-text-primary">Benefício líquido</span>
+                          <span className="font-semibold text-cf-text-primary">
+                            R$ {prefill.netAmount.toFixed(2).replace(".", ",")}
+                          </span>
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2">
                 <label

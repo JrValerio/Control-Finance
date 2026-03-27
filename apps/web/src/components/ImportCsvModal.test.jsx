@@ -6,6 +6,7 @@ import { transactionsService } from "../services/transactions.service";
 import { categoriesService } from "../services/categories.service";
 import { incomeSourcesService } from "../services/incomeSources.service";
 import { profileService } from "../services/profile.service";
+import { salaryService } from "../services/salary.service";
 import { forecastService } from "../services/forecast.service";
 
 vi.mock("../services/transactions.service", () => ({
@@ -30,6 +31,7 @@ vi.mock("../services/incomeSources.service", () => ({
   incomeSourcesService: {
     list: vi.fn(),
     createStatement: vi.fn(),
+    linkTransaction: vi.fn(),
     postStatement: vi.fn(),
   },
 }));
@@ -37,6 +39,12 @@ vi.mock("../services/incomeSources.service", () => ({
 vi.mock("../services/profile.service", () => ({
   profileService: {
     updateProfile: vi.fn(),
+  },
+}));
+
+vi.mock("../services/salary.service", () => ({
+  salaryService: {
+    syncImportedBenefitProfile: vi.fn(),
   },
 }));
 
@@ -115,6 +123,7 @@ describe("ImportCsvModal", () => {
       },
     });
     profileService.updateProfile.mockResolvedValue({});
+    salaryService.syncImportedBenefitProfile.mockResolvedValue({});
     forecastService.recompute.mockResolvedValue({});
   });
 
@@ -727,11 +736,103 @@ describe("ImportCsvModal", () => {
         rows: [],
         suggestion: {
           type: "profile",
+          profileKind: "inss",
           referenceMonth: "2026-02",
           netAmount: 1412.0,
           paymentDate: "2026-02-25",
           grossAmount: 1800.0,
           benefitKind: "Aposentadoria",
+          },
+        });
+
+      const buildMultiCompetenceInssResponse = () =>
+        buildDryRunResponse({
+          documentType: "income_statement_inss",
+          summary: { totalRows: 2, validRows: 2, invalidRows: 0, duplicateRows: 0, conflictRows: 0, income: 5607.04, expense: 0 },
+          rows: [
+            {
+              line: 8,
+              status: "valid",
+              raw: {
+                date: "2026-03-05",
+                type: "Entrada",
+                value: "2803.52",
+                description: "Credito INSS 02/2026",
+                notes: "",
+                category: "",
+              },
+              normalized: {
+                date: "2026-03-05",
+                type: "Entrada",
+                value: 2803.52,
+                description: "Credito INSS 02/2026",
+                notes: "",
+                categoryId: null,
+              },
+              errors: [],
+            },
+            {
+              line: 15,
+              status: "valid",
+              raw: {
+                date: "2026-04-07",
+                type: "Entrada",
+                value: "2803.52",
+                description: "Credito INSS 03/2026",
+                notes: "",
+                category: "",
+              },
+              normalized: {
+                date: "2026-04-07",
+                type: "Entrada",
+                value: 2803.52,
+                description: "Credito INSS 03/2026",
+                notes: "",
+                categoryId: null,
+              },
+              errors: [],
+            },
+          ],
+          suggestions: [
+            {
+              type: "profile",
+              line: 8,
+              profileKind: "inss",
+              referenceMonth: "2026-02",
+              paymentDate: "2026-03-05",
+              netAmount: 2803.52,
+              grossAmount: 4958.67,
+              benefitKind: "Pensão por morte",
+              birthYear: 1955,
+              deductions: [
+                { code: "216", label: "CONSIGNACAO EMPRESTIMO BANCARIO", amount: 156, consignacaoType: "loan" },
+                { code: "217", label: "EMPRESTIMO SOBRE A RMC", amount: 238, consignacaoType: "loan" },
+              ],
+            },
+            {
+              type: "profile",
+              line: 15,
+              profileKind: "inss",
+              referenceMonth: "2026-03",
+              paymentDate: "2026-04-07",
+              netAmount: 2803.52,
+              grossAmount: 4958.67,
+              benefitKind: "Pensão por morte",
+              birthYear: 1955,
+              deductions: [
+                { code: "216", label: "CONSIGNACAO EMPRESTIMO BANCARIO", amount: 75.17, consignacaoType: "loan" },
+                { code: "268", label: "CONSIGNACAO - CARTAO", amount: 247.93, consignacaoType: "card" },
+              ],
+            },
+          ],
+          suggestion: {
+            type: "profile",
+            line: 8,
+            profileKind: "inss",
+            referenceMonth: "2026-02",
+            paymentDate: "2026-03-05",
+            netAmount: 2803.52,
+            grossAmount: 4958.67,
           },
         });
 
@@ -792,6 +893,82 @@ describe("ImportCsvModal", () => {
         expect(
           screen.getByRole("dialog", { name: /Registrar no histórico de renda/i }),
         ).toBeInTheDocument();
+      });
+    });
+
+    it("permite escolher a competencia do INSS e envia os descontos individualizados", async () => {
+      const file = new File(["dummy"], "inss.pdf", { type: "application/pdf" });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildMultiCompetenceInssResponse());
+      incomeSourcesService.list.mockResolvedValue([
+        { id: 1, name: "INSS Benefício", deductions: [], userId: 1, categoryId: null, defaultDay: null, notes: null, createdAt: "", updatedAt: "" },
+      ]);
+      incomeSourcesService.createStatement.mockResolvedValue({
+        statement: {
+          id: 11,
+          incomeSourceId: 1,
+          referenceMonth: "2026-02",
+          netAmount: 2803.52,
+          totalDeductions: 394,
+          grossAmount: 4958.67,
+          details: null,
+          paymentDate: "2026-03-05",
+          status: "draft",
+          postedTransactionId: null,
+          createdAt: "2026-03-05T00:00:00Z",
+          updatedAt: "2026-03-05T00:00:00Z",
+        },
+        deductions: [],
+      });
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /2026-03\s*·\s*2026-04-07/i }),
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole("button", { name: /2026-02\s*·\s*2026-03-05/i }),
+        ).toBeInTheDocument();
+      });
+
+      await userEvent.click(
+        screen.getByRole("button", { name: /2026-02\s*·\s*2026-03-05/i }),
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Competência: 2026-02")).toBeInTheDocument();
+        expect(screen.getByText("Pagamento: 2026-03-05")).toBeInTheDocument();
+      });
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Usar este documento na minha renda" }),
+      );
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Registrar e lancar entrada" })).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+
+      await waitFor(() => {
+        expect(incomeSourcesService.createStatement).toHaveBeenCalledWith(1, {
+          referenceMonth: "2026-02",
+          netAmount: 2803.52,
+          paymentDate: "2026-03-05",
+          grossAmount: 4958.67,
+          deductions: [
+            { label: "216 CONSIGNACAO EMPRESTIMO BANCARIO", amount: 156, isVariable: false },
+            { label: "217 EMPRESTIMO SOBRE A RMC", amount: 238, isVariable: false },
+          ],
+          details: {
+            profileKind: "inss",
+            benefitKind: "Pensão por morte",
+            birthYear: 1955,
+          },
+          sourceImportSessionId: "import-session-1",
+        });
       });
     });
 
@@ -873,9 +1050,15 @@ describe("ImportCsvModal", () => {
           payday: 25,
         });
       });
+      expect(salaryService.syncImportedBenefitProfile).toHaveBeenCalledWith({
+        gross_salary: 1800,
+        payment_day: 25,
+        birth_year: null,
+        consignacoes: [],
+      });
       expect(forecastService.recompute).toHaveBeenCalled();
       expect(
-        screen.getByText(/perfil e planejamento atualizados com sucesso/i),
+        screen.getByText(/perfil, planejamento e benefício atualizados com sucesso/i),
       ).toBeInTheDocument();
     });
 

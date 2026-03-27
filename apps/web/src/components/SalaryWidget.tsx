@@ -26,6 +26,7 @@ interface BenefitFormState {
 const EMPTY_CLT: CltFormState = { grossSalary: "", dependents: "0", paymentDay: "5" };
 const EMPTY_BENEFIT: BenefitFormState = { grossBenefit: "", birthYear: "", dependents: "0", paymentDay: "5" };
 const CONSIGNACAO_DESCRIPTION_MAX_LENGTH = 100;
+const SALARY_PROFILE_UPDATED_EVENT = "salary-profile-updated";
 
 const profileToCltForm = (p: SalaryProfile): CltFormState => ({
   grossSalary: String(p.grossSalary),
@@ -596,11 +597,40 @@ const SalaryWidget = (): JSX.Element | null => {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    salaryService
-      .getProfile()
-      .then(setProfile)
-      .catch(() => setProfile(null))
-      .finally(() => setIsLoading(false));
+    let cancelled = false;
+
+    const loadProfile = async (showLoading = false) => {
+      if (showLoading && !cancelled) {
+        setIsLoading(true);
+      }
+
+      try {
+        const nextProfile = await salaryService.getProfile();
+        if (!cancelled) {
+          setProfile(nextProfile);
+        }
+      } catch {
+        if (!cancelled) {
+          setProfile(null);
+        }
+      } finally {
+        if (showLoading && !cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    void loadProfile(true);
+
+    const handleProfileUpdated = () => {
+      void loadProfile(false);
+    };
+
+    window.addEventListener(SALARY_PROFILE_UPDATED_EVENT, handleProfileUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(SALARY_PROFILE_UPDATED_EVENT, handleProfileUpdated);
+    };
   }, []);
 
   // Derived mode

@@ -173,6 +173,28 @@ const normalizeOptionalImportSessionId = (value) => {
   return trimmed || null;
 };
 
+const normalizeStatementSnapshotDeductions = (value) => {
+  if (value == null) {
+    return [];
+  }
+
+  if (!Array.isArray(value)) {
+    throw createError(400, "Descontos do extrato devem ser enviados em uma lista.");
+  }
+
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw createError(400, "Cada desconto do extrato deve ser um objeto.");
+    }
+
+    return {
+      label: normalizeDeductionLabel(item.label),
+      amount: normalizeDeductionAmount(item.amount),
+      isVariable: Boolean(item.isVariable),
+    };
+  });
+};
+
 // ─── Row mappers ───────────────────────────────────────────────────────────────
 
 const mapSourceRow = (row) => ({
@@ -683,17 +705,32 @@ export const createStatementDraftForSource = async (userId, sourceId, payload) =
   const sourceImportSessionId = normalizeOptionalImportSessionId(
     payload.sourceImportSessionId ?? null,
   );
+  const hasExplicitSnapshotDeductions = Object.prototype.hasOwnProperty.call(payload, "deductions");
+  const explicitSnapshotDeductions = hasExplicitSnapshotDeductions
+    ? normalizeStatementSnapshotDeductions(payload.deductions)
+    : null;
 
   return withDbTransaction(async (client) => {
-    // Fetch active deductions to clone
-    const { rows: deductionRows } = await client.query(
-      `SELECT * FROM income_deductions
-       WHERE income_source_id = $1 AND is_active = TRUE
-       ORDER BY sort_order ASC, id ASC`,
-      [sid],
-    );
+    let snapshotTemplateRows = [];
 
-    const totalDeductions = deductionRows.reduce(
+    if (explicitSnapshotDeductions !== null) {
+      snapshotTemplateRows = explicitSnapshotDeductions;
+    } else {
+      const { rows: deductionRows } = await client.query(
+        `SELECT * FROM income_deductions
+         WHERE income_source_id = $1 AND is_active = TRUE
+         ORDER BY sort_order ASC, id ASC`,
+        [sid],
+      );
+
+      snapshotTemplateRows = deductionRows.map((row) => ({
+        label: String(row.label),
+        amount: toMoney(row.amount),
+        isVariable: Boolean(row.is_variable),
+      }));
+    }
+
+    const totalDeductions = snapshotTemplateRows.reduce(
       (sum, row) => sum + toMoney(row.amount),
       0,
     );
@@ -720,15 +757,15 @@ export const createStatementDraftForSource = async (userId, sourceId, payload) =
       throw err;
     }
 
-    // Clone active deductions as snapshot
+    // Persist snapshot deductions for this specific statement/competence.
     const snapshotDeductions = [];
-    for (const d of deductionRows) {
+    for (const deduction of snapshotTemplateRows) {
       const { rows } = await client.query(
         `INSERT INTO income_statement_deductions
            (statement_id, label, amount, is_variable)
          VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [stmtRow.id, d.label, d.amount, d.is_variable],
+        [stmtRow.id, deduction.label, deduction.amount, deduction.isVariable],
       );
       snapshotDeductions.push(mapStatementDeductionRow(rows[0]));
     }

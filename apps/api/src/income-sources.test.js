@@ -422,6 +422,61 @@ describe("income-sources", () => {
     expect(res.body.deductions[1].label).toBe("Cartao");
   });
 
+  it("POST /income-sources/:id/statements usa descontos explicitos da competencia importada", async () => {
+    const token = await registerAndLogin("inss-stmt-imported-deductions@test.dev");
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Pensao INSS" });
+    const sourceId = srcRes.body.id;
+
+    await request(app)
+      .post(`/income-sources/${sourceId}/deductions`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ label: "Desconto padrao da fonte", amount: 999 });
+
+    const res = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-03",
+        netAmount: 2803.52,
+        grossAmount: 4958.67,
+        deductions: [
+          { label: "216 CONSIGNACAO EMPRESTIMO BANCARIO", amount: 156 },
+          { label: "217 EMPRESTIMO SOBRE A RMC", amount: 238, isVariable: true },
+          { label: "268 CONSIGNACAO - CARTAO", amount: 247.93 },
+        ],
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.statement).toMatchObject({
+      referenceMonth: "2026-03",
+      netAmount: 2803.52,
+      grossAmount: 4958.67,
+      totalDeductions: 641.93,
+      status: "draft",
+    });
+    expect(res.body.deductions).toEqual([
+      expect.objectContaining({
+        label: "216 CONSIGNACAO EMPRESTIMO BANCARIO",
+        amount: 156,
+        isVariable: false,
+      }),
+      expect.objectContaining({
+        label: "217 EMPRESTIMO SOBRE A RMC",
+        amount: 238,
+        isVariable: true,
+      }),
+      expect.objectContaining({
+        label: "268 CONSIGNACAO - CARTAO",
+        amount: 247.93,
+        isVariable: false,
+      }),
+    ]);
+  });
+
   it("POST /income-sources/:id/statements retorna 409 para mes duplicado", async () => {
     const token = await registerAndLogin("inss-stmt-dup@test.dev");
 

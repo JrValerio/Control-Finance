@@ -440,6 +440,56 @@ describe("SalaryWidget — beneficiário com consignações", () => {
     expect(screen.getByText("Empréstimo")).toBeInTheDocument();
     expect(screen.getByText("Cartão")).toBeInTheDocument();
   });
+
+  it("recarrega o benefício quando recebe sincronização externa do INSS", async () => {
+    const updatedProfile = buildBenefitProfile({
+      paymentDay: 7,
+      consignacoes: [
+        {
+          id: 11,
+          salaryProfileId: 2,
+          description: "216 CONSIGNACAO EMPRESTIMO BANCARIO",
+          amount: 156,
+          consignacaoType: "loan",
+          createdAt: "2026-04-07T00:00:00Z",
+        },
+        {
+          id: 12,
+          salaryProfileId: 2,
+          description: "217 EMPRESTIMO SOBRE A RMC",
+          amount: 238,
+          consignacaoType: "loan",
+          createdAt: "2026-04-07T00:00:00Z",
+        },
+      ],
+      calculation: {
+        ...buildBenefitProfile().calculation,
+        consignacoesMonthly: 394,
+        loanTotal: 394,
+        cardTotal: 0,
+        netMonthly: 4564.67,
+      },
+    });
+
+    vi.mocked(salaryService.getProfile)
+      .mockResolvedValueOnce(buildBenefitProfile())
+      .mockResolvedValue(updatedProfile);
+
+    renderWidget();
+
+    await waitFor(() => {
+      expect(screen.getByText("Nenhum desconto cadastrado.")).toBeInTheDocument();
+    });
+
+    window.dispatchEvent(new CustomEvent("salary-profile-updated"));
+
+    await waitFor(() => {
+      expect(screen.getByText("216 CONSIGNACAO EMPRESTIMO BANCARIO")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("217 EMPRESTIMO SOBRE A RMC")).toBeInTheDocument();
+    expect(salaryService.getProfile).toHaveBeenCalledTimes(2);
+  });
 });
 
 // ─── Perfil beneficiário — alerta de limite excedido ─────────────────────────

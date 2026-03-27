@@ -2,6 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } f
 import PropTypes from "prop-types";
 import { transactionsService } from "../services/transactions.service";
 import { profileService } from "../services/profile.service";
+import { salaryService } from "../services/salary.service";
 import { forecastService } from "../services/forecast.service";
 import { categoriesService } from "../services/categories.service";
 import { formatCurrency } from "../utils/formatCurrency";
@@ -11,6 +12,53 @@ import IncomeStatementQuickModal from "./IncomeStatementQuickModal";
 import ConfirmDialog from "./ConfirmDialog";
 
 const PREVIEW_PAGE_SIZE = 100;
+const SALARY_PROFILE_UPDATED_EVENT = "salary-profile-updated";
+const buildProfileSuggestionKey = (suggestion) =>
+  [
+    suggestion?.line ?? "",
+    suggestion?.referenceMonth ?? "",
+    suggestion?.paymentDate ?? "",
+  ].join("|");
+
+const getProfileSuggestionRank = (suggestion) => {
+  if (suggestion?.paymentDate) {
+    const paymentTimestamp = Date.parse(`${suggestion.paymentDate}T00:00:00Z`);
+    if (Number.isFinite(paymentTimestamp)) {
+      return paymentTimestamp;
+    }
+  }
+
+  if (suggestion?.referenceMonth) {
+    const monthTimestamp = Date.parse(`${suggestion.referenceMonth}-01T00:00:00Z`);
+    if (Number.isFinite(monthTimestamp)) {
+      return monthTimestamp;
+    }
+  }
+
+  return 0;
+};
+
+const getCurrentMonthValue = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+};
+
+const getProfileSuggestionTiming = (suggestion) => {
+  const effectiveMonth = suggestion?.paymentDate?.slice(0, 7) || suggestion?.referenceMonth || "";
+  if (!effectiveMonth) {
+    return null;
+  }
+
+  const currentMonth = getCurrentMonthValue();
+  if (effectiveMonth < currentMonth) {
+    return { label: "Passado", className: "border-slate-300 bg-slate-100 text-slate-700" };
+  }
+  if (effectiveMonth > currentMonth) {
+    return { label: "Futuro", className: "border-amber-300 bg-amber-100 text-amber-700" };
+  }
+
+  return { label: "Entra neste mês", className: "border-green-300 bg-green-100 text-green-700" };
+};
 
 const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory = undefined }) => {
   const fileInputRef = useRef(null);
@@ -42,6 +90,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
   // income statement bridge
   const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
   const [incomeStatementCreated, setIncomeStatementCreated] = useState(false);
+  const [selectedProfileSuggestionKey, setSelectedProfileSuggestionKey] = useState("");
   // batch category
   const [selectedPreviewLines, setSelectedPreviewLines] = useState(new Set());
   const [batchCategoryId, setBatchCategoryId] = useState("");
@@ -82,6 +131,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
     setBillCreated(false);
     setIsIncomeModalOpen(false);
     setIncomeStatementCreated(false);
+    setSelectedProfileSuggestionKey("");
     setSelectedPreviewLines(new Set());
     setBatchCategoryId("");
     setPreviewSearch("");
@@ -160,16 +210,67 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
     );
   }, [dryRunResult]);
 
+  const profileSuggestions = useMemo(() => {
+    const suggestionsFromResponse = Array.isArray(dryRunResult?.suggestions)
+      ? dryRunResult.suggestions
+      : [];
+    const fallbackSuggestion =
+      dryRunResult?.suggestion?.type === "profile" ? [dryRunResult.suggestion] : [];
+
+    const candidates = (suggestionsFromResponse.length > 0
+      ? suggestionsFromResponse
+      : fallbackSuggestion).filter((suggestion) => suggestion?.type === "profile");
+
+    return [...candidates].sort(
+      (left, right) => getProfileSuggestionRank(right) - getProfileSuggestionRank(left),
+    );
+  }, [dryRunResult]);
+
+  useEffect(() => {
+    if (profileSuggestions.length === 0) {
+      setSelectedProfileSuggestionKey("");
+      return;
+    }
+
+    setSelectedProfileSuggestionKey((current) => {
+      if (
+        current &&
+        profileSuggestions.some((suggestion) => buildProfileSuggestionKey(suggestion) === current)
+      ) {
+        return current;
+      }
+
+      return buildProfileSuggestionKey(profileSuggestions[0]);
+    });
+  }, [profileSuggestions]);
+
+  const selectedProfileSuggestion = useMemo(() => {
+    if (profileSuggestions.length === 0) return null;
+    return profileSuggestions.find(
+      (suggestion) => buildProfileSuggestionKey(suggestion) === selectedProfileSuggestionKey,
+    ) ?? profileSuggestions[0];
+  }, [profileSuggestions, selectedProfileSuggestionKey]);
+
+  const selectedBillSuggestion = useMemo(() => {
+    if (dryRunResult?.suggestion?.type === "bill") {
+      return dryRunResult.suggestion;
+    }
+    return null;
+  }, [dryRunResult]);
+
   const suggestionCard = useMemo(() => {
-    const suggestion = dryRunResult?.suggestion;
+    const suggestion = selectedProfileSuggestion ?? selectedBillSuggestion;
     if (!suggestion) return null;
 
     if (suggestion.type === "profile") {
       const lines = [];
       if (suggestion.profileKind === "clt") lines.push("Tipo: Holerite / CLT");
+      if (suggestion.profileKind === "inss") lines.push("Tipo: Benefício INSS");
       if (suggestion.employerName) lines.push(`Empresa: ${suggestion.employerName}`);
       if (suggestion.referenceMonth) lines.push(`Competência: ${suggestion.referenceMonth}`);
       if (suggestion.paymentDate) lines.push(`Pagamento: ${suggestion.paymentDate}`);
+      const timing = getProfileSuggestionTiming(suggestion);
+      if (timing) lines.push(`Status: ${timing.label}`);
       if (suggestion.netAmount != null) lines.push(`Líquido: R$ ${suggestion.netAmount.toFixed(2).replace(".", ",")}`);
       if (suggestion.grossAmount != null) {
         lines.push(
@@ -177,6 +278,11 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
         );
       }
       if (suggestion.benefitKind) lines.push(`Espécie: ${suggestion.benefitKind}`);
+      if (Array.isArray(suggestion.deductions) && suggestion.deductions.length > 0) {
+        lines.push(
+          `${suggestion.deductions.length} desconto(s) reconhecido(s) para esta competência.`,
+        );
+      }
       return { kind: "profile", lines };
     }
 
@@ -191,10 +297,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
     }
 
     return null;
-  }, [dryRunResult]);
+  }, [selectedBillSuggestion, selectedProfileSuggestion]);
 
   const profilePatch = useMemo(() => {
-    const suggestion = dryRunResult?.suggestion;
+    const suggestion = selectedProfileSuggestion;
     if (suggestion?.type !== "profile") return null;
     const patch = {};
     if (suggestion.netAmount != null) patch.salary_monthly = suggestion.netAmount;
@@ -203,10 +309,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
       if (day >= 1 && day <= 31) patch.payday = day;
     }
     return Object.keys(patch).length > 0 ? patch : null;
-  }, [dryRunResult]);
+  }, [selectedProfileSuggestion]);
 
   const billPrefill = useMemo(() => {
-    const suggestion = dryRunResult?.suggestion;
+    const suggestion = selectedBillSuggestion;
     if (suggestion?.type !== "bill") return null;
     const typeLabel = suggestion.billType === "energy" ? "Conta de energia" : "Conta de água";
     const title = suggestion.issuer ? `${typeLabel} — ${suggestion.issuer}` : typeLabel;
@@ -218,34 +324,51 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
       billType: suggestion.billType ?? undefined,
       sourceImportSessionId: dryRunResult?.importId ?? undefined,
     };
-  }, [dryRunResult]);
+  }, [dryRunResult, selectedBillSuggestion]);
 
   const incomePrefill = useMemo(() => {
-    const suggestion = dryRunResult?.suggestion;
+    const suggestion = selectedProfileSuggestion;
     if (suggestion?.type !== "profile") return null;
     const details = {};
     if (suggestion.profileKind) details.profileKind = suggestion.profileKind;
     if (suggestion.employerName) details.employerName = suggestion.employerName;
     if (suggestion.benefitKind) details.benefitKind = suggestion.benefitKind;
-    if (Array.isArray(suggestion.deductions) && suggestion.deductions.length > 0) {
-      details.deductions = suggestion.deductions;
-    }
+    if (suggestion.benefitId) details.benefitId = suggestion.benefitId;
+    if (suggestion.taxpayerCpf) details.taxpayerCpf = suggestion.taxpayerCpf;
+    if (suggestion.birthYear != null) details.birthYear = suggestion.birthYear;
     return {
       referenceMonth: suggestion.referenceMonth ?? undefined,
       netAmount: suggestion.netAmount ?? undefined,
       paymentDate: suggestion.paymentDate ?? undefined,
       grossAmount: suggestion.grossAmount ?? null,
+      deductions: Array.isArray(suggestion.deductions) ? suggestion.deductions : [],
       details: Object.keys(details).length > 0 ? details : null,
       sourceImportSessionId: dryRunResult?.importId ?? undefined,
     };
-  }, [dryRunResult]);
+  }, [dryRunResult, selectedProfileSuggestion]);
 
   // First Entrada transaction created by the last commit — used for auto-link
   const incomeTransactionId = useMemo(() => {
     const txs = lastCommitResult?.createdTransactions;
     if (!Array.isArray(txs)) return null;
+    if (selectedProfileSuggestion?.line != null) {
+      const byLine = txs.find(
+        (tx) => tx.type === "Entrada" && Number(tx.line) === Number(selectedProfileSuggestion.line),
+      );
+      if (byLine) {
+        return byLine.id;
+      }
+    }
+    if (selectedProfileSuggestion?.paymentDate) {
+      const byDate = txs.find(
+        (tx) => tx.type === "Entrada" && tx.date === selectedProfileSuggestion.paymentDate,
+      );
+      if (byDate) {
+        return byDate.id;
+      }
+    }
     return txs.find((tx) => tx.type === "Entrada")?.id ?? null;
-  }, [lastCommitResult]);
+  }, [lastCommitResult, selectedProfileSuggestion]);
 
 
   const handleApplyProfile = async () => {
@@ -253,7 +376,29 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
     setIsApplyingProfile(true);
     setErrorMessage("");
     setPlanningUpdateError("");
+    let benefitProfileSynced = false;
     try {
+      if (
+        selectedProfileSuggestion?.type === "profile" &&
+        selectedProfileSuggestion.profileKind === "inss" &&
+        selectedProfileSuggestion.grossAmount != null &&
+        profilePatch.payday != null
+      ) {
+        await salaryService.syncImportedBenefitProfile({
+          gross_salary: selectedProfileSuggestion.grossAmount,
+          payment_day: profilePatch.payday,
+          birth_year: selectedProfileSuggestion.birthYear ?? null,
+          consignacoes: Array.isArray(selectedProfileSuggestion.deductions)
+            ? selectedProfileSuggestion.deductions.map((deduction) => ({
+                description: `${deduction.code ? `${deduction.code} ` : ""}${deduction.label}`.trim(),
+                amount: deduction.amount,
+                consignacao_type: deduction.consignacaoType ?? "other",
+              }))
+            : [],
+        });
+        benefitProfileSynced = true;
+      }
+
       await profileService.updateProfile(profilePatch);
       try {
         await forecastService.recompute();
@@ -267,8 +412,21 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
       }
       setProfileApplied(true);
       setProfileSuggestionDismissed(false);
+      if (benefitProfileSynced && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(SALARY_PROFILE_UPDATED_EVENT));
+      }
     } catch (error) {
-      setErrorMessage(getApiErrorMessage(error, "Não foi possível atualizar o perfil."));
+      if (benefitProfileSynced && typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(SALARY_PROFILE_UPDATED_EVENT));
+      }
+      setErrorMessage(
+        getApiErrorMessage(
+          error,
+          benefitProfileSynced
+            ? "Benefício líquido sincronizado, mas não foi possível atualizar o perfil."
+            : "Não foi possível atualizar o perfil.",
+        ),
+      );
     } finally {
       setIsApplyingProfile(false);
       setShowProfileConfirm(false);
@@ -691,6 +849,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
               setInlineCreateName("");
               setLastCommitResult(null);
               setShowUndoConfirm(false);
+              setSelectedProfileSuggestionKey("");
             }}
             className="block w-full text-sm text-cf-text-primary file:mr-3 file:rounded file:border file:border-cf-border file:bg-cf-bg-subtle file:px-3 file:py-1 file:text-sm file:font-semibold file:text-cf-text-primary hover:file:bg-cf-border"
           />
@@ -819,6 +978,45 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                     <li key={line} className="text-xs text-blue-700 dark:text-blue-300">{line}</li>
                   ))}
                 </ul>
+                {suggestionCard.kind === "profile" && profileSuggestions.length > 1 ? (
+                  <div className="mb-2 rounded border border-blue-200 bg-white/70 px-3 py-2 dark:border-blue-800 dark:bg-blue-950/20">
+                    <p className="mb-2 text-[11px] font-semibold uppercase text-blue-700 dark:text-blue-400">
+                      Escolha a competência para usar na renda
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {profileSuggestions.map((suggestion) => {
+                        const suggestionKey = buildProfileSuggestionKey(suggestion);
+                        const isSelected = suggestionKey === buildProfileSuggestionKey(selectedProfileSuggestion);
+                        const timing = getProfileSuggestionTiming(suggestion);
+
+                        return (
+                          <button
+                            key={suggestionKey}
+                            type="button"
+                            onClick={() => setSelectedProfileSuggestionKey(suggestionKey)}
+                            className={`rounded border px-2 py-1 text-xs font-medium ${
+                              isSelected
+                                ? "border-blue-500 bg-blue-600 text-white"
+                                : "border-blue-200 bg-white text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-blue-950/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
+                            }`}
+                          >
+                            <span>{suggestion.referenceMonth || "Sem competência"}</span>
+                            {suggestion.paymentDate ? <span>{` · ${suggestion.paymentDate}`}</span> : null}
+                            {timing ? (
+                              <span
+                                className={`ml-2 rounded border px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  isSelected ? "border-white/60 bg-white/15 text-white" : timing.className
+                                }`}
+                              >
+                                {timing.label}
+                              </span>
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
                 {suggestionCard.kind === "profile" && !incomeStatementCreated ? (
                   <p className="mb-2 text-xs text-blue-700 dark:text-blue-300">
                     Depois de usar este documento na sua renda, o app pode sugerir uma atualização
@@ -906,7 +1104,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                 {suggestionCard.kind === "profile" && profileApplied ? (
                   <div className="mt-1 space-y-1">
                     <p className="text-xs font-semibold text-green-600 dark:text-green-400">
-                      Perfil e planejamento atualizados com sucesso.
+                      {selectedProfileSuggestion?.profileKind === "inss"
+                        ? "Perfil, planejamento e benefício atualizados com sucesso."
+                        : "Perfil e planejamento atualizados com sucesso."}
                     </p>
                     {planningUpdateError ? (
                       <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
