@@ -277,6 +277,7 @@ Documentos de referência:
 
 - `docs/roadmaps/importacao-inteligente-renda-extratos.md`
 - `docs/audits/importacao-inteligente-mvp-auditoria-final.md`
+- `docs/roadmaps/importacao-inteligente-pos-mvp-backlog.md`
 
 Leitura correta do estado:
 
