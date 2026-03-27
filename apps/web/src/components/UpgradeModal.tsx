@@ -18,16 +18,24 @@ const FEATURES: { label: string; free: string; pro: string }[] = [
   { label: "Histórico de analytics",  free: "6 meses", pro: "24 meses" },
   { label: "Previsão financeira",     free: "—", pro: "✓" },
   { label: "Controle salarial",       free: "—", pro: "✓" },
-  { label: "Exportar CSV",            free: "—", pro: "✓" },
-  { label: "Importar CSV",            free: "—", pro: "✓" },
+  { label: "Exportar transações em CSV", free: "—", pro: "✓" },
+  { label: "Importar extratos (CSV, OFX e PDF)", free: "—", pro: "✓" },
 ];
 
 const BENEFITS = [
   "Saiba quanto vai ter no saldo no fim do mês",
   "Entenda exatamente para onde seu dinheiro está indo",
   "Planeje seu salário com cálculo real de INSS e IRRF",
-  "Exporte e importe transações com facilidade",
+  "Importe extratos com revisão antes de confirmar",
 ];
+
+const FEATURE_TITLES: Partial<Record<PaywallFeature, string>> = {
+  csv_import: "Importação disponível no Pro",
+  csv_export: "Exportação disponível no Pro",
+  forecast: "Projeção disponível no Pro",
+  analytics_trend: "Histórico avançado disponível no Pro",
+  salary: "Controle salarial disponível no Pro",
+};
 
 const UpgradeModal = ({
   isOpen,
@@ -56,9 +64,10 @@ const UpgradeModal = ({
   if (!isOpen) return null;
 
   const isTrialExpired = reason.toLowerCase().includes("teste encerrado");
+  const featureTitle = FEATURE_TITLES[feature];
   const title = isTrialExpired
     ? "Seu período de teste encerrou"
-    : "Desbloqueie o Control Finance Pro";
+    : featureTitle || "Desbloqueie o Control Finance Pro";
   const subtitle = isTrialExpired
     ? "Continue com acesso total por menos de R$ 0,33 por dia."
     : reason;

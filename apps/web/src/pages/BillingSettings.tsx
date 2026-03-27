@@ -27,6 +27,26 @@ const daysRemaining = (isoDate: string | null | undefined): number => {
   return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 };
 
+const resolvePlanSupportCopy = (summary: SubscriptionSummary): string => {
+  if (summary.entitlementSource === "trial") {
+    return "Durante o trial, você testa o painel financeiro, metas, cartões, renda e a Central do Leão. Importação e exportação de extratos fazem parte do plano Pro.";
+  }
+
+  if (summary.entitlementSource === "free" && summary.trialExpired) {
+    return "Seu trial terminou. Faça upgrade para liberar importação de extratos, exportação e demais recursos avançados do Pro.";
+  }
+
+  if (
+    summary.entitlementSource === "subscription" ||
+    summary.entitlementSource === "subscription_grace" ||
+    summary.entitlementSource === "prepaid"
+  ) {
+    return "Seu plano Pro mantém importação e exportação de extratos, projeção financeira e os módulos avançados do produto.";
+  }
+
+  return "Consulte abaixo o que está disponível agora e o que faz parte do plano Pro.";
+};
+
 type PlanBadge = { label: string; className: string };
 
 const resolvePlanBadge = (summary: import("../services/billing.service").SubscriptionSummary): PlanBadge => {
@@ -152,6 +172,7 @@ const BillingSettings = ({
   const showCheckoutPendingNotice =
     checkoutStatus === "success" && !isLoading && !loadError && !isPro;
   const showCheckoutCanceledNotice = checkoutStatus === "cancel";
+  const planTitle = source === "trial" ? "Trial do Control Finance" : summary?.displayName ?? "";
 
   return (
     <div className="min-h-screen bg-cf-bg-page py-6">
@@ -231,7 +252,7 @@ const BillingSettings = ({
                       Plano atual
                     </p>
                     <p className="mt-0.5 text-lg font-bold text-cf-text-primary">
-                      {summary.displayName}
+                      {planTitle}
                     </p>
                     {planBadge ? (
                       <span
@@ -240,6 +261,9 @@ const BillingSettings = ({
                         {planBadge.label}
                       </span>
                     ) : null}
+                    <p className="mt-2 max-w-2xl text-xs text-cf-text-secondary">
+                      {resolvePlanSupportCopy(summary)}
+                    </p>
                   </div>
 
                   {isPro ? (

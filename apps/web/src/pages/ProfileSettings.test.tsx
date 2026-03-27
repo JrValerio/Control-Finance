@@ -304,6 +304,7 @@ describe("ProfileSettings — Assinatura", () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("Trial ativo")).toBeInTheDocument());
     expect(screen.getByText(/dias? restante/i)).toBeInTheDocument();
+    expect(screen.getByText(/importação e exportação de extratos fazem parte do Pro/i)).toBeInTheDocument();
   });
 
   it("shows trial expired with upgrade CTA", async () => {
