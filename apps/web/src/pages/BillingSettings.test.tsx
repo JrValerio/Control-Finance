@@ -44,7 +44,7 @@ describe("BillingSettings", () => {
 
     expect(
       screen.getByText(
-        /Durante o trial, você testa o painel financeiro, metas, cartões, renda e a Central do Leão/i,
+        /Durante o trial, você acompanha painel financeiro, metas, cartões, renda e a Central do Leão/i,
       ),
     ).toBeInTheDocument();
     expect(

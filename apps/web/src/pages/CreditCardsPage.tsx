@@ -214,7 +214,7 @@ const CreditCardsPage = ({
             <div>
               <h1 className="text-xl font-bold text-cf-text-primary">Cartões</h1>
               <p className="text-sm text-cf-text-secondary">
-                Limite, compras abertas e ciclo da fatura sem misturar compra com saída imediata.
+                Acompanhe limite, compras e faturas sem confundir uso do cartão com saída imediata de caixa.
               </p>
             </div>
           </div>
@@ -246,7 +246,7 @@ const CreditCardsPage = ({
         ) : cards.length === 0 ? (
           <div className="rounded border border-dashed border-cf-border bg-cf-surface p-6 text-center">
             <p className="text-sm text-cf-text-secondary">
-              Nenhum cartão cadastrado ainda. Crie o primeiro para acompanhar limite e fatura.
+              Nenhum cartão cadastrado ainda. Crie o primeiro para acompanhar limite, compras e faturas do mês.
             </p>
           </div>
         ) : (

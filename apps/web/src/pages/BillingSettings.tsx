@@ -29,11 +29,11 @@ const daysRemaining = (isoDate: string | null | undefined): number => {
 
 const resolvePlanSupportCopy = (summary: SubscriptionSummary): string => {
   if (summary.entitlementSource === "trial") {
-    return "Durante o trial, você testa o painel financeiro, metas, cartões, renda e a Central do Leão. Importação e exportação de extratos fazem parte do plano Pro.";
+    return "Durante o trial, você acompanha painel financeiro, metas, cartões, renda e a Central do Leão. Importação e exportação de extratos fazem parte do plano Pro.";
   }
 
   if (summary.entitlementSource === "free" && summary.trialExpired) {
-    return "Seu trial terminou. Faça upgrade para liberar importação de extratos, exportação e demais recursos avançados do Pro.";
+    return "Seu trial terminou. Faça upgrade para liberar importação e exportação de extratos e manter a experiência completa do Pro em cartões, renda e apoio fiscal.";
   }
 
   if (
@@ -41,10 +41,10 @@ const resolvePlanSupportCopy = (summary: SubscriptionSummary): string => {
     summary.entitlementSource === "subscription_grace" ||
     summary.entitlementSource === "prepaid"
   ) {
-    return "Seu plano Pro mantém importação e exportação de extratos, projeção financeira e os módulos avançados do produto.";
+    return "Seu plano Pro libera importação e exportação de extratos, projeção financeira e os módulos avançados para uma experiência financeira mais completa.";
   }
 
-  return "Consulte abaixo o que está disponível agora e o que faz parte do plano Pro.";
+  return "Consulte abaixo o que está disponível agora e o que o plano Pro adiciona ao seu controle financeiro.";
 };
 
 type PlanBadge = { label: string; className: string };
@@ -180,12 +180,10 @@ const BillingSettings = ({
         <section className="rounded border border-cf-border bg-cf-surface p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h1 className="text-xl font-semibold text-cf-text-primary">
-                Settings - Assinatura
-              </h1>
-              <p className="mt-1 text-sm text-cf-text-secondary">
-                Gerencie seu plano e assinatura.
-              </p>
+                <h1 className="text-xl font-semibold text-cf-text-primary">Assinatura</h1>
+                <p className="mt-1 text-sm text-cf-text-secondary">
+                  Veja o que seu plano libera hoje e o que faz parte do Pro.
+                </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
