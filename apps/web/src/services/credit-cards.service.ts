@@ -19,6 +19,9 @@ export interface CreditCardPurchase {
   purchaseDate: string;
   status: "open" | "billed";
   statementMonth: string | null;
+  installmentGroupId: string | null;
+  installmentNumber: number | null;
+  installmentCount: number | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -73,6 +76,13 @@ export interface CreateCreditCardPurchasePayload {
   amount: number;
   purchaseDate: string;
   notes?: string | null;
+  installmentCount?: number;
+}
+
+export interface CreateCreditCardInstallmentsResult {
+  purchases: CreditCardPurchase[];
+  installmentCount: number;
+  totalAmount: number;
 }
 
 export interface CloseInvoiceResult {
@@ -112,6 +122,17 @@ const normalizePurchase = (payload: Record<string, unknown>): CreditCardPurchase
   purchaseDate: normalizeString(payload.purchaseDate ?? payload.purchase_date),
   status: payload.status === "billed" ? "billed" : "open",
   statementMonth: normalizeStringOrNull(payload.statementMonth ?? payload.statement_month),
+  installmentGroupId: normalizeStringOrNull(
+    payload.installmentGroupId ?? payload.installment_group_id,
+  ),
+  installmentNumber:
+    payload.installmentNumber != null || payload.installment_number != null
+      ? Number(payload.installmentNumber ?? payload.installment_number) || 0
+      : null,
+  installmentCount:
+    payload.installmentCount != null || payload.installment_count != null
+      ? Number(payload.installmentCount ?? payload.installment_count) || 0
+      : null,
   notes: normalizeStringOrNull(payload.notes),
   createdAt: normalizeString(payload.createdAt ?? payload.created_at),
   updatedAt: normalizeString(payload.updatedAt ?? payload.updated_at),
@@ -178,6 +199,25 @@ export const creditCardsService = {
   ): Promise<CreditCardPurchase> => {
     const { data } = await api.post(`/credit-cards/${cardId}/purchases`, payload);
     return normalizePurchase(data as Record<string, unknown>);
+  },
+
+  createInstallments: async (
+    cardId: number,
+    payload: CreateCreditCardPurchasePayload & { installmentCount: number },
+  ): Promise<CreateCreditCardInstallmentsResult> => {
+    const { data } = await api.post(`/credit-cards/${cardId}/installments`, payload);
+    const raw = data as {
+      purchases?: Record<string, unknown>[];
+      installmentCount?: unknown;
+      totalAmount?: unknown;
+    };
+    return {
+      purchases: Array.isArray(raw.purchases)
+        ? raw.purchases.map((item) => normalizePurchase(item))
+        : [],
+      installmentCount: Number(raw.installmentCount) || 0,
+      totalAmount: Number(raw.totalAmount) || 0,
+    };
   },
 
   removePurchase: async (purchaseId: number): Promise<void> => {
