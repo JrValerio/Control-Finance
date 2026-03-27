@@ -695,6 +695,126 @@ describe("income-sources", () => {
     expectErrorResponseWithRequestId(res, 409, "Extrato ja foi lancado.");
   });
 
+  it("GET /income-sources/:id/statements retorna candidato de conciliacao para credito importado compativel", async () => {
+    const email = "inss-reconcile-candidate@test.dev";
+    const token = await registerAndLogin(email);
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Pensao INSS" });
+    const sourceId = srcRes.body.id;
+
+    await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-02",
+        netAmount: 1412,
+        paymentDate: "2026-02-25",
+        sourceImportSessionId: "income-doc-session-1",
+      });
+
+    await dbQuery(
+      `INSERT INTO transactions (
+         user_id, type, value, date, description, import_session_id, import_document_type
+       )
+       VALUES ((SELECT id FROM users WHERE email = $1), $2, $3, $4, $5, $6, $7)`,
+      [email, "Entrada", 1412, "2026-02-25", "Credito INSS", "bank-session-1", "bank_statement"],
+    );
+
+    const res = await request(app)
+      .get(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.statements[0]).toMatchObject({
+      referenceMonth: "2026-02",
+      reconciliation: {
+        status: "candidate",
+        candidates: [
+          expect.objectContaining({
+            description: "Credito INSS",
+            importSessionId: "bank-session-1",
+          }),
+        ],
+      },
+    });
+  });
+
+  it("GET /income-sources/:id/statements distingue conciliado de lancamento manual", async () => {
+    const email = "inss-reconcile-linked@test.dev";
+    const token = await registerAndLogin(email);
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Pensao INSS" });
+    const sourceId = srcRes.body.id;
+
+    const importedStatementRes = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-02",
+        netAmount: 1412,
+        paymentDate: "2026-02-25",
+      });
+
+    const manualStatementRes = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-03",
+        netAmount: 1500,
+        paymentDate: "2026-03-25",
+      });
+
+    const { rows: importedTxRows } = await dbQuery(
+      `INSERT INTO transactions (
+         user_id, type, value, date, description, import_session_id, import_document_type
+       )
+       VALUES ((SELECT id FROM users WHERE email = $1), $2, $3, $4, $5, $6, $7)
+       RETURNING id`,
+      [email, "Entrada", 1412, "2026-02-25", "Credito INSS", "bank-session-2", "bank_statement"],
+    );
+
+    const { rows: manualTxRows } = await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date, description)
+       VALUES ((SELECT id FROM users WHERE email = $1), $2, $3, $4, $5)
+       RETURNING id`,
+      [email, "Entrada", 1500, "2026-03-25", "Entrada manual"],
+    );
+
+    await request(app)
+      .post(`/income-sources/statements/${importedStatementRes.body.statement.id}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: Number(importedTxRows[0].id) });
+
+    await request(app)
+      .post(`/income-sources/statements/${manualStatementRes.body.statement.id}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: Number(manualTxRows[0].id) });
+
+    const res = await request(app)
+      .get(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.statements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          referenceMonth: "2026-02",
+          reconciliation: expect.objectContaining({ status: "reconciled" }),
+        }),
+        expect.objectContaining({
+          referenceMonth: "2026-03",
+          reconciliation: expect.objectContaining({ status: "manual_entry" }),
+        }),
+      ]),
+    );
+  });
+
   // ─── Link statement to transaction ───────────────────────────────────────────
 
   const setupStatementAndTransaction = async (email, opts = {}) => {
