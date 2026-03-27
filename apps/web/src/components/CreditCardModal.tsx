@@ -158,7 +158,7 @@ const CreditCardModal = ({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="credit-card-closing-day" className="text-sm font-medium text-cf-text-primary">
-                Fechamento
+                Dia do fechamento
               </label>
               <input
                 id="credit-card-closing-day"
@@ -173,7 +173,7 @@ const CreditCardModal = ({
             </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="credit-card-due-day" className="text-sm font-medium text-cf-text-primary">
-                Vencimento
+                Dia do vencimento
               </label>
               <input
                 id="credit-card-due-day"

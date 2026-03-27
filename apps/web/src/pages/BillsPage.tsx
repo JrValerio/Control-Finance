@@ -27,6 +27,13 @@ const formatDueDate = (dateStr: string): string => {
   return `${day}/${month}/${year}`;
 };
 
+const formatReferenceMonth = (value: string | null): string => {
+  if (!value) return "";
+  const [year, month] = value.split("-");
+  if (!year || !month) return value;
+  return `${month}/${year}`;
+};
+
 const isCreditCardInvoice = (bill: Bill) => bill.billType === "credit_card_invoice";
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -258,7 +265,12 @@ const BillsPage = ({
                 ← Voltar
               </button>
             ) : null}
-            <h1 className="text-xl font-bold text-cf-text-primary">Pendências</h1>
+            <div>
+              <h1 className="text-xl font-bold text-cf-text-primary">Pendências</h1>
+              <p className="text-sm text-cf-text-secondary">
+                Acompanhe contas em aberto, vencidas e faturas sem perder prazos.
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -281,7 +293,7 @@ const BillsPage = ({
                   {formatCurrency(summary?.pendingTotal ?? 0)}
                 </p>
                 <p className="mt-0.5 text-xs text-cf-text-secondary">
-                  {summary?.pendingCount ?? 0} {(summary?.pendingCount ?? 0) === 1 ? "conta" : "contas"}
+                  {summary?.pendingCount ?? 0} {(summary?.pendingCount ?? 0) === 1 ? "conta em aberto" : "contas em aberto"}
                 </p>
               </>
             )}
@@ -300,7 +312,7 @@ const BillsPage = ({
                   {formatCurrency(summary?.overdueTotal ?? 0)}
                 </p>
                 <p className="mt-0.5 text-xs text-cf-text-secondary">
-                  {summary?.overdueCount ?? 0} {(summary?.overdueCount ?? 0) === 1 ? "conta" : "contas"}
+                  {summary?.overdueCount ?? 0} {(summary?.overdueCount ?? 0) === 1 ? "conta em atraso" : "contas em atraso"}
                 </p>
               </>
             )}
@@ -355,7 +367,7 @@ const BillsPage = ({
             </p>
           ) : items.length === 0 ? (
             <p className="py-4 text-center text-sm text-cf-text-secondary">
-              Nenhuma pendência encontrada.
+              Nenhuma conta encontrada para este filtro.
             </p>
           ) : (
             items.map((bill) => (
@@ -380,7 +392,7 @@ const BillsPage = ({
                     </span>
                     {bill.referenceMonth ? (
                       <span className="text-xs text-cf-text-secondary">
-                        Ref. {bill.referenceMonth}
+                        Referência {formatReferenceMonth(bill.referenceMonth)}
                       </span>
                     ) : null}
                     {isCreditCardInvoice(bill) ? (
@@ -401,7 +413,7 @@ const BillsPage = ({
                       onClick={() => void handleMarkPaid(bill)}
                       className="whitespace-nowrap rounded border border-green-300 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
                     >
-                      Marcar como paga
+                      Registrar pagamento
                     </button>
                   ) : null}
 
@@ -452,7 +464,7 @@ const BillsPage = ({
         {!isLoadingList && items.length > 0 ? (
           <div className="mt-4 flex items-center justify-between gap-3">
             <span className="text-xs text-cf-text-secondary">
-              Mostrando {rangeStart}–{rangeEnd} de {paginationTotal}
+              Mostrando {rangeStart} a {rangeEnd} de {paginationTotal}
             </span>
             <div className="flex gap-2">
               <button

@@ -19,10 +19,17 @@ const formatDate = (value: string) => {
   return `${day}/${month}/${year}`;
 };
 
+const formatReferenceMonth = (value: string | null) => {
+  if (!value) return "—";
+  const [year, month] = value.split("-");
+  if (!year || !month) return value;
+  return `${month}/${year}`;
+};
+
 const USAGE_STATUS_LABELS = {
-  unused: "Sem uso no ciclo",
-  using: "Em uso",
-  exceeded: "Limite estourado",
+  unused: "Sem compras no ciclo",
+  using: "Com compras no ciclo",
+  exceeded: "Acima do limite",
 } as const;
 
 const USAGE_STATUS_BADGE_CLASSNAMES = {
@@ -153,7 +160,7 @@ const CreditCardsPage = ({
     try {
       const result = await creditCardsService.closeInvoice(card.id);
       showSuccess(
-        `Fatura fechada em ${formatCurrency(result.total)} com ${result.purchasesCount} compra${result.purchasesCount === 1 ? "" : "s"}.`,
+        `Fatura fechada em ${formatCurrency(result.total)} com ${result.purchasesCount} compra${result.purchasesCount === 1 ? "" : "s"} lançada${result.purchasesCount === 1 ? "" : "s"}.`,
       );
       await loadCards();
     } catch (error) {
@@ -165,7 +172,7 @@ const CreditCardsPage = ({
     setPageError("");
     try {
       await billsService.markPaid(invoiceId);
-      showSuccess("Fatura paga e saída de caixa registrada.");
+      showSuccess("Pagamento da fatura registrado na sua conta.");
       await loadCards();
     } catch (error) {
       setPageError(getApiErrorMessage(error, "Não foi possível pagar a fatura."));
@@ -177,7 +184,7 @@ const CreditCardsPage = ({
     try {
       const result = await creditCardsService.reopenInvoice(invoiceId);
       showSuccess(
-        `Fatura reaberta. ${result.reopenedPurchasesCount} compra${result.reopenedPurchasesCount === 1 ? "" : "s"} voltaram para aberto.`,
+        `Fatura reaberta. ${result.reopenedPurchasesCount} compra${result.reopenedPurchasesCount === 1 ? "" : "s"} voltou${result.reopenedPurchasesCount === 1 ? "" : "aram"} para compras em aberto.`,
       );
       await loadCards();
     } catch (error) {
@@ -214,7 +221,7 @@ const CreditCardsPage = ({
             <div>
               <h1 className="text-xl font-bold text-cf-text-primary">Cartões</h1>
               <p className="text-sm text-cf-text-secondary">
-                Acompanhe limite, compras e faturas sem confundir uso do cartão com saída imediata de caixa.
+                Acompanhe limite, compras e faturas sem misturar uso do cartão com saída imediata da conta.
               </p>
             </div>
           </div>
@@ -246,7 +253,7 @@ const CreditCardsPage = ({
         ) : cards.length === 0 ? (
           <div className="rounded border border-dashed border-cf-border bg-cf-surface p-6 text-center">
             <p className="text-sm text-cf-text-secondary">
-              Nenhum cartão cadastrado ainda. Crie o primeiro para acompanhar limite, compras e faturas do mês.
+              Nenhum cartão cadastrado ainda. Crie o primeiro para acompanhar limite, compras do ciclo e faturas para pagar.
             </p>
           </div>
         ) : (
@@ -273,7 +280,7 @@ const CreditCardsPage = ({
                       Fecha no dia {card.closingDay} e vence no dia {card.dueDay}
                     </p>
                     <p className="mt-1 text-xs text-cf-text-secondary">
-                      {card.openPurchasesCount} compra{card.openPurchasesCount === 1 ? "" : "s"} aberta
+                      {card.openPurchasesCount} compra{card.openPurchasesCount === 1 ? "" : "s"} em aberto
                       {card.openPurchasesCount === 1 ? "" : "s"} · {card.pendingInvoicesCount} fatura
                       {card.pendingInvoicesCount === 1 ? "" : "s"} pendente{card.pendingInvoicesCount === 1 ? "" : "s"}
                     </p>
@@ -329,13 +336,13 @@ const CreditCardsPage = ({
                     <p className="text-xs font-medium uppercase text-cf-text-secondary">Limite disponível</p>
                     <p className="mt-1 text-lg font-bold text-cf-text-primary">{formatCurrency(card.usage.available)}</p>
                     {card.usage.exceededBy > 0 ? (
-                      <p className="text-xs text-red-600">Estourado em {formatCurrency(card.usage.exceededBy)}</p>
+                      <p className="text-xs text-red-600">Acima do limite em {formatCurrency(card.usage.exceededBy)}</p>
                     ) : (
-                      <p className="text-xs text-cf-text-secondary">Ainda livre para novas compras</p>
+                      <p className="text-xs text-cf-text-secondary">Valor ainda livre para novas compras</p>
                     )}
                   </div>
                   <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
-                    <p className="text-xs font-medium uppercase text-cf-text-secondary">Fatura atual</p>
+                    <p className="text-xs font-medium uppercase text-cf-text-secondary">Fatura do ciclo</p>
                     <p className="mt-1 text-lg font-bold text-cf-text-primary">
                       {pendingInvoice
                         ? formatCurrency(pendingInvoice.amount)
@@ -350,7 +357,7 @@ const CreditCardsPage = ({
                           : `Vence em ${formatDate(pendingInvoice.dueDate)}`}
                       </p>
                     ) : card.openPurchasesCount > 0 ? (
-                      <p className="text-xs text-cf-text-secondary">Compras abertas aguardando fechamento</p>
+                      <p className="text-xs text-cf-text-secondary">Compras deste ciclo aguardando fechamento</p>
                     ) : (
                       <p className="text-xs text-cf-text-secondary">Sem fatura pendente no momento</p>
                     )}
@@ -362,12 +369,12 @@ const CreditCardsPage = ({
                     <div className="mb-2 flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-cf-text-primary">Faturas</h3>
                       <span className="text-xs text-cf-text-secondary">
-                        {card.invoices.length} lançada{card.invoices.length === 1 ? "" : "s"}
+                        {card.invoices.length} no histórico
                       </span>
                     </div>
                     {card.invoices.length === 0 ? (
                       <div className="rounded border border-dashed border-cf-border px-3 py-4 text-sm text-cf-text-secondary">
-                        Nenhuma fatura fechada ainda.
+                        Nenhuma fatura fechada por enquanto.
                       </div>
                     ) : (
                       <div className="space-y-2">
@@ -387,7 +394,7 @@ const CreditCardsPage = ({
                                     </span>
                                   </div>
                                   <p className="text-xs text-cf-text-secondary">
-                                    Ref. {invoice.referenceMonth || "—"} · vence {formatDate(invoice.dueDate)}
+                                    Referência {formatReferenceMonth(invoice.referenceMonth)} · vence {formatDate(invoice.dueDate)}
                                   </p>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -408,7 +415,7 @@ const CreditCardsPage = ({
                                         onClick={() => void handlePayInvoice(invoice.id)}
                                         className="rounded border border-green-300 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
                                       >
-                                        Pagar fatura
+                                        Registrar pagamento
                                       </button>
                                     </div>
                                   ) : (
@@ -434,7 +441,7 @@ const CreditCardsPage = ({
                     </div>
                     {card.openPurchases.length === 0 ? (
                       <div className="rounded border border-dashed border-cf-border px-3 py-4 text-sm text-cf-text-secondary">
-                        Nenhuma compra aberta neste cartão.
+                        Nenhuma compra em aberto neste cartão.
                       </div>
                     ) : (
                       <div className="space-y-2">

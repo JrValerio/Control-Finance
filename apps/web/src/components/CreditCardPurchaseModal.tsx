@@ -123,7 +123,9 @@ const CreditCardPurchaseModal = ({
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-cf-text-primary">Nova compra</h2>
-            <p className="text-xs text-cf-text-secondary">{cardName}</p>
+            <p className="text-xs text-cf-text-secondary">
+              {cardName ? `${cardName} · entra no ciclo do cartão antes de virar pagamento.` : "Compra do cartão"}
+            </p>
           </div>
           <button
             type="button"
@@ -182,13 +184,14 @@ const CreditCardPurchaseModal = ({
 
           <div className="flex flex-col gap-1.5">
             <label htmlFor="credit-card-purchase-notes" className="text-sm font-medium text-cf-text-primary">
-              Notas
+              Observações <span className="text-xs font-normal text-cf-text-secondary">(opcional)</span>
             </label>
             <textarea
               id="credit-card-purchase-notes"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={3}
+              placeholder="Ex.: farmácia, mercado ou parcela de curso"
               className="rounded border border-cf-border-input bg-cf-surface px-3 py-2 text-sm text-cf-text-primary"
               disabled={isSaving}
             />
@@ -225,7 +228,7 @@ const CreditCardPurchaseModal = ({
                     disabled={isSaving}
                   />
                   <span className="text-xs text-cf-text-secondary">
-                    As parcelas futuras entram nos próximos fechamentos mensais.
+                    As próximas parcelas entram nos fechamentos futuros do cartão.
                   </span>
                 </div>
               </div>
@@ -255,7 +258,7 @@ const CreditCardPurchaseModal = ({
               {isSaving
                 ? "Salvando..."
                 : isInstallment
-                  ? `Adicionar em ${parseInt(installmentCount, 10) || MIN_INSTALLMENT_COUNT}x`
+                  ? `Adicionar parcelado em ${parseInt(installmentCount, 10) || MIN_INSTALLMENT_COUNT}x`
                   : "Adicionar compra"}
             </button>
           </div>

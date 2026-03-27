@@ -89,8 +89,8 @@ describe("BillsPage", () => {
     });
 
     expect(screen.getAllByText(/132[,.]90/).length).toBeGreaterThan(0);
-    expect(screen.getByText("2 contas")).toBeInTheDocument();
-    expect(screen.getByText("1 conta")).toBeInTheDocument();
+    expect(screen.getByText("2 contas em aberto")).toBeInTheDocument();
+    expect(screen.getByText("1 conta em atraso")).toBeInTheDocument();
   });
 
   it("renderiza lista de bills com titulo e valor", async () => {
@@ -147,7 +147,7 @@ describe("BillsPage", () => {
 
     expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Excluir" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Marcar como paga" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Registrar pagamento" })).toBeInTheDocument();
   });
 
   it("clicar filtro Pendentes chama list com status pending", async () => {
@@ -197,7 +197,7 @@ describe("BillsPage", () => {
       expect(screen.getByText("Conta de Agua")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "Marcar como paga" }));
+    await user.click(screen.getByRole("button", { name: "Registrar pagamento" }));
 
     await waitFor(() => {
       expect(billsService.markPaid).toHaveBeenCalledWith(1);
@@ -244,7 +244,7 @@ describe("BillsPage", () => {
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByText("Nenhuma pendência encontrada.")).toBeInTheDocument();
+      expect(screen.getByText("Nenhuma conta encontrada para este filtro.")).toBeInTheDocument();
     });
   });
 
@@ -288,7 +288,7 @@ describe("BillsPage", () => {
     await waitFor(() => expect(screen.getByText("Conta de Agua")).toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: /Nova pendência/ }));
-    await user.type(screen.getByLabelText(/Titulo/), "IPTU");
+    await user.type(screen.getByLabelText(/Título/), "IPTU");
     await user.type(screen.getByLabelText(/Valor/), "500");
     await user.click(screen.getByRole("checkbox", { name: /Parcelar/ }));
 
@@ -319,7 +319,7 @@ describe("BillsPage", () => {
     await waitFor(() => expect(screen.getByText("Conta de Agua")).toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: /Nova pendência/ }));
-    await user.type(screen.getByLabelText(/Titulo/), "IPTU");
+    await user.type(screen.getByLabelText(/Título/), "IPTU");
     await user.type(screen.getByLabelText(/Valor/), "500");
     await user.click(screen.getByRole("checkbox", { name: /Parcelar/ }));
     await user.click(screen.getByRole("button", { name: "Gerar 2 parcelas" }));
