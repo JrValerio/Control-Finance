@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import PropTypes from "prop-types";
 import { transactionsService } from "../services/transactions.service";
 import { profileService } from "../services/profile.service";
@@ -9,6 +9,8 @@ import { getApiErrorMessage } from "../utils/apiError";
 import BillModal from "./BillModal";
 import IncomeStatementQuickModal from "./IncomeStatementQuickModal";
 import ConfirmDialog from "./ConfirmDialog";
+
+const PREVIEW_PAGE_SIZE = 100;
 
 const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory = undefined }) => {
   const fileInputRef = useRef(null);
@@ -47,10 +49,12 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
   const [previewStatusFilter, setPreviewStatusFilter] = useState("all");
   const [previewTypeFilter, setPreviewTypeFilter] = useState("all");
   const [previewCategoryFilter, setPreviewCategoryFilter] = useState("all");
+  const [previewVisibleCount, setPreviewVisibleCount] = useState(PREVIEW_PAGE_SIZE);
   const [importRules, setImportRules] = useState([]);
   const [isSavingImportRule, setIsSavingImportRule] = useState(false);
   const [deletingImportRuleId, setDeletingImportRuleId] = useState(null);
   const [ruleFeedback, setRuleFeedback] = useState(null);
+  const deferredPreviewSearch = useDeferredValue(previewSearch);
 
   useEffect(() => {
     if (isOpen) {
@@ -84,6 +88,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
     setPreviewStatusFilter("all");
     setPreviewTypeFilter("all");
     setPreviewCategoryFilter("all");
+    setPreviewVisibleCount(PREVIEW_PAGE_SIZE);
     setImportRules([]);
     setIsSavingImportRule(false);
     setDeletingImportRuleId(null);
@@ -289,7 +294,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
 
   const filteredPreviewRows = useMemo(() => {
     const rows = dryRunResult?.rows ?? [];
-    const normalizedSearch = previewSearch.trim().toLowerCase();
+    const normalizedSearch = deferredPreviewSearch.trim().toLowerCase();
 
     return rows.filter((row) => {
       if (previewStatusFilter !== "all" && row.status !== previewStatusFilter) {
@@ -330,17 +335,28 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
       return searchableFields.includes(normalizedSearch);
     });
   }, [
+    deferredPreviewSearch,
     dryRunResult,
     previewCategoryFilter,
-    previewSearch,
     previewStatusFilter,
     previewTypeFilter,
     resolvePreviewCategoryMeta,
   ]);
 
+  useEffect(() => {
+    setPreviewVisibleCount(PREVIEW_PAGE_SIZE);
+  }, [dryRunResult, deferredPreviewSearch, previewCategoryFilter, previewStatusFilter, previewTypeFilter]);
+
+  const renderedPreviewRows = useMemo(
+    () => filteredPreviewRows.slice(0, previewVisibleCount),
+    [filteredPreviewRows, previewVisibleCount],
+  );
+
+  const hasHiddenPreviewRows = renderedPreviewRows.length < filteredPreviewRows.length;
+
   const validPreviewLines = useMemo(
-    () => filteredPreviewRows.filter((r) => r.status === "valid").map((r) => r.line),
-    [filteredPreviewRows],
+    () => renderedPreviewRows.filter((r) => r.status === "valid").map((r) => r.line),
+    [renderedPreviewRows],
   );
 
   const selectedPreviewRows = useMemo(
@@ -382,6 +398,16 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
       validPreviewLines.length > 0 && validPreviewLines.every((line) => selectedPreviewLines.has(line)),
     [selectedPreviewLines, validPreviewLines],
   );
+
+  const handleShowMorePreviewRows = () => {
+    setPreviewVisibleCount((current) =>
+      Math.min(current + PREVIEW_PAGE_SIZE, filteredPreviewRows.length),
+    );
+  };
+
+  const handleShowAllPreviewRows = () => {
+    setPreviewVisibleCount(filteredPreviewRows.length);
+  };
 
   const togglePreviewLine = (line) => {
     setSelectedPreviewLines((prev) => {
@@ -1038,9 +1064,16 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                     </select>
                   </div>
                   <div className="sm:col-span-2 xl:col-span-5">
-                    <p className="text-xs text-cf-text-secondary">
-                      {filteredPreviewRows.length} de {dryRunResult.rows.length} linhas visíveis nesta revisão.
-                    </p>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <p className="text-xs text-cf-text-secondary">
+                        {filteredPreviewRows.length} de {dryRunResult.rows.length} linhas visíveis nesta revisão.
+                      </p>
+                      {hasHiddenPreviewRows ? (
+                        <p className="text-xs text-cf-text-secondary">
+                          Mostrando {renderedPreviewRows.length} agora para manter a revisão leve.
+                        </p>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
                 {importRules.length > 0 ? (
@@ -1148,76 +1181,102 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                       Nenhuma linha encontrada para os filtros atuais.
                     </div>
                   ) : (
-                    <table className="min-w-full border-collapse text-left text-xs">
-                      <thead className="bg-cf-bg-subtle">
-                        <tr>
-                          <th className="border-b border-cf-border px-2 py-2">
-                            <input
-                              type="checkbox"
-                              aria-label="Selecionar todas as linhas válidas"
-                              checked={allVisibleValidSelected}
-                              onChange={toggleSelectAllPreview}
-                              className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
-                            />
-                          </th>
-                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Linha</th>
-                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Status</th>
-                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Descricao</th>
-                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Valor</th>
-                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Data</th>
-                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Categoria</th>
-                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Erros</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                    {filteredPreviewRows.map((row) => (
-                      <tr key={`import-row-${row.line}`} className="align-top">
-                        <td className="border-b border-cf-border px-2 py-2">
-                          {row.status === "valid" ? (
-                            <input
-                              type="checkbox"
-                              aria-label={`Selecionar linha ${row.line}`}
-                              checked={selectedPreviewLines.has(row.line)}
-                              onChange={() => togglePreviewLine(row.line)}
-                              className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
-                            />
-                          ) : null}
-                        </td>
-                        <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">{row.line}</td>
-                        <td className="border-b border-cf-border px-2 py-2">
-                          <span
-                            className={`rounded px-2 py-0.5 font-semibold ${
-                              row.status === "valid"
-                                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+                    <>
+                      {hasHiddenPreviewRows ? (
+                        <div className="border-b border-cf-border bg-cf-bg-subtle px-3 py-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs text-cf-text-secondary">
+                              Mostrando {renderedPreviewRows.length} de {filteredPreviewRows.length} linhas filtradas.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={handleShowMorePreviewRows}
+                                className="rounded border border-cf-border px-2 py-1 text-xs font-medium text-cf-text-primary hover:bg-cf-surface"
+                              >
+                                Mostrar mais {Math.min(PREVIEW_PAGE_SIZE, filteredPreviewRows.length - renderedPreviewRows.length)}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleShowAllPreviewRows}
+                                className="rounded border border-cf-border px-2 py-1 text-xs text-cf-text-secondary hover:bg-cf-surface"
+                              >
+                                Mostrar todas
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                      <table className="min-w-full border-collapse text-left text-xs">
+                        <thead className="bg-cf-bg-subtle">
+                          <tr>
+                            <th className="border-b border-cf-border px-2 py-2">
+                              <input
+                                type="checkbox"
+                                aria-label="Selecionar todas as linhas válidas"
+                                checked={allVisibleValidSelected}
+                                onChange={toggleSelectAllPreview}
+                                className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
+                              />
+                            </th>
+                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Linha</th>
+                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Status</th>
+                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Descricao</th>
+                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Valor</th>
+                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Data</th>
+                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Categoria</th>
+                            <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Erros</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                    {renderedPreviewRows.map((row) => (
+                        <tr key={`import-row-${row.line}`} className="align-top">
+                          <td className="border-b border-cf-border px-2 py-2">
+                            {row.status === "valid" ? (
+                              <input
+                                type="checkbox"
+                                aria-label={`Selecionar linha ${row.line}`}
+                                checked={selectedPreviewLines.has(row.line)}
+                                onChange={() => togglePreviewLine(row.line)}
+                                className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
+                              />
+                            ) : null}
+                          </td>
+                          <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">{row.line}</td>
+                          <td className="border-b border-cf-border px-2 py-2">
+                            <span
+                              className={`rounded px-2 py-0.5 font-semibold ${
+                                row.status === "valid"
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400"
+                                  : row.status === "duplicate"
+                                    ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                                    : row.status === "conflict"
+                                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                                    : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                              }`}
+                            >
+                              {row.status === "valid"
+                                ? "Valida"
                                 : row.status === "duplicate"
-                                  ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+                                  ? "Duplicada"
                                   : row.status === "conflict"
-                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
-                                  : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
-                            }`}
-                          >
-                            {row.status === "valid"
-                              ? "Valida"
-                              : row.status === "duplicate"
-                                ? "Duplicada"
-                                : row.status === "conflict"
-                                  ? "Conflito"
-                                : "Invalida"}
-                          </span>
-                          {(row.status === "duplicate" || row.status === "conflict") && row.statusDetail && (
-                            <span className="ml-1.5 text-xs text-cf-text-secondary">{row.statusDetail}</span>
-                          )}
-                        </td>
-                        <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
-                          {row.raw.description || "-"}
-                        </td>
-                        <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
-                          {row.raw.value || "-"}
-                        </td>
-                        <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">{row.raw.date || "-"}</td>
-                        <td className="border-b border-cf-border px-2 py-2">
-                          {row.status === "valid" ? (
-                            <div className="space-y-1">
+                                    ? "Conflito"
+                                  : "Invalida"}
+                            </span>
+                            {(row.status === "duplicate" || row.status === "conflict") && row.statusDetail && (
+                              <span className="ml-1.5 text-xs text-cf-text-secondary">{row.statusDetail}</span>
+                            )}
+                          </td>
+                          <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
+                            {row.raw.description || "-"}
+                          </td>
+                          <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
+                            {row.raw.value || "-"}
+                          </td>
+                          <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">{row.raw.date || "-"}</td>
+                          <td className="border-b border-cf-border px-2 py-2">
+                            {row.status === "valid" ? (
+                              <div className="space-y-1">
                               <div className="flex items-center gap-1">
                                 <select
                                   aria-label={`Categoria da linha ${row.line}`}
@@ -1299,6 +1358,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                     ))}
                       </tbody>
                     </table>
+                  </>
                   )}
                 </div>
               </>
