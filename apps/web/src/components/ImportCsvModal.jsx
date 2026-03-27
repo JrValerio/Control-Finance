@@ -41,6 +41,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   // batch category
   const [selectedPreviewLines, setSelectedPreviewLines] = useState(new Set());
   const [batchCategoryId, setBatchCategoryId] = useState("");
+  const [previewSearch, setPreviewSearch] = useState("");
+  const [previewStatusFilter, setPreviewStatusFilter] = useState("all");
+  const [previewTypeFilter, setPreviewTypeFilter] = useState("all");
+  const [previewCategoryFilter, setPreviewCategoryFilter] = useState("all");
 
   useEffect(() => {
     if (isOpen) {
@@ -69,6 +73,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setIncomeStatementCreated(false);
     setSelectedPreviewLines(new Set());
     setBatchCategoryId("");
+    setPreviewSearch("");
+    setPreviewStatusFilter("all");
+    setPreviewTypeFilter("all");
+    setPreviewCategoryFilter("all");
   }, [isOpen]);
 
   useEffect(() => {
@@ -239,9 +247,83 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     }
   };
 
+  const resolvePreviewCategoryMeta = useCallback((row) => {
+    const categoryId =
+      categoryOverrides[row.line] !== undefined
+        ? categoryOverrides[row.line]
+        : row.normalized?.categoryId ?? null;
+
+    if (categoryId == null) {
+      return { categoryId: null, categoryLabel: "Sem categoria" };
+    }
+
+    const match = categories.find((cat) => Number(cat.id) === Number(categoryId));
+    return {
+      categoryId,
+      categoryLabel: match?.name ?? row.raw.category ?? `Categoria ${categoryId}`,
+    };
+  }, [categories, categoryOverrides]);
+
+  const filteredPreviewRows = useMemo(() => {
+    const rows = dryRunResult?.rows ?? [];
+    const normalizedSearch = previewSearch.trim().toLowerCase();
+
+    return rows.filter((row) => {
+      if (previewStatusFilter !== "all" && row.status !== previewStatusFilter) {
+        return false;
+      }
+
+      if (previewTypeFilter !== "all" && row.raw.type !== previewTypeFilter) {
+        return false;
+      }
+
+      const { categoryId, categoryLabel } = resolvePreviewCategoryMeta(row);
+      if (previewCategoryFilter === "categorized" && categoryId == null) {
+        return false;
+      }
+      if (previewCategoryFilter === "uncategorized" && categoryId != null) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const searchableFields = [
+        row.raw.description,
+        row.raw.notes,
+        row.raw.category,
+        row.raw.type,
+        row.raw.date,
+        row.raw.value,
+        row.status,
+        row.statusDetail,
+        categoryLabel,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchableFields.includes(normalizedSearch);
+    });
+  }, [
+    dryRunResult,
+    previewCategoryFilter,
+    previewSearch,
+    previewStatusFilter,
+    previewTypeFilter,
+    resolvePreviewCategoryMeta,
+  ]);
+
   const validPreviewLines = useMemo(
-    () => (dryRunResult?.rows ?? []).filter((r) => r.status === "valid").map((r) => r.line),
-    [dryRunResult],
+    () => filteredPreviewRows.filter((r) => r.status === "valid").map((r) => r.line),
+    [filteredPreviewRows],
+  );
+
+  const allVisibleValidSelected = useMemo(
+    () =>
+      validPreviewLines.length > 0 && validPreviewLines.every((line) => selectedPreviewLines.has(line)),
+    [selectedPreviewLines, validPreviewLines],
   );
 
   const togglePreviewLine = (line) => {
@@ -253,11 +335,15 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   };
 
   const toggleSelectAllPreview = () => {
-    if (selectedPreviewLines.size === validPreviewLines.length) {
-      setSelectedPreviewLines(new Set());
-    } else {
-      setSelectedPreviewLines(new Set(validPreviewLines));
-    }
+    setSelectedPreviewLines((prev) => {
+      const next = new Set(prev);
+      if (allVisibleValidSelected) {
+        validPreviewLines.forEach((line) => next.delete(line));
+      } else {
+        validPreviewLines.forEach((line) => next.add(line));
+      }
+      return next;
+    });
   };
 
   const handleApplyBatchCategory = () => {
@@ -704,6 +790,89 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
               </div>
             ) : (
               <>
+                <div className="grid gap-2 rounded border border-cf-border bg-cf-surface px-3 py-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <div className="sm:col-span-2 xl:col-span-2">
+                    <label
+                      className="mb-1 block text-xs font-medium uppercase text-cf-text-secondary"
+                      htmlFor="import-preview-search"
+                    >
+                      Buscar
+                    </label>
+                    <input
+                      id="import-preview-search"
+                      type="search"
+                      aria-label="Buscar na pré-visualização"
+                      value={previewSearch}
+                      onChange={(e) => setPreviewSearch(e.target.value)}
+                      placeholder="PIX, farmácia, salário..."
+                      className="w-full rounded border border-cf-border bg-cf-surface px-2 py-1.5 text-sm text-cf-text-primary"
+                    />
+                  </div>
+                  <div>
+                    <label
+                      className="mb-1 block text-xs font-medium uppercase text-cf-text-secondary"
+                      htmlFor="import-preview-status-filter"
+                    >
+                      Status
+                    </label>
+                    <select
+                      id="import-preview-status-filter"
+                      aria-label="Filtrar por status"
+                      value={previewStatusFilter}
+                      onChange={(e) => setPreviewStatusFilter(e.target.value)}
+                      className="w-full rounded border border-cf-border bg-cf-surface px-2 py-1.5 text-sm text-cf-text-primary"
+                    >
+                      <option value="all">Todos</option>
+                      <option value="valid">Válidas</option>
+                      <option value="duplicate">Duplicadas</option>
+                      <option value="conflict">Conflitos</option>
+                      <option value="invalid">Inválidas</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      className="mb-1 block text-xs font-medium uppercase text-cf-text-secondary"
+                      htmlFor="import-preview-type-filter"
+                    >
+                      Tipo
+                    </label>
+                    <select
+                      id="import-preview-type-filter"
+                      aria-label="Filtrar por tipo"
+                      value={previewTypeFilter}
+                      onChange={(e) => setPreviewTypeFilter(e.target.value)}
+                      className="w-full rounded border border-cf-border bg-cf-surface px-2 py-1.5 text-sm text-cf-text-primary"
+                    >
+                      <option value="all">Todos</option>
+                      <option value="Entrada">Entrada</option>
+                      <option value="Saida">Saída</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      className="mb-1 block text-xs font-medium uppercase text-cf-text-secondary"
+                      htmlFor="import-preview-category-filter"
+                    >
+                      Categoria
+                    </label>
+                    <select
+                      id="import-preview-category-filter"
+                      aria-label="Filtrar por categoria"
+                      value={previewCategoryFilter}
+                      onChange={(e) => setPreviewCategoryFilter(e.target.value)}
+                      className="w-full rounded border border-cf-border bg-cf-surface px-2 py-1.5 text-sm text-cf-text-primary"
+                    >
+                      <option value="all">Todas</option>
+                      <option value="categorized">Com categoria</option>
+                      <option value="uncategorized">Sem categoria</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2 xl:col-span-5">
+                    <p className="text-xs text-cf-text-secondary">
+                      {filteredPreviewRows.length} de {dryRunResult.rows.length} linhas visíveis nesta revisão.
+                    </p>
+                  </div>
+                </div>
                 {selectedPreviewLines.size > 0 && (
                   <div className="mb-1 flex flex-wrap items-center gap-2 rounded border border-brand-1/40 bg-brand-1/5 px-3 py-2">
                     <span className="text-xs font-medium text-cf-text-primary">
@@ -736,30 +905,35 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                     </button>
                   </div>
                 )}
-              <div className="max-h-80 overflow-auto rounded border border-cf-border">
-                <table className="min-w-full border-collapse text-left text-xs">
-                  <thead className="bg-cf-bg-subtle">
-                    <tr>
-                      <th className="border-b border-cf-border px-2 py-2">
-                        <input
-                          type="checkbox"
-                          aria-label="Selecionar todas as linhas válidas"
-                          checked={validPreviewLines.length > 0 && selectedPreviewLines.size === validPreviewLines.length}
-                          onChange={toggleSelectAllPreview}
-                          className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
-                        />
-                      </th>
-                      <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Linha</th>
-                      <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Status</th>
-                      <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Descricao</th>
-                      <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Valor</th>
-                      <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Data</th>
-                      <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Categoria</th>
-                      <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Erros</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dryRunResult.rows.map((row) => (
+                <div className="max-h-80 overflow-auto rounded border border-cf-border">
+                  {filteredPreviewRows.length === 0 ? (
+                    <div className="px-3 py-4 text-sm text-cf-text-secondary">
+                      Nenhuma linha encontrada para os filtros atuais.
+                    </div>
+                  ) : (
+                    <table className="min-w-full border-collapse text-left text-xs">
+                      <thead className="bg-cf-bg-subtle">
+                        <tr>
+                          <th className="border-b border-cf-border px-2 py-2">
+                            <input
+                              type="checkbox"
+                              aria-label="Selecionar todas as linhas válidas"
+                              checked={allVisibleValidSelected}
+                              onChange={toggleSelectAllPreview}
+                              className="h-3.5 w-3.5 cursor-pointer accent-brand-1"
+                            />
+                          </th>
+                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Linha</th>
+                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Status</th>
+                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Descricao</th>
+                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Valor</th>
+                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Data</th>
+                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Categoria</th>
+                          <th className="border-b border-cf-border px-2 py-2 text-cf-text-primary">Erros</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                    {filteredPreviewRows.map((row) => (
                       <tr key={`import-row-${row.line}`} className="align-top">
                         <td className="border-b border-cf-border px-2 py-2">
                           {row.status === "valid" ? (
@@ -886,9 +1060,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                         </td>
                       </tr>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               </>
             )}
           </div>

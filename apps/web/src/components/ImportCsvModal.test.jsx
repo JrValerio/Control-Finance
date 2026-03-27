@@ -141,8 +141,8 @@ describe("ImportCsvModal", () => {
       expect(transactionsService.dryRunImportCsv).toHaveBeenCalledWith(file);
     });
 
-    const validRowsCard = screen.getByText("Válidas").closest("div");
-    const invalidRowsCard = screen.getByText("Inválidas").closest("div");
+    const validRowsCard = screen.getAllByText("Válidas")[0].closest("div");
+    const invalidRowsCard = screen.getAllByText("Inválidas")[0].closest("div");
 
     expect(validRowsCard).toHaveTextContent("1");
     expect(invalidRowsCard).toHaveTextContent("1");
@@ -198,7 +198,7 @@ describe("ImportCsvModal", () => {
     await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Conflitos")).toBeInTheDocument();
+      expect(screen.getAllByText("Conflitos")[0]).toBeInTheDocument();
     });
 
     expect(screen.getByText("Conflito")).toBeInTheDocument();
@@ -326,6 +326,174 @@ describe("ImportCsvModal", () => {
         screen.getByText("Sessão de importação expirada. Rode a pré-visualização novamente."),
       ).toBeInTheDocument();
     });
+  });
+
+  describe("preview search and filters", () => {
+    it("filtra o preview por busca textual e status", async () => {
+      const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(
+        buildDryRunResponse({
+          summary: {
+            totalRows: 3,
+            validRows: 2,
+            invalidRows: 0,
+            duplicateRows: 1,
+            conflictRows: 0,
+            income: 250,
+            expense: 0,
+          },
+          rows: [
+            {
+              line: 2,
+              status: "valid",
+              raw: {
+                date: "2026-02-21",
+                type: "Entrada",
+                value: "100",
+                description: "PIX FARMACIA CENTRAL",
+                notes: "",
+                category: "",
+              },
+              normalized: {
+                date: "2026-02-21",
+                type: "Entrada",
+                value: 100,
+                description: "PIX FARMACIA CENTRAL",
+                notes: "",
+                categoryId: null,
+              },
+              errors: [],
+            },
+            {
+              line: 3,
+              status: "valid",
+              raw: {
+                date: "2026-02-22",
+                type: "Entrada",
+                value: "100",
+                description: "PIX MERCADO BAIRRO",
+                notes: "",
+                category: "",
+              },
+              normalized: {
+                date: "2026-02-22",
+                type: "Entrada",
+                value: 100,
+                description: "PIX MERCADO BAIRRO",
+                notes: "",
+                categoryId: null,
+              },
+              errors: [],
+            },
+            {
+              line: 4,
+              status: "duplicate",
+              statusDetail: "Ja existe uma transacao importada equivalente.",
+              raw: {
+                date: "2026-02-25",
+                type: "Entrada",
+                value: "50",
+                description: "SALARIO INSS",
+                notes: "",
+                category: "Trabalho",
+              },
+              normalized: null,
+              errors: [],
+            },
+          ],
+        }),
+      );
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/buscar na pré-visualização/i)).toBeInTheDocument();
+      });
+
+      await userEvent.type(screen.getByLabelText(/buscar na pré-visualização/i), "farmacia");
+
+      expect(screen.getByText("PIX FARMACIA CENTRAL")).toBeInTheDocument();
+      expect(screen.queryByText("PIX MERCADO BAIRRO")).not.toBeInTheDocument();
+      expect(screen.getByText(/1 de 3 linhas visíveis/i)).toBeInTheDocument();
+
+      await userEvent.clear(screen.getByLabelText(/buscar na pré-visualização/i));
+      await userEvent.selectOptions(screen.getByLabelText(/filtrar por status/i), "duplicate");
+
+      expect(screen.getByText("SALARIO INSS")).toBeInTheDocument();
+      expect(screen.queryByText("PIX FARMACIA CENTRAL")).not.toBeInTheDocument();
+      expect(screen.getByText(/1 de 3 linhas visíveis/i)).toBeInTheDocument();
+    });
+
+    it(
+      "mantem o preview navegavel com extrato grande e busca pontual",
+      async () => {
+        const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+        const rows = Array.from({ length: 320 }, (_, index) => {
+          const line = index + 2;
+          const description =
+            line === 211
+              ? "PIX FARMACIA ESPECIAL"
+              : `PIX TRANSFERENCIA ${String(line).padStart(3, "0")}`;
+
+          return {
+            line,
+            status: "valid",
+            raw: {
+              date: "2026-02-21",
+              type: "Entrada",
+              value: "10",
+              description,
+              notes: "",
+              category: "",
+            },
+            normalized: {
+              date: "2026-02-21",
+              type: "Entrada",
+              value: 10,
+              description,
+              notes: "",
+              categoryId: null,
+            },
+            errors: [],
+          };
+        });
+
+        transactionsService.dryRunImportCsv.mockResolvedValueOnce(
+          buildDryRunResponse({
+            summary: {
+              totalRows: rows.length,
+              validRows: rows.length,
+              invalidRows: 0,
+              duplicateRows: 0,
+              conflictRows: 0,
+              income: rows.length * 10,
+              expense: 0,
+            },
+            rows,
+          }),
+        );
+
+        render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+        await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+        await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+        await waitFor(() => {
+          expect(screen.getByText(/320 de 320 linhas visíveis/i)).toBeInTheDocument();
+        });
+
+        await userEvent.type(
+          screen.getByLabelText(/buscar na pré-visualização/i),
+          "farmacia especial",
+        );
+
+        expect(screen.getByText("PIX FARMACIA ESPECIAL")).toBeInTheDocument();
+        expect(screen.queryByText("PIX TRANSFERENCIA 002")).not.toBeInTheDocument();
+        expect(screen.getByText(/1 de 320 linhas visíveis/i)).toBeInTheDocument();
+      },
+      10000,
+    );
   });
 
   describe("income statement bridge", () => {
