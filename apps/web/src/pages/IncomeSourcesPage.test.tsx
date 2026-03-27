@@ -221,10 +221,10 @@ describe("IncomeSourcesPage", () => {
 
     expect(screen.getByRole("heading", { name: /Gerar extrato/ })).toBeInTheDocument();
     expect(screen.getByLabelText(/Mês de referência/)).toBeInTheDocument();
-    expect(screen.getByLabelText(/Valor liquido/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Valor líquido/)).toBeInTheDocument();
   });
 
-  it("Lancar entrada chama createStatement e postStatement e exibe mensagem de sucesso", async () => {
+  it("Lançar entrada chama createStatement e postStatement e exibe mensagem de sucesso", async () => {
     const user = userEvent.setup();
     vi.mocked(incomeSourcesService.createStatement).mockResolvedValue(buildStatementResult());
     vi.mocked(incomeSourcesService.postStatement).mockResolvedValue(buildPostResult());
@@ -235,9 +235,9 @@ describe("IncomeSourcesPage", () => {
 
     await user.click(screen.getByRole("button", { name: "Gerar extrato" }));
 
-    await user.type(screen.getByLabelText(/Valor liquido/), "2803,52");
+    await user.type(screen.getByLabelText(/Valor líquido/), "2803,52");
 
-    await user.click(screen.getByRole("button", { name: "Lancar entrada" }));
+    await user.click(screen.getByRole("button", { name: "Lançar entrada" }));
 
     await waitFor(() => {
       expect(incomeSourcesService.createStatement).toHaveBeenCalledWith(
@@ -305,7 +305,7 @@ describe("IncomeSourcesPage", () => {
 
     await user.click(screen.getByRole("button", { name: "Gerar extrato" }));
 
-    await user.type(screen.getByLabelText(/Valor liquido/), "2803,52");
+    await user.type(screen.getByLabelText(/Valor líquido/), "2803,52");
 
     await user.click(screen.getByRole("button", { name: "Salvar rascunho" }));
 
@@ -332,8 +332,8 @@ describe("IncomeSourcesPage", () => {
     await waitFor(() => expect(screen.getByText("Pensao INSS")).toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: "Gerar extrato" }));
-    await user.type(screen.getByLabelText(/Valor liquido/), "2803,52");
-    await user.click(screen.getByRole("button", { name: "Lancar entrada" }));
+    await user.type(screen.getByLabelText(/Valor líquido/), "2803,52");
+    await user.click(screen.getByRole("button", { name: "Lançar entrada" }));
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toBeInTheDocument();

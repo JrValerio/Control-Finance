@@ -60,8 +60,8 @@ describe("ImportHistoryModal", () => {
     expect(screen.getByText("itau-90-dias.ofx")).toBeInTheDocument();
     expect(screen.getByText("Extrato bancário")).toBeInTheDocument();
     expect(screen.getByText("Já existentes: 1")).toBeInTheDocument();
-    expect(screen.getByText("Para revisar: 1")).toBeInTheDocument();
-    expect(screen.getByText("Sem ação disponível")).toBeInTheDocument();
+    expect(screen.getByText("Pedem revisão: 1")).toBeInTheDocument();
+    expect(screen.getByText("Desfazer indisponível")).toBeInTheDocument();
     expect(
       screen.getByText(
         "Esta importação já gerou uma conta vinculada. Revise ou remova esse item antes de desfazer.",
