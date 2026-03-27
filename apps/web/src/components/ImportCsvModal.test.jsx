@@ -960,10 +960,10 @@ describe("ImportCsvModal", () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByRole("button", { name: "Registrar e lancar entrada" })).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Registrar e lançar entrada" })).toBeInTheDocument();
       });
 
-      await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+      await userEvent.click(screen.getByRole("button", { name: "Registrar e lançar entrada" }));
 
       await waitFor(() => {
         expect(incomeSourcesService.createStatement).toHaveBeenCalledWith(1, {
@@ -1035,11 +1035,11 @@ describe("ImportCsvModal", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole("button", { name: "Registrar e lancar entrada" }),
+          screen.getByRole("button", { name: "Registrar e lançar entrada" }),
         ).toBeInTheDocument();
       });
 
-      await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+      await userEvent.click(screen.getByRole("button", { name: "Registrar e lançar entrada" }));
 
       await waitFor(() => {
         expect(
@@ -1142,11 +1142,11 @@ describe("ImportCsvModal", () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole("button", { name: "Registrar e lancar entrada" }),
+          screen.getByRole("button", { name: "Registrar e lançar entrada" }),
         ).toBeInTheDocument();
       });
 
-      await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+      await userEvent.click(screen.getByRole("button", { name: "Registrar e lançar entrada" }));
 
       await waitFor(() => {
         expect(
