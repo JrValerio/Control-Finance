@@ -582,15 +582,29 @@ describe("ImportCsvModal", () => {
 
         await waitFor(() => {
           expect(screen.getByText(/320 de 320 linhas visíveis/i)).toBeInTheDocument();
+          expect(screen.getByText(/mostrando 100 agora para manter a revisão leve/i)).toBeInTheDocument();
+          expect(screen.getByText(/mostrando 100 de 320 linhas filtradas/i)).toBeInTheDocument();
         });
+
+        expect(screen.queryByText("PIX TRANSFERENCIA 102")).not.toBeInTheDocument();
+
+        await userEvent.click(screen.getByRole("button", { name: /mostrar mais 100/i }));
+
+        await waitFor(() => {
+          expect(screen.getByText(/mostrando 200 de 320 linhas filtradas/i)).toBeInTheDocument();
+        });
+
+        expect(screen.getByText("PIX TRANSFERENCIA 102")).toBeInTheDocument();
 
         fireEvent.change(screen.getByLabelText(/buscar na pré-visualização/i), {
           target: { value: "farmacia especial" },
         });
 
-        expect(screen.getByText("PIX FARMACIA ESPECIAL")).toBeInTheDocument();
-        expect(screen.queryByText("PIX TRANSFERENCIA 002")).not.toBeInTheDocument();
-        expect(screen.getByText(/1 de 320 linhas visíveis/i)).toBeInTheDocument();
+        await waitFor(() => {
+          expect(screen.getByText("PIX FARMACIA ESPECIAL")).toBeInTheDocument();
+          expect(screen.queryByText("PIX TRANSFERENCIA 002")).not.toBeInTheDocument();
+          expect(screen.getByText(/1 de 320 linhas visíveis/i)).toBeInTheDocument();
+        });
       },
       20000,
     );
