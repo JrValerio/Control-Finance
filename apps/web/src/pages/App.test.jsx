@@ -503,9 +503,15 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("R$ 1.020,00")).toBeInTheDocument();
-    expect(screen.getByTestId("mom-income")).toHaveTextContent("MoM: ↑ +8.3% (+R$ 100,00)");
-    expect(screen.getByTestId("mom-balance")).toHaveTextContent("MoM: ↑ +13.3% (+R$ 120,00)");
-    expect(screen.getByTestId("mom-expense")).toHaveTextContent("MoM: ↓ -6.7% (-R$ 20,00)");
+    expect(screen.getByTestId("mom-income")).toHaveTextContent(
+      "Vs. mês anterior: subiu 8,3% (+R$ 100,00)",
+    );
+    expect(screen.getByTestId("mom-balance")).toHaveTextContent(
+      "Vs. mês anterior: subiu 13,3% (+R$ 120,00)",
+    );
+    expect(screen.getByTestId("mom-expense")).toHaveTextContent(
+      "Vs. mês anterior: caiu 6,7% (-R$ 20,00)",
+    );
     expect(screen.getByTestId("mom-expense")).toHaveClass("text-green-200");
   });
 
@@ -544,7 +550,9 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByTestId("mom-income")).toBeInTheDocument();
-    expect(screen.getByTestId("mom-income")).toHaveTextContent("MoM: ↑ — (+R$ 100,00)");
+    expect(screen.getByTestId("mom-income")).toHaveTextContent(
+      "Vs. mês anterior: sem base de comparação (+R$ 100,00)",
+    );
   });
 
   it("exibe loading de comparacao mensal enquanto os resumos sao carregados", async () => {
@@ -556,9 +564,11 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByTestId("mom-balance")).toHaveTextContent("MoM: Calculando...");
-    expect(screen.getByTestId("mom-income")).toHaveTextContent("MoM: Calculando...");
-    expect(screen.getByTestId("mom-expense")).toHaveTextContent("MoM: Calculando...");
+    expect(await screen.findByTestId("mom-balance")).toHaveTextContent(
+      "Vs. mês anterior: calculando...",
+    );
+    expect(screen.getByTestId("mom-income")).toHaveTextContent("Vs. mês anterior: calculando...");
+    expect(screen.getByTestId("mom-expense")).toHaveTextContent("Vs. mês anterior: calculando...");
 
     await act(async () => {
       currentMonthDeferred.resolve(
@@ -593,7 +603,9 @@ describe("App", () => {
       );
     });
 
-    expect(screen.getByTestId("mom-balance")).not.toHaveTextContent("MoM: Calculando...");
+    expect(screen.getByTestId("mom-balance")).not.toHaveTextContent(
+      "Vs. mês anterior: calculando...",
+    );
   });
 
   it("mostra fallback de MoM quando comparacao mensal falha", async () => {
@@ -613,9 +625,9 @@ describe("App", () => {
 
     expect(await screen.findByText("R$ 700,00")).toBeInTheDocument();
     expect(await screen.findByText("Comparação mensal indisponível.")).toBeInTheDocument();
-    expect(screen.getByTestId("mom-income")).toHaveTextContent("MoM: —");
-    expect(screen.getByTestId("mom-balance")).toHaveTextContent("MoM: —");
-    expect(screen.getByTestId("mom-expense")).toHaveTextContent("MoM: —");
+    expect(screen.getByTestId("mom-income")).toHaveTextContent("Vs. mês anterior: indisponível");
+    expect(screen.getByTestId("mom-balance")).toHaveTextContent("Vs. mês anterior: indisponível");
+    expect(screen.getByTestId("mom-expense")).toHaveTextContent("Vs. mês anterior: indisponível");
   });
 
   it("exibe top 3 variacoes por categoria ordenadas por maior delta absoluto", async () => {

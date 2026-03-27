@@ -104,6 +104,58 @@ const METHOD_LABELS: Record<string, string> = {
   simplified_discount: "Desconto simplificado",
 };
 
+const OBLIGATION_REASON_LABELS: Record<string, string> = {
+  TAXABLE_INCOME_LIMIT: "Rendimentos tributáveis acima do limite",
+  EXEMPT_AND_EXCLUSIVE_INCOME_LIMIT: "Rendimentos isentos e exclusivos acima do limite",
+  ASSET_BALANCE_LIMIT: "Patrimônio acima do limite",
+  RURAL_REVENUE_LIMIT: "Receita rural acima do limite",
+  RURAL_LOSS_COMPENSATION: "Compensação de prejuízo rural",
+  CAPITAL_GAIN_EVENT: "Ganho de capital no exercício",
+  PROPERTY_SALE_EXEMPTION_EVENT: "Venda de imóvel com isenção",
+  STOCK_OPERATION_EVENT: "Operações em bolsa",
+  RESIDENT_START_EVENT: "Passou à condição de residente",
+  CONTROLLED_ENTITY_ABROAD_EVENT: "Entidade controlada no exterior",
+  FOREIGN_TRUST_EVENT: "Trust no exterior",
+  FOREIGN_FINANCIAL_EVENT: "Aplicações financeiras no exterior",
+  FOREIGN_DIVIDENDS_EVENT: "Dividendos no exterior",
+};
+
+const FACT_WARNING_LABELS: Record<string, string> = {
+  PENDING_FACTS_EXCLUDED: "Fatos pendentes fora do cálculo",
+  DUPLICATE_FACTS_INCLUDED: "Fatos revisados com possível duplicidade",
+  TAXPAYER_CPF_MISMATCH_EXCLUDED: "Fatos excluídos por CPF divergente",
+  TAXPAYER_CPF_NOT_CONFIGURED: "CPF do titular ainda não configurado",
+};
+
+const FACT_CONFLICT_LABELS: Record<string, string> = {
+  TAX_FACT_DUPLICATE: "Possível duplicidade",
+};
+
+const FACT_SUBCATEGORY_LABELS: Record<string, string> = {
+  annual_taxable_income: "Rendimento tributável anual",
+  annual_taxable_income_adjusted: "Rendimento tributável anual ajustado",
+  annual_withheld_tax: "IR retido na fonte no ano",
+  bank_account_balance: "Saldo em conta bancária",
+  bank_annual_exclusive_income: "Rendimento bancário com tributação exclusiva",
+  bank_debt_balance: "Saldo de dívida bancária",
+  bank_investment_balance: "Saldo de investimento bancário",
+  exempt_income_total: "Rendimento isento no ano",
+  exclusive_income_total: "Rendimento exclusivo no ano",
+  inss_annual_taxable_income: "Benefício INSS tributável no ano",
+  inss_annual_withheld_tax: "IR retido do INSS no ano",
+  inss_retirement_65_plus_exempt: "Aposentadoria do INSS isenta para maiores de 65 anos",
+  inss_retirement_65_plus_thirteenth_exempt: "13º do INSS isento para maiores de 65 anos",
+  inss_thirteenth_salary_exclusive: "13º do INSS com tributação exclusiva",
+  inss_thirteenth_withheld_tax: "IR retido sobre o 13º do INSS",
+  app_income_statement_taxable_income: "Renda sincronizada do app",
+  app_transaction_income: "Entrada sincronizada do app",
+  profile_suggestion_amount: "Valor sugerido a partir do perfil",
+  thirteenth_salary: "13º salário",
+  total_paid: "Total pago",
+  withheld_tax_total: "Total de IR retido",
+  year_end_balance: "Saldo em 31 de dezembro",
+};
+
 const DOCUMENT_STATUS_LABELS: Record<string, string> = {
   uploaded: "Enviado",
   classified: "Classificado",
@@ -161,6 +213,85 @@ const formatDateTime = (value: string | null) => {
 };
 
 const normalizeDocumentNumber = (value: unknown) => String(value || "").replace(/\D/g, "");
+
+const humanizeTaxIdentifier = (value: string | null | undefined) => {
+  const normalizedValue = String(value || "").trim();
+
+  if (!normalizedValue) {
+    return "Não informado";
+  }
+
+  if (!/[_-]/.test(normalizedValue) && /\s/.test(normalizedValue)) {
+    return normalizedValue;
+  }
+
+  const acronymLabels: Record<string, string> = {
+    app: "App",
+    bank: "Banco",
+    cpf: "CPF",
+    inss: "INSS",
+    irpf: "IRPF",
+    irrf: "IRRF",
+  };
+
+  return normalizedValue
+    .split(/[_-]+/g)
+    .filter(Boolean)
+    .map((segment) => {
+      const loweredSegment = segment.toLowerCase();
+
+      if (acronymLabels[loweredSegment]) {
+        return acronymLabels[loweredSegment];
+      }
+
+      if (/^\d+$/.test(segment)) {
+        return segment;
+      }
+
+      return `${segment.charAt(0).toUpperCase()}${segment.slice(1).toLowerCase()}`;
+    })
+    .join(" ");
+};
+
+const formatObligationReasonLabel = (code: string) =>
+  OBLIGATION_REASON_LABELS[code] || humanizeTaxIdentifier(code);
+
+const formatFactWarningLabel = (code: string) =>
+  FACT_WARNING_LABELS[code] || humanizeTaxIdentifier(code);
+
+const formatFactConflictLabel = (code: string) =>
+  FACT_CONFLICT_LABELS[code] || humanizeTaxIdentifier(code);
+
+const formatFactSubcategoryLabel = (subcategory: string) =>
+  FACT_SUBCATEGORY_LABELS[subcategory] || humanizeTaxIdentifier(subcategory);
+
+const formatReferencePeriod = (value: string | null) => {
+  const normalizedValue = String(value || "").trim();
+
+  if (!normalizedValue) {
+    return "Período não informado";
+  }
+
+  const annualMatch = normalizedValue.match(/^(\d{4})-annual$/);
+
+  if (annualMatch) {
+    return `Ano de ${annualMatch[1]}`;
+  }
+
+  const monthMatch = normalizedValue.match(/^(\d{4})-(\d{2})$/);
+
+  if (monthMatch) {
+    return `${monthMatch[2]}/${monthMatch[1]}`;
+  }
+
+  const dateMatch = normalizedValue.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (dateMatch) {
+    return `${dateMatch[3]}/${dateMatch[2]}/${dateMatch[1]}`;
+  }
+
+  return normalizedValue;
+};
 
 const formatCpf = (value: string | null) => {
   const digits = normalizeDocumentNumber(value);
@@ -1041,7 +1172,10 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                 <ul className="mt-2 space-y-2">
                   {obligation.reasons.map((reason) => (
                     <li key={reason.code} className="text-sm text-cf-text-primary">
-                      <span className="font-semibold">{reason.code}</span>: {reason.message}
+                      <span className="font-semibold" title={reason.code}>
+                        {formatObligationReasonLabel(reason.code)}
+                      </span>
+                      : {reason.message}
                     </li>
                   ))}
                 </ul>
@@ -1059,7 +1193,10 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                   key={warning.code}
                   className="rounded border border-amber-200 bg-white/60 px-3 py-2 text-sm text-amber-900"
                 >
-                  <span className="font-semibold">{warning.code}</span>: {warning.message}
+                  <span className="font-semibold" title={warning.code}>
+                    {formatFactWarningLabel(warning.code)}
+                  </span>
+                  : {warning.message}
                 </div>
               ))}
             </div>
@@ -1239,7 +1376,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                             <span className="text-xs text-cf-text-secondary">#{fact.id}</span>
                             {fact.conflictCode ? (
                               <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                                {fact.conflictCode}
+                                {formatFactConflictLabel(fact.conflictCode)}
                               </span>
                             ) : null}
                             {ownershipMismatch ? (
@@ -1255,8 +1392,16 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                             {fact.payerName || "Fonte pagadora não identificada"}
                           </p>
                           <div className="mt-2 flex flex-wrap gap-3 text-xs text-cf-text-secondary">
-                            {fact.subcategory ? <span>Subcategoria: {fact.subcategory}</span> : null}
-                            {fact.referencePeriod ? <span>Período: {fact.referencePeriod}</span> : null}
+                            {fact.subcategory ? (
+                              <span title={fact.subcategory}>
+                                Subcategoria fiscal: {formatFactSubcategoryLabel(fact.subcategory)}
+                              </span>
+                            ) : null}
+                            {fact.referencePeriod ? (
+                              <span title={fact.referencePeriod}>
+                                Período de referência: {formatReferencePeriod(fact.referencePeriod)}
+                              </span>
+                            ) : null}
                             {fact.sourceDocument?.originalFileName ? (
                               <span>Documento: {fact.sourceDocument.originalFileName}</span>
                             ) : null}

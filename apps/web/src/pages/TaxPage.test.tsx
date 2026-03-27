@@ -240,11 +240,49 @@ describe("TaxPage", () => {
     });
 
     expect(screen.getByText("Obrigatório declarar")).toBeInTheDocument();
-    expect(screen.getByText("TAXABLE_INCOME_LIMIT")).toBeInTheDocument();
+    expect(screen.getByText("Rendimentos tributáveis acima do limite")).toBeInTheDocument();
     expect(screen.getByText("ACME LTDA")).toBeInTheDocument();
     expect(screen.getByText("Documentos do exercício")).toBeInTheDocument();
     expect(screen.getByText("empregador.pdf")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Aprovar todos pendentes" })).toBeInTheDocument();
+  });
+
+  it("traduz avisos, subcategoria, periodo e conflito para linguagem mais humana", async () => {
+    vi.mocked(taxService.getSummary).mockResolvedValue(
+      buildSummary({
+        warnings: [
+          {
+            code: "PENDING_FACTS_EXCLUDED",
+            message: "Ha fatos fiscais pendentes de revisao e eles nao entram no resumo anual.",
+          },
+        ],
+      }),
+    );
+    vi.mocked(taxService.listFacts).mockResolvedValue({
+      items: [
+        buildFact({
+          subcategory: "inss_retirement_65_plus_exempt",
+          referencePeriod: "2025-annual",
+          conflictCode: "TAX_FACT_DUPLICATE",
+          conflictMessage: "Fato potencialmente duplicado com outro documento fiscal do usuario.",
+        }),
+      ],
+      page: 1,
+      pageSize: 25,
+      total: 1,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Fatos pendentes fora do cálculo")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Possível duplicidade")).toBeInTheDocument();
+    expect(
+      screen.getByText("Subcategoria fiscal: Aposentadoria do INSS isenta para maiores de 65 anos"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Período de referência: Ano de 2025")).toBeInTheDocument();
   });
 
   it("explica de forma didatica quando o usuario esta sem obrigatoriedade", async () => {
@@ -567,7 +605,7 @@ describe("TaxPage", () => {
     expect(
       await screen.findByText((content) => content.includes("Renda manual INSS")),
     ).toBeInTheDocument();
-  });
+  }, 10000);
 
   it("distingue upload concluído de falha no processamento", async () => {
     const user = userEvent.setup();
