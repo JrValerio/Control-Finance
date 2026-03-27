@@ -272,6 +272,11 @@ PRs mergeados:
 6. `#303` guard rails operacionais e histórico auditável de imports
 7. `#304` limite bancário / cheque especial
 8. `#305` cartão + ciclo inicial de fatura
+9. `#309` conciliação explícita entre renda documental e crédito bancário
+10. `#310` parcelamento simples no cartão
+11. `#311` bridge documental para holerite/CLT
+12. `#312` polish e performance do preview grande
+13. `#313` undo com cascata segura para derivados
 
 Documentos de referência:
 
@@ -285,7 +290,8 @@ Leitura correta do estado:
 - guard rails do MVP: entregues
 - limite bancário: entregue
 - cartão e fatura: entregues no recorte inicial
-- gaps atuais: refino, reconciliação e consistência operacional de undo
+- follow-ups pós-MVP já entregues: reconciliação explícita, parcelamento simples, bridge de holerite/CLT, polish grande de preview e undo seguro
+- gaps atuais: evolução de cartão para casos mais ricos, expansão documental além de INSS/CLT e UX mais explícita de reconciliação
 
 Essa frente não deve voltar para o backlog como “fundação pendente”.
 Os próximos passos devem nascer como **follow-ups pós-MVP**, não como repetição da trilha já mergeada.
