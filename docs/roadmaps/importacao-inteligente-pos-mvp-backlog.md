@@ -27,68 +27,32 @@ Documentos de referência:
 - `docs/roadmaps/importacao-inteligente-renda-extratos.md`
 - `docs/audits/importacao-inteligente-mvp-auditoria-final.md`
 
+Follow-ups já entregues em `main` depois do MVP inicial:
+
+- `#309` conciliação explícita entre renda documental e crédito bancário
+- `#310` parcelamento simples no cartão
+- `#311` bridge documental para holerite/CLT
+- `#312` polish e performance do preview grande
+- `#313` undo com cascata segura para derivados
+
 ---
 
 ## 2. Objetivo do backlog pós-MVP
 
-Fechar o principal gap operacional remanescente e abrir a próxima camada de evolução do produto sem reabrir escopo já entregue.
+Seguir evoluindo o produto a partir de uma base já estável, sem reabrir escopo já entregue e sem perder auditabilidade.
 
 ---
 
-## 3. P0 — Undo de importação com cascata para derivados
+## 3. P0 — Encerrado em `#313`
 
-### Prioridade
+O principal gap operacional do pós-MVP foi resolvido com:
 
-Crítica
+- planner de undo por sessão
+- cascata segura para `income_statements` revertíveis
+- cascata segura para `bills` revertíveis
+- bloqueio explícito para derivados evoluídos fora do fluxo seguro
 
-### Problema
-
-Hoje o desfazer importação pode reverter a sessão principal, mas ainda existe risco de deixar artefatos derivados ativos, o que quebra a consistência entre:
-
-- sessão de importação
-- entidades derivadas
-- histórico auditável
-- estado real do produto
-
-Em produto financeiro, “quase desfeito” é bug, não detalhe.
-
-### Escopo
-
-Implementar `undo` de importação com consistência transacional e/ou bloqueio explícito para derivados.
-
-#### Deve cobrir
-
-- reverter `transactions` da sessão
-- reverter ou bloquear `income_statements` derivados da sessão
-- reverter ou bloquear `bills` derivados da sessão
-- manter o histórico coerente com o estado real após reversão
-- preservar auditabilidade do que foi criado, revertido, bloqueado ou mantido
-
-### Regras de negócio
-
-- uma sessão desfeita não pode deixar artefato derivado ativo sem sinalização explícita
-- se não for possível reverter automaticamente um derivado, a operação deve:
-  - bloquear o undo completo com mensagem clara, ou
-  - marcar o derivado de forma explícita como pendente/incompatível e exigir ação consciente
-- histórico e estado persistido precisam contar a mesma história
-
-### Risco
-
-Alto
-
-### Critérios de aceite
-
-- sessão desfeita não deixa `transactions` ativas daquela importação
-- sessão desfeita não deixa `income_statements` derivados ativos sem tratamento explícito
-- sessão desfeita não deixa `bills` derivados ativos sem tratamento explícito
-- histórico reflete reversão completa ou bloqueio justificado
-- operação continua auditável ponta a ponta
-
-### Observações de implementação
-
-- preferir abordagem determinística e auditável
-- evitar `delete` cego; favorecer `soft-delete` ou `revert status` quando fizer sentido
-- garantir que o histórico final seja inteligível para usuário e auditoria interna
+A partir daqui, o backlog segue só com follow-ups reais de produto.
 
 ---
 
@@ -96,9 +60,11 @@ Alto
 
 ### 4.1 Conciliação explícita entre renda documental e crédito bancário
 
+**Status:** entregue no recorte inicial via `#309`
+
 #### Objetivo
 
-Parar de depender só de heurística implícita e tornar visível a ligação entre:
+Evoluir a visibilidade e a revisão do vínculo já existente entre:
 
 - documento de renda
 - crédito bancário correspondente
@@ -106,26 +72,28 @@ Parar de depender só de heurística implícita e tornar visível a ligação en
 
 #### Escopo
 
-- exibir vínculo entre documento e crédito conciliado
-- mostrar casos conciliados, pendentes e conflitantes
-- permitir revisão manual quando necessário
-- evitar dupla leitura de renda em fluxos ambíguos
+- painéis mais claros de conciliado, pendente e conflitante
+- revisão manual mais fluida
+- acabamento da comunicação de conflito
+- ampliar confiança do usuário na reconciliação já feita
 
 #### Critérios de aceite
 
-- usuário consegue ver quando uma renda documental já foi conciliada com um crédito bancário
-- conflitos ficam visíveis e não silenciosos
-- o produto não duplica renda em caso conciliado
+- usuário entende o vínculo conciliado sem precisar inferir pela UI
+- conflitos continuam visíveis e não silenciosos
+- o produto continua sem duplicar renda em caso conciliado
 
 ### 4.2 Evolução do cartão para casos mais reais
 
+**Status:** MVP entregue com parcelamento simples via `#310`
+
 #### Objetivo
 
-Sair do ciclo inicial de fatura para um modelo mais próximo do uso cotidiano.
+Ir além do ciclo inicial já entregue para um modelo mais próximo do uso cotidiano.
 
 #### Escopo
 
-- compras parceladas
+- parcelamento mais rico
 - melhor modelagem de fechamento e vencimento
 - relação mais clara entre compra, fatura e pagamento
 - possibilidade de múltiplos cenários reais de uso
@@ -138,13 +106,15 @@ Sair do ciclo inicial de fatura para um modelo mais próximo do uso cotidiano.
 
 ### 4.3 Expansão do pipeline documental além do trilho forte de INSS
 
+**Status:** bridge inicial de holerite/CLT entregue via `#311`
+
 #### Objetivo
 
-Generalizar o fluxo documental sem ficar dependente demais do caso mais forte atual.
+Generalizar ainda mais o fluxo documental sem ficar dependente demais dos casos já fortes.
 
 #### Escopo
 
-- ampliar cobertura para CLT/holerite
+- ampliar cobertura para outros formatos além de INSS/CLT
 - estruturar melhor casos de renda autônoma documental
 - manter a mesma disciplina de extração, confirmação e impacto no planejamento
 
@@ -156,13 +126,15 @@ Generalizar o fluxo documental sem ficar dependente demais do caso mais forte at
 
 ### 4.4 Performance e polish em imports grandes
 
+**Status:** MVP entregue no recorte inicial via `#312`
+
 #### Objetivo
 
-Melhorar experiência com massa maior de dados sem mexer desnecessariamente no domínio.
+Seguir melhorando a experiência com massa maior de dados sem mexer desnecessariamente no domínio.
 
 #### Escopo
 
-- refinamento de busca/filtros
+- refinamento contínuo de busca/filtros
 - UX para grandes volumes
 - revisão de performance em listas extensas
 - acabamento de preview/import
@@ -213,16 +185,15 @@ Ganhar conveniência sem transformar o produto em caixa-preta.
 
 ## 7. Ordem recomendada
 
-1. **P0 — undo com cascata para derivados**
-2. **P1 — conciliação explícita**
-3. **P1 — evolução de cartão**
-4. **P1 — expansão documental**
-5. **P1 — performance/polish**
-6. **P2 — refinamentos de UX e automações assistidas**
+1. **P1 — evolução de cartão**
+2. **P1 — expansão documental**
+3. **P1 — reconciliação com UX mais explícita**
+4. **P1 — performance/polish orientado por uso real**
+5. **P2 — refinamentos de UX e automações assistidas**
 
 ---
 
 ## 8. Veredito
 
 O pós-MVP certo não é abrir escopo novo por impulso.
-É fechar primeiro a **consistência operacional que ainda pode mentir sobre o estado real**, e depois evoluir reconciliação, cartão e pipeline documental com calma e critério.
+É evoluir reconciliação, cartão e pipeline documental com calma e critério, a partir de uma base operacional já consistente.
