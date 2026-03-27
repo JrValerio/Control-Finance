@@ -1660,7 +1660,7 @@ const App = ({
                   <span className="text-cf-text-primary">Finance</span>
                 </h1>
                 <p className="mt-1 text-xs text-cf-text-secondary sm:text-sm">
-                  Painel financeiro com importações, pendências, cartões e Central do Leão.
+                  Controle financeiro pessoal com importação, pendências, cartões, fontes de renda e apoio fiscal.
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
@@ -2299,7 +2299,7 @@ const App = ({
               <div>
                 <h3 className="text-sm font-medium text-cf-text-primary">Visão do mês</h3>
                 <p className="mt-1 text-xs text-cf-text-secondary">
-                  Saldo, entradas e saídas em destaque antes das análises detalhadas.
+                  Saldo, entradas e saídas consolidados antes das análises detalhadas.
                 </p>
               </div>
               <input
@@ -2426,7 +2426,7 @@ const App = ({
                 Painel operacional
               </h3>
               <p className="mt-1 text-xs text-cf-text-secondary">
-                O que pede ação agora: projeção, pendências, cartões e renda principal.
+                O que pede ação agora: projeção, pendências, cartões, renda principal e sinais de risco.
               </p>
             </div>
 

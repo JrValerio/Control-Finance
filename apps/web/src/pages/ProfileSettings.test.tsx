@@ -337,6 +337,6 @@ describe("ProfileSettings — Assinatura", () => {
     );
     renderPage();
     await waitFor(() => expect(screen.getByText("Acesso ativo")).toBeInTheDocument());
-    expect(screen.getByText(/Detalhes do plano disponíveis em Faturamento/)).toBeInTheDocument();
+    expect(screen.getByText(/Consulte Faturamento para ver o que está liberado agora/)).toBeInTheDocument();
   });
 });

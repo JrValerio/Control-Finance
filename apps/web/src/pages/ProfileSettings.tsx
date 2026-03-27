@@ -209,7 +209,7 @@ const ProfileSettings = ({
           <div>
             <h1 className="text-xl font-semibold text-cf-text-primary">Configurações</h1>
             <p className="mt-1 text-sm text-cf-text-secondary">
-              Gerencie sua conta, preferências e plano.
+              Conta, preferências e plano para manter seu controle financeiro alinhado ao dia a dia.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -265,7 +265,7 @@ const ProfileSettings = ({
             <section className="rounded border border-cf-border bg-cf-surface p-5">
               <SectionHeading
                 title="Dados da conta"
-                description="Nome exibido, avatar e informações de acesso."
+                description="Nome exibido, avatar e dados usados por renda, cartões e acesso."
               />
 
               <form onSubmit={handleSubmit} noValidate className="space-y-4">
@@ -580,8 +580,8 @@ const ProfileSettings = ({
                     <p className="text-sm font-semibold text-green-800">Trial ativo</p>
                     <p className="mt-0.5 text-xs text-green-700">
                       {daysRemaining > 0
-                        ? `${daysRemaining} dia${daysRemaining !== 1 ? "s" : ""} restante${daysRemaining !== 1 ? "s" : ""} — aproveite as funcionalidades liberadas no trial. Importação e exportação de extratos fazem parte do Pro.`
-                        : "Último dia de trial — as funcionalidades liberadas no teste seguem ativas até o fim do dia. Importação e exportação de extratos fazem parte do Pro."}
+                        ? `${daysRemaining} dia${daysRemaining !== 1 ? "s" : ""} restante${daysRemaining !== 1 ? "s" : ""} — use o trial para acompanhar painel, cartões, renda e Central do Leão. Importação e exportação de extratos fazem parte do Pro.`
+                        : "Último dia de trial — você ainda pode acompanhar painel, cartões, renda e Central do Leão até o fim do dia. Importação e exportação de extratos fazem parte do Pro."}
                     </p>
                   </div>
                   <span className="shrink-0 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
@@ -593,7 +593,7 @@ const ProfileSettings = ({
                   <div>
                     <p className="text-sm font-semibold text-amber-800">Trial expirado</p>
                     <p className="mt-0.5 text-xs text-amber-700">
-                      Algumas funcionalidades ficaram limitadas. Faça upgrade para continuar com projeção, exportação e importação de extratos no Pro.
+                      Algumas funcionalidades ficaram limitadas. Faça upgrade para continuar com projeção, importação e exportação de extratos e os módulos avançados do Pro.
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-2">
@@ -616,7 +616,7 @@ const ProfileSettings = ({
                   <div>
                     <p className="text-sm font-semibold text-cf-text-primary">Acesso ativo</p>
                     <p className="mt-0.5 text-xs text-cf-text-secondary">
-                      Detalhes do plano disponíveis em Faturamento.
+                      Consulte Faturamento para ver o que está liberado agora e o que faz parte do Pro.
                     </p>
                   </div>
                   {onOpenBilling ? (

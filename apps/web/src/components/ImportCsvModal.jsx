@@ -663,7 +663,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
         </div>
 
         <p className="mb-4 text-sm text-cf-text-secondary">
-          Envie um CSV, OFX ou PDF de extrato para pré-visualizar as transações válidas antes de importar.
+          Envie um CSV, OFX ou PDF para revisar, categorizar e confirmar o que entra no seu painel financeiro antes de importar.
         </p>
 
         <div className="rounded border border-cf-border bg-cf-surface p-3">
@@ -695,7 +695,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
             className="block w-full text-sm text-cf-text-primary file:mr-3 file:rounded file:border file:border-cf-border file:bg-cf-bg-subtle file:px-3 file:py-1 file:text-sm file:font-semibold file:text-cf-text-primary hover:file:bg-cf-border"
           />
           <p className="mt-2 text-xs text-cf-text-secondary">
-            OFX é o formato preferencial quando o banco oferecer. CSV manual, CSV exportado por banco e PDF com OCR assistido entram como alternativas.
+            OFX é o formato preferencial quando o banco oferecer. CSV manual, CSV do banco e PDF com OCR assistido entram como alternativas.
+          </p>
+          <p className="mt-1 text-xs text-cf-text-secondary">
+            Use a pré-visualização para conferir categorias, renda e pendências antes de confirmar a importação.
           </p>
           <p className="mt-1 text-xs text-cf-text-secondary">
             Quando possível, a plataforma sugere automaticamente categorias com base nas descrições e nas categorias já cadastradas.
@@ -818,7 +821,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                 </ul>
                 {suggestionCard.kind === "profile" && !incomeStatementCreated ? (
                   <p className="mb-2 text-xs text-blue-700 dark:text-blue-300">
-                    Depois de usar este documento na sua renda, o app pode sugerir uma atualizacao
+                    Depois de usar este documento na sua renda, o app pode sugerir uma atualização
                     do perfil financeiro e do planejamento.
                   </p>
                 ) : null}
