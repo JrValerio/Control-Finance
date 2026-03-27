@@ -39,12 +39,12 @@ describe("BillingSettings", () => {
     render(<BillingSettings />);
 
     await waitFor(() =>
-      expect(screen.getByText("Trial do Control Finance")).toBeInTheDocument(),
+      expect(screen.getByText("Período de teste do Control Finance")).toBeInTheDocument(),
     );
 
     expect(
       screen.getByText(
-        /Durante o trial, você acompanha painel financeiro, metas, cartões, renda e a Central do Leão/i,
+        /Durante o período de teste, você acompanha painel financeiro, metas, cartões, renda e a Central do Leão/i,
       ),
     ).toBeInTheDocument();
     expect(

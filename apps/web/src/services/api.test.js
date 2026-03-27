@@ -249,7 +249,7 @@ describe("api service", () => {
 
     expect(onPaymentRequired).toHaveBeenCalledWith({
       reason:
-        "Seu plano atual não inclui a importação de extratos. No Pro, você importa CSV, OFX e PDF com pré-visualização antes de confirmar.",
+        "Importação de extratos é um recurso do Pro. No Pro, você importa CSV, OFX e PDF com prévia antes de confirmar.",
       feature: "csv_import",
       context: "feature_gate",
     });
