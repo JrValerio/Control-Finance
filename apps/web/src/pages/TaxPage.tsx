@@ -272,24 +272,12 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     if (summaryResult.status === "fulfilled") {
       setSummary(summaryResult.value);
     } else {
-      setSummary({
-        ...EMPTY_SUMMARY,
-        taxYear,
-        exerciseYear: taxYear,
-        calendarYear: taxYear - 1,
-      });
       nextErrors.push(getApiErrorMessage(summaryResult.reason, "Não foi possível carregar o resumo fiscal."));
     }
 
     if (obligationResult.status === "fulfilled") {
       setObligation(obligationResult.value);
     } else {
-      setObligation({
-        ...EMPTY_OBLIGATION,
-        taxYear,
-        exerciseYear: taxYear,
-        calendarYear: taxYear - 1,
-      });
       nextErrors.push(
         getApiErrorMessage(
           obligationResult.reason,
@@ -301,12 +289,6 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     if (factsResult.status === "fulfilled") {
       setFactsPage(factsResult.value);
     } else {
-      setFactsPage({
-        items: [],
-        page: 1,
-        pageSize: DEFAULT_FACTS_PAGE_SIZE,
-        total: 0,
-      });
       nextErrors.push(
         getApiErrorMessage(factsResult.reason, "Não foi possível carregar a fila de revisão."),
       );
@@ -315,7 +297,6 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     if (documentsResult.status === "fulfilled") {
       setDocumentsPage(documentsResult.value);
     } else {
-      setDocumentsPage(EMPTY_DOCUMENTS_PAGE);
       nextErrors.push(
         getApiErrorMessage(documentsResult.reason, "Não foi possível carregar os documentos do exercício."),
       );
@@ -323,8 +304,6 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
 
     if (profileResult.status === "fulfilled") {
       setTaxpayerCpf(profileResult.value.profile?.taxpayerCpf ?? null);
-    } else {
-      setTaxpayerCpf(null);
     }
 
     setPageError(nextErrors[0] || "");
@@ -485,9 +464,8 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
 
     try {
       const rebuiltSummary = await taxService.rebuildSummary(taxYear);
-      const nextObligation = await taxService.getObligation(taxYear);
       setSummary(rebuiltSummary);
-      setObligation(nextObligation);
+      await loadPageData();
       showSuccess(
         rebuiltSummary.snapshotVersion
           ? `Resumo fiscal atualizado na versão ${rebuiltSummary.snapshotVersion}.`
@@ -645,7 +623,19 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
   };
 
   const headerCalendarYear = summary.calendarYear || obligation.calendarYear || taxYear - 1;
-  const methodLabel = summary.bestMethod ? METHOD_LABELS[summary.bestMethod] : "Ainda não definido";
+  const hasResolvedFiscalData =
+    summary.status === "generated" ||
+    summary.snapshotVersion !== null ||
+    summary.generatedAt !== null ||
+    obligation.approvedFactsCount > 0 ||
+    documentsPage.total > 0 ||
+    factsPage.total > 0;
+  const showLoadingPlaceholders = isLoadingPage && !hasResolvedFiscalData;
+  const methodLabel = showLoadingPlaceholders
+    ? "Carregando..."
+    : summary.bestMethod
+      ? METHOD_LABELS[summary.bestMethod]
+      : "Ainda não definido";
   const liveTaxableIncome = obligation.totals.annualTaxableIncome;
   const liveExemptIncome = obligation.totals.annualExemptIncome;
   const liveExclusiveIncome = obligation.totals.annualExclusiveIncome;
@@ -686,14 +676,23 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     });
   }
 
-  const showNoObligationInfo = !obligation.mustDeclare;
+  const visibleFactWarnings = showLoadingPlaceholders ? [] : factWarnings;
+  const showNoObligationInfo = !showLoadingPlaceholders && !obligation.mustDeclare;
   const canSyncFromApp = !isLoadingPage && documentsPage.total === 0;
+  const generatedStatusLabel = showLoadingPlaceholders
+    ? "Carregando dados..."
+    : summary.status === "generated"
+      ? "Gerado"
+      : "Ainda não gerado";
+  const documentsCountLabel = showLoadingPlaceholders
+    ? "Carregando..."
+    : `${documentsPage.total} documento(s)`;
 
   return (
     <div className="min-h-screen bg-cf-bg-page px-4 py-6 sm:px-6">
       <div className="mx-auto max-w-6xl">
         <div className="mb-6 flex flex-col gap-4 rounded border border-cf-border bg-cf-surface p-5">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-4">
             <div>
               <div className="flex items-center gap-3">
                 {onBack ? (
@@ -715,53 +714,74 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleOpenUploadModal}
-                className="rounded border border-brand-1 bg-brand-1 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-2"
-              >
-                Enviar documento
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSyncAppData()}
-                disabled={!canSyncFromApp || isSyncingAppData}
-                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSyncingAppData ? "Sincronizando..." : "Sincronizar do app"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void loadPageData()}
-                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface"
-              >
-                Atualizar
-              </button>
-              <button
-                type="button"
-                onClick={handleRebuildSummary}
-                disabled={isRebuildingSummary}
-                className="rounded border border-brand-1 bg-brand-1 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isRebuildingSummary ? "Gerando resumo..." : "Gerar resumo"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleExport("json")}
-                disabled={exportingFormat !== null}
-                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {exportingFormat === "json" ? "Baixando JSON..." : "Baixar JSON"}
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleExport("csv")}
-                disabled={exportingFormat !== null}
-                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {exportingFormat === "csv" ? "Baixando CSV..." : "Baixar CSV"}
-              </button>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-cf-text-secondary">
+              <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 font-semibold">
+                {generatedStatusLabel}
+              </span>
+              {summary.generatedAt && !showLoadingPlaceholders ? (
+                <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 font-medium">
+                  Atualizado em {formatDateTime(summary.generatedAt)}
+                </span>
+              ) : null}
+              {summary.snapshotVersion != null && !showLoadingPlaceholders ? (
+                <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 font-medium">
+                  Snapshot v{summary.snapshotVersion}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleOpenUploadModal}
+                  className="rounded border border-brand-1 bg-brand-1 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-2"
+                >
+                  Enviar documento
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSyncAppData()}
+                  disabled={!canSyncFromApp || isSyncingAppData}
+                  className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSyncingAppData ? "Sincronizando..." : "Sincronizar do app"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void loadPageData()}
+                  className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface"
+                >
+                  Atualizar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRebuildSummary}
+                  disabled={isRebuildingSummary}
+                  className="rounded border border-brand-1 bg-brand-1 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isRebuildingSummary ? "Gerando resumo..." : "Gerar resumo"}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleExport("json")}
+                  disabled={exportingFormat !== null}
+                  className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportingFormat === "json" ? "Baixando JSON..." : "Baixar JSON"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleExport("csv")}
+                  disabled={exportingFormat !== null}
+                  className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportingFormat === "csv" ? "Baixando CSV..." : "Baixar CSV"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -787,21 +807,33 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
         <div className="grid gap-4 lg:grid-cols-4">
           <FactSummaryCard
             title="Obrigatoriedade"
-            value={obligation.mustDeclare ? "Obrigatório declarar" : "Sem obrigatoriedade hoje"}
+            value={
+              showLoadingPlaceholders
+                ? "Carregando..."
+                : obligation.mustDeclare
+                  ? "Obrigatório declarar"
+                  : "Sem obrigatoriedade hoje"
+            }
             helper={
-              obligation.mustDeclare
+              showLoadingPlaceholders
+                ? "Lendo fatos revisados e status do exercício"
+                : obligation.mustDeclare
                 ? `${obligation.reasons.length} motivo(s) ativo(s) com base em fatos revisados`
                 : "Mesmo isento, o espelho do exercício continua disponível"
             }
           />
           <FactSummaryCard
             title="Rendimentos Tributáveis"
-            value={formatCurrency(displayAnnualTaxableIncome)}
+            value={
+              showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayAnnualTaxableIncome)
+            }
             helper="Base considerada para o gatilho principal"
           />
           <FactSummaryCard
             title="IRRF Acumulado"
-            value={formatCurrency(displayAnnualWithheldTax)}
+            value={
+              showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayAnnualWithheldTax)
+            }
             helper="Valor separado do imposto pela tabela, mesmo abaixo do limite"
           />
           <FactSummaryCard
@@ -834,46 +866,70 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                 </p>
               </div>
               <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 text-xs font-semibold text-cf-text-secondary">
-                {summary.status === "generated" ? "Gerado" : "Ainda não gerado"}
+                {generatedStatusLabel}
               </span>
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <FactSummaryCard
                 title="Imposto pela Tabela"
-                value={summary.estimatedAnnualTax == null ? "—" : formatCurrency(summary.estimatedAnnualTax)}
+                value={
+                  showLoadingPlaceholders
+                    ? "Carregando..."
+                    : summary.estimatedAnnualTax == null
+                      ? "—"
+                      : formatCurrency(summary.estimatedAnnualTax)
+                }
                 helper="Sem compensar IRRF"
               />
               <FactSummaryCard
                 title="Rendimentos Isentos"
-                value={formatCurrency(displayAnnualExemptIncome)}
+                value={
+                  showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayAnnualExemptIncome)
+                }
                 helper="Ex.: aposentadoria 65+, parcelas isentas e afins"
               />
               <FactSummaryCard
                 title="Exclusivos na Fonte"
-                value={formatCurrency(displayAnnualExclusiveIncome)}
+                value={
+                  showLoadingPlaceholders
+                    ? "Carregando..."
+                    : formatCurrency(displayAnnualExclusiveIncome)
+                }
                 helper="Ex.: 13º e aplicações"
               />
               <FactSummaryCard
                 title="Deduções Legais"
-                value={formatCurrency(displayLegalDeductions)}
+                value={
+                  showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayLegalDeductions)
+                }
                 helper="Médicas e instrução já revisadas"
               />
               <FactSummaryCard
                 title="Desconto Simplificado"
-                value={formatCurrency(summary.simplifiedDiscountUsed)}
+                value={
+                  showLoadingPlaceholders
+                    ? "Carregando..."
+                    : formatCurrency(summary.simplifiedDiscountUsed)
+                }
                 helper="Cap aplicado pelas regras ativas"
               />
               <FactSummaryCard
                 title="Documentos"
-                value={String(summary.sourceCounts.documents)}
+                value={
+                  showLoadingPlaceholders ? "Carregando..." : String(summary.sourceCounts.documents)
+                }
                 helper="Arquivos vinculados ao exercício"
               />
               <FactSummaryCard
                 title="Fatos no Cálculo"
-                value={String(obligation.approvedFactsCount)}
+                value={
+                  showLoadingPlaceholders ? "Carregando..." : String(obligation.approvedFactsCount)
+                }
                 helper={
-                  excludedApprovedFactsCount > 0
+                  showLoadingPlaceholders
+                    ? "Separando fatos que entram no cálculo oficial"
+                    : excludedApprovedFactsCount > 0
                     ? `${excludedApprovedFactsCount} aprovado(s) ficaram fora por CPF divergente`
                     : "Base que entra em obrigação e summary"
                 }
@@ -891,26 +947,36 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-3">
                 <p className="text-xs font-semibold uppercase text-cf-text-secondary">Tributáveis</p>
                 <p className="mt-1 text-lg font-bold text-cf-text-primary">
-                  {formatCurrency(obligation.thresholds.taxableIncome)}
+                  {showLoadingPlaceholders
+                    ? "Carregando..."
+                    : formatCurrency(obligation.thresholds.taxableIncome)}
                 </p>
               </div>
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-3">
                 <p className="text-xs font-semibold uppercase text-cf-text-secondary">Isentos + exclusivos</p>
                 <p className="mt-1 text-lg font-bold text-cf-text-primary">
-                  {formatCurrency(obligation.thresholds.exemptAndExclusiveIncome)}
+                  {showLoadingPlaceholders
+                    ? "Carregando..."
+                    : formatCurrency(obligation.thresholds.exemptAndExclusiveIncome)}
                 </p>
               </div>
               <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-3">
                 <p className="text-xs font-semibold uppercase text-cf-text-secondary">Patrimônio</p>
                 <p className="mt-1 text-lg font-bold text-cf-text-primary">
-                  {formatCurrency(obligation.thresholds.assets)}
+                  {showLoadingPlaceholders
+                    ? "Carregando..."
+                    : formatCurrency(obligation.thresholds.assets)}
                 </p>
               </div>
             </div>
 
             <div className="mt-4 rounded border border-cf-border bg-cf-bg-subtle px-3 py-3">
               <p className="text-xs font-semibold uppercase text-cf-text-secondary">Motivos ativos</p>
-              {obligation.reasons.length === 0 ? (
+              {showLoadingPlaceholders ? (
+                <p className="mt-2 text-sm text-cf-text-secondary">
+                  Carregando gatilhos e fatos revisados do exercício...
+                </p>
+              ) : obligation.reasons.length === 0 ? (
                 <p className="mt-2 text-sm text-cf-text-secondary">
                   Pelos fatos revisados até agora, você continua abaixo dos limites objetivos do exercício.
                 </p>
@@ -927,11 +993,11 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
           </section>
         </div>
 
-        {factWarnings.length > 0 ? (
+        {visibleFactWarnings.length > 0 ? (
           <section className="mt-4 rounded border border-amber-200 bg-amber-50 p-5">
             <h2 className="text-lg font-bold text-amber-900">Alertas e observações fiscais</h2>
             <div className="mt-3 space-y-2">
-              {factWarnings.map((warning) => (
+              {visibleFactWarnings.map((warning) => (
                 <div
                   key={warning.code}
                   className="rounded border border-amber-200 bg-white/60 px-3 py-2 text-sm text-amber-900"
@@ -957,7 +1023,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               </p>
             </div>
             <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 text-xs font-semibold text-cf-text-secondary">
-              {documentsPage.total} documento(s)
+              {documentsCountLabel}
             </span>
           </div>
 

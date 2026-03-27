@@ -8,6 +8,7 @@ import { analyticsService } from "../services/analytics.service";
 import { forecastService } from "../services/forecast.service";
 import { profileService } from "../services/profile.service";
 import { billsService } from "../services/bills.service";
+import { creditCardsService } from "../services/credit-cards.service";
 import { salaryService } from "../services/salary.service";
 
 vi.mock("../hooks/useTheme", () => ({
@@ -82,6 +83,12 @@ vi.mock("../services/profile.service", () => ({
 vi.mock("../services/bills.service", () => ({
   billsService: {
     getSummary: vi.fn(),
+  },
+}));
+
+vi.mock("../services/credit-cards.service", () => ({
+  creditCardsService: {
+    list: vi.fn(),
   },
 }));
 
@@ -330,6 +337,9 @@ describe("App", () => {
       overdueCount: 0,
       overdueTotal: 0,
     });
+    creditCardsService.list.mockResolvedValue({
+      items: [],
+    });
     salaryService.getProfile.mockResolvedValue(null);
     transactionsService.exportCsv.mockResolvedValue({
       blob: new Blob(["id,type\n1,Entrada"], { type: "text/csv;charset=utf-8" }),
@@ -359,6 +369,49 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Cartões" }));
 
     expect(onOpenCreditCards).toHaveBeenCalledTimes(1);
+  });
+
+  it("exibe resumo agregado de cartões no painel operacional", async () => {
+    creditCardsService.list.mockResolvedValueOnce({
+      items: [
+        {
+          id: 1,
+          userId: 1,
+          name: "Nubank",
+          limitTotal: 3000,
+          closingDay: 10,
+          dueDay: 17,
+          isActive: true,
+          createdAt: "",
+          updatedAt: "",
+          usage: {
+            total: 3000,
+            used: 1480,
+            available: 1520,
+            exceededBy: 0,
+            usagePct: 49.33,
+            status: "using",
+          },
+          openPurchasesCount: 3,
+          openPurchasesTotal: 480,
+          pendingInvoicesCount: 1,
+          pendingInvoicesTotal: 1000,
+          openPurchases: [],
+          invoices: [],
+        },
+      ],
+    });
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Painel operacional")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Cartões")).toBeInTheDocument();
+    expect(screen.getByText(/1 cartão ativo/i)).toBeInTheDocument();
+    expect(screen.getByText("Compras abertas")).toBeInTheDocument();
+    expect(screen.getByText("Faturas pendentes")).toBeInTheDocument();
   });
 
   it("carrega transacoes paginadas da API ao iniciar", async () => {

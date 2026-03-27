@@ -156,9 +156,11 @@ describe("ProfileSettings — Dados da conta", () => {
     );
 
     renderPage();
-    await waitFor(() => expect(screen.getByLabelText("Limite bancário (R$)")).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByLabelText("Limite da conta / cheque especial (R$)")).toBeInTheDocument(),
+    );
 
-    const bankLimitInput = screen.getByLabelText("Limite bancário (R$)");
+    const bankLimitInput = screen.getByLabelText("Limite da conta / cheque especial (R$)");
     expect(bankLimitInput).toHaveValue(850);
 
     await user.clear(bankLimitInput);

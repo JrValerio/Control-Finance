@@ -281,7 +281,7 @@ const ProfileSettings = ({
                       htmlFor="avatar_url"
                       className="block text-sm font-semibold text-cf-text-primary"
                     >
-                      URL do avatar
+                      Foto do perfil (URL)
                     </label>
                     <input
                       id="avatar_url"
@@ -292,7 +292,7 @@ const ProfileSettings = ({
                       className="mt-1 w-full rounded border border-cf-border-input bg-cf-surface px-3 py-1.5 text-sm text-cf-text-primary placeholder:text-cf-text-secondary focus:outline-none focus:ring-1 focus:ring-brand-1"
                     />
                     <p className="mt-0.5 text-xs text-cf-text-secondary">
-                      Deve começar com https://. Deixe vazio para usar as iniciais.
+                      Por enquanto, use uma imagem em https://. Se deixar vazio, usamos suas iniciais.
                     </p>
                   </div>
                 </div>
@@ -385,7 +385,7 @@ const ProfileSettings = ({
                       htmlFor="bank_limit_total"
                       className="block text-sm font-semibold text-cf-text-primary"
                     >
-                      Limite bancário (R$)
+                      Limite da conta / cheque especial (R$)
                     </label>
                     <input
                       id="bank_limit_total"
@@ -398,7 +398,7 @@ const ProfileSettings = ({
                       className="mt-1 w-full rounded border border-cf-border-input bg-cf-surface px-3 py-1.5 text-sm text-cf-text-primary placeholder:text-cf-text-secondary focus:outline-none focus:ring-1 focus:ring-brand-1"
                     />
                     <p className="mt-0.5 text-xs text-cf-text-secondary">
-                      Usado para mostrar quanto da projeção do mês entraria no limite da conta.
+                      Use se o banco oferece cheque especial ou limite automático. A projeção mostra quanto desse valor seria consumido.
                     </p>
                   </div>
                   <div>

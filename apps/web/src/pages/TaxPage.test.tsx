@@ -322,7 +322,7 @@ describe("TaxPage", () => {
     });
   });
 
-  it("gerar resumo chama rebuildSummary", async () => {
+  it("gerar resumo chama rebuildSummary e recarrega o espelho fiscal completo", async () => {
     const user = userEvent.setup();
     renderPage();
 
@@ -334,6 +334,13 @@ describe("TaxPage", () => {
 
     await waitFor(() => {
       expect(taxService.rebuildSummary).toHaveBeenCalledWith(2026);
+    });
+
+    await waitFor(() => {
+      expect(taxService.getSummary).toHaveBeenCalledTimes(2);
+      expect(taxService.getObligation).toHaveBeenCalledTimes(2);
+      expect(taxService.listDocuments).toHaveBeenCalledTimes(2);
+      expect(taxService.listFacts).toHaveBeenCalledTimes(2);
     });
   });
 
