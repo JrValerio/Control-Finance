@@ -1502,6 +1502,20 @@ const App = ({
     setImportModalOpen(false);
   }, [loadMonthlyBudgets, loadMonthlySummary, loadTransactions]);
 
+  const handleOpenImportHistoryAfterImport = useCallback(async () => {
+    await loadTransactions();
+    await loadMonthlySummary();
+    await loadMonthlyBudgets();
+    setImportModalOpen(false);
+    setImportHistoryModalOpen(true);
+  }, [loadMonthlyBudgets, loadMonthlySummary, loadTransactions]);
+
+  const handleImportSessionReverted = useCallback(async () => {
+    await loadTransactions();
+    await loadMonthlySummary();
+    await loadMonthlyBudgets();
+  }, [loadMonthlyBudgets, loadMonthlySummary, loadTransactions]);
+
   const handleViewBudgetTransactions = (budget: MonthlyBudget) => {
     const monthRange = getMonthRange(selectedSummaryMonth);
     setSelectedTransactionCategoryId(String(budget.categoryId));
@@ -2922,11 +2936,13 @@ const App = ({
         isOpen={isImportModalOpen}
         onClose={() => setImportModalOpen(false)}
         onImported={handleImportCommitted}
+        onOpenHistory={handleOpenImportHistoryAfterImport}
       />
 
       <ImportHistoryModal
         isOpen={isImportHistoryModalOpen}
         onClose={() => setImportHistoryModalOpen(false)}
+        onImportSessionReverted={handleImportSessionReverted}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ImportCsvModal from "./ImportCsvModal";
 import { transactionsService } from "../services/transactions.service";
@@ -248,6 +248,103 @@ describe("ImportCsvModal", () => {
 
     await waitFor(() => {
       expect(onImported).toHaveBeenCalled();
+    });
+  });
+
+  it("abre o histórico depois do commit sem perder o refresh do app", async () => {
+    const onImported = vi.fn();
+    const onOpenHistory = vi.fn();
+    const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+
+    transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildDryRunResponse());
+    transactionsService.commitImportCsv.mockResolvedValueOnce({
+      imported: 1,
+      importSessionId: "import-session-1",
+      summary: { income: 100, expense: 20, balance: 80 },
+    });
+
+    render(
+      <ImportCsvModal
+        isOpen
+        onClose={vi.fn()}
+        onImported={onImported}
+        onOpenHistory={onOpenHistory}
+      />,
+    );
+
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Importar" })).not.toBeDisabled();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Importar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Ver histórico" })).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Ver histórico" }));
+
+    await waitFor(() => {
+      expect(onImported).toHaveBeenCalledWith(
+        expect.objectContaining({
+          importSessionId: "import-session-1",
+        }),
+      );
+      expect(onOpenHistory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          importSessionId: "import-session-1",
+        }),
+      );
+    });
+  });
+
+  it("pede confirmação antes de desfazer a importação", async () => {
+    const onImported = vi.fn();
+    const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+
+    transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildDryRunResponse());
+    transactionsService.commitImportCsv.mockResolvedValueOnce({
+      imported: 1,
+      importSessionId: "import-session-1",
+      summary: { income: 100, expense: 20, balance: 80 },
+    });
+    transactionsService.deleteImportSession.mockResolvedValueOnce({
+      importSessionId: "import-session-1",
+      deletedCount: 1,
+      success: true,
+    });
+
+    render(<ImportCsvModal isOpen onClose={vi.fn()} onImported={onImported} />);
+
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Importar" })).not.toBeDisabled();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Importar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Desfazer importação" })).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Desfazer importação" }));
+
+    expect(transactionsService.deleteImportSession).not.toHaveBeenCalled();
+    const confirmDialog = screen.getByRole("dialog", { name: "Desfazer esta importação?" });
+    expect(confirmDialog).toBeInTheDocument();
+
+    await userEvent.click(
+      within(confirmDialog).getByRole("button", { name: "Desfazer importação" }),
+    );
+
+    await waitFor(() => {
+      expect(transactionsService.deleteImportSession).toHaveBeenCalledWith("import-session-1");
+      expect(onImported).toHaveBeenCalledWith(null);
     });
   });
 

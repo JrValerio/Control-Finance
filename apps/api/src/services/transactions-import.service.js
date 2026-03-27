@@ -884,10 +884,26 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
   const pagination = normalizeImportHistoryPagination(filters);
   const result = await dbQuery(
     `
-      SELECT id, created_at, expires_at, committed_at, payload_json
-      FROM transaction_import_sessions
-      WHERE user_id = $1
-      ORDER BY created_at DESC
+      SELECT s.id,
+             s.created_at,
+             s.expires_at,
+             s.committed_at,
+             s.payload_json,
+             COALESCE(tx.active_imported_count, 0) AS active_imported_count
+      FROM transaction_import_sessions s
+      LEFT JOIN (
+        SELECT import_session_id,
+               user_id,
+               COUNT(*)::int AS active_imported_count
+        FROM transactions
+        WHERE deleted_at IS NULL
+          AND import_session_id IS NOT NULL
+        GROUP BY import_session_id, user_id
+      ) tx
+        ON tx.import_session_id = s.id
+       AND tx.user_id = s.user_id
+      WHERE s.user_id = $1
+      ORDER BY s.created_at DESC
       LIMIT $2 OFFSET $3
     `,
     [userId, pagination.limit, pagination.offset],
@@ -896,17 +912,28 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
   const items = result.rows.map((row) => {
     const payload = parsePayloadJson(row.payload_json);
     const summary = payload.summary || {};
-    const validRows = normalizeSummaryInteger(summary.validRows, 0);
-    const imported = row.committed_at ? validRows : 0;
+    const imported = normalizeSummaryInteger(row.active_imported_count, 0);
+    const committedAt = toIsoDateString(row.committed_at);
 
     return {
       id: String(row.id),
       createdAt: toIsoDateString(row.created_at),
       expiresAt: toIsoDateString(row.expires_at),
-      committedAt: toIsoDateString(row.committed_at),
+      committedAt,
+      fileName:
+        typeof payload.fileName === "string" && payload.fileName.trim()
+          ? payload.fileName.trim()
+          : null,
+      documentType:
+        typeof payload.documentType === "string" && payload.documentType.trim()
+          ? payload.documentType.trim()
+          : null,
+      canUndo: Boolean(committedAt) && imported > 0,
       summary: {
         totalRows: normalizeSummaryInteger(summary.totalRows, 0),
-        validRows,
+        validRows: normalizeSummaryInteger(summary.validRows, 0),
+        duplicateRows: normalizeSummaryInteger(summary.duplicateRows, 0),
+        conflictRows: normalizeSummaryInteger(summary.conflictRows, 0),
         invalidRows: normalizeSummaryInteger(summary.invalidRows, 0),
         income: normalizeSummaryNumber(summary.income, 0),
         expense: normalizeSummaryNumber(summary.expense, 0),

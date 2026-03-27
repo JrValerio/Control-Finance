@@ -210,6 +210,8 @@ export interface ImportCommitResult {
 export interface ImportHistorySummary {
   totalRows: number;
   validRows: number;
+  duplicateRows: number;
+  conflictRows: number;
   invalidRows: number;
   income: number;
   expense: number;
@@ -221,6 +223,9 @@ export interface ImportHistoryItem {
   createdAt: string;
   expiresAt: string;
   committedAt: string | null;
+  fileName: string | null;
+  documentType: string | null;
+  canUndo: boolean;
   summary: ImportHistorySummary;
 }
 
@@ -400,9 +405,14 @@ interface ImportHistoryApiResponse {
     createdAt?: unknown;
     expiresAt?: unknown;
     committedAt?: unknown;
+    fileName?: unknown;
+    documentType?: unknown;
+    canUndo?: unknown;
     summary?: {
       totalRows?: unknown;
       validRows?: unknown;
+      duplicateRows?: unknown;
+      conflictRows?: unknown;
       invalidRows?: unknown;
       income?: unknown;
       expense?: unknown;
@@ -948,9 +958,20 @@ export const transactionsService = {
             typeof item?.committedAt === "string" && item.committedAt.trim()
               ? item.committedAt
               : null,
+          fileName:
+            typeof item?.fileName === "string" && item.fileName.trim()
+              ? item.fileName.trim()
+              : null,
+          documentType:
+            typeof item?.documentType === "string" && item.documentType.trim()
+              ? item.documentType.trim()
+              : null,
+          canUndo: Boolean(item?.canUndo),
           summary: {
             totalRows: Number(item?.summary?.totalRows) || 0,
             validRows: Number(item?.summary?.validRows) || 0,
+            duplicateRows: Number(item?.summary?.duplicateRows) || 0,
+            conflictRows: Number(item?.summary?.conflictRows) || 0,
             invalidRows: Number(item?.summary?.invalidRows) || 0,
             income: Number(item?.summary?.income) || 0,
             expense: Number(item?.summary?.expense) || 0,

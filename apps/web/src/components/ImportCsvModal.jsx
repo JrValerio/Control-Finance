@@ -8,8 +8,9 @@ import { formatCurrency } from "../utils/formatCurrency";
 import { getApiErrorMessage } from "../utils/apiError";
 import BillModal from "./BillModal";
 import IncomeStatementQuickModal from "./IncomeStatementQuickModal";
+import ConfirmDialog from "./ConfirmDialog";
 
-const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
+const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory = undefined }) => {
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isDryRunning, setIsDryRunning] = useState(false);
@@ -32,6 +33,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   // post-commit state
   const [lastCommitResult, setLastCommitResult] = useState(null);
   const [isUndoing, setIsUndoing] = useState(false);
+  const [showUndoConfirm, setShowUndoConfirm] = useState(false);
   // bill bridge
   const [isBillModalOpen, setIsBillModalOpen] = useState(false);
   const [billCreated, setBillCreated] = useState(false);
@@ -71,6 +73,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setInlineCreateName("");
     setLastCommitResult(null);
     setIsUndoing(false);
+    setShowUndoConfirm(false);
     setIsBillModalOpen(false);
     setBillCreated(false);
     setIsIncomeModalOpen(false);
@@ -558,10 +561,24 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     else onClose();
   };
 
+  const handleOpenHistoryAfterCommit = async () => {
+    if (onImported) {
+      await onImported(lastCommitResult);
+    }
+
+    if (onOpenHistory) {
+      await onOpenHistory(lastCommitResult);
+      return;
+    }
+
+    onClose();
+  };
+
   const handleUndo = async () => {
     if (!lastCommitResult?.importSessionId) return;
     setIsUndoing(true);
     setErrorMessage("");
+    setShowUndoConfirm(false);
     try {
       await transactionsService.deleteImportSession(lastCommitResult.importSessionId);
       if (onImported) await onImported(null);
@@ -635,6 +652,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
               setCategoryOverrides({});
               setInlineCreate(null);
               setInlineCreateName("");
+              setLastCommitResult(null);
+              setShowUndoConfirm(false);
             }}
             className="block w-full text-sm text-cf-text-primary file:mr-3 file:rounded file:border file:border-cf-border file:bg-cf-bg-subtle file:px-3 file:py-1 file:text-sm file:font-semibold file:text-cf-text-primary hover:file:bg-cf-border"
           />
@@ -653,6 +672,20 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                 ? "1 lançamento importado."
                 : `${lastCommitResult.imported} lançamentos importados.`}
             </p>
+            <div className="mb-3 grid gap-2 sm:grid-cols-3">
+              <div className="rounded border border-green-200 bg-white px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
+                <p className="font-semibold uppercase">Entradas</p>
+                <p>{formatCurrency(lastCommitResult.summary?.income || 0)}</p>
+              </div>
+              <div className="rounded border border-green-200 bg-white px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
+                <p className="font-semibold uppercase">Saídas</p>
+                <p>{formatCurrency(lastCommitResult.summary?.expense || 0)}</p>
+              </div>
+              <div className="rounded border border-green-200 bg-white px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
+                <p className="font-semibold uppercase">Saldo</p>
+                <p>{formatCurrency(lastCommitResult.summary?.balance || 0)}</p>
+              </div>
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -664,7 +697,15 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
               </button>
               <button
                 type="button"
-                onClick={handleUndo}
+                onClick={handleOpenHistoryAfterCommit}
+                disabled={isUndoing}
+                className="rounded border border-cf-border bg-white px-3 py-1.5 text-sm font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Ver histórico
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowUndoConfirm(true)}
                 disabled={isUndoing}
                 className="rounded border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-700 dark:bg-red-950/40 dark:text-red-400"
               >
@@ -1277,6 +1318,15 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
           setIncomeStatementCreated(true);
         }}
       />
+
+      <ConfirmDialog
+        isOpen={showUndoConfirm}
+        title="Desfazer esta importação?"
+        description="Os lançamentos criados nesta sessão serão removidos e o histórico continuará disponível como registro revertido."
+        confirmLabel="Desfazer importação"
+        onConfirm={() => void handleUndo()}
+        onCancel={() => setShowUndoConfirm(false)}
+      />
     </div>
   );
 };
@@ -1285,6 +1335,7 @@ ImportCsvModal.propTypes = {
   isOpen: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
   onImported: PropTypes.func,
+  onOpenHistory: PropTypes.func,
 };
 
 export default ImportCsvModal;
