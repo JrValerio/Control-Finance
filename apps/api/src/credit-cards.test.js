@@ -346,6 +346,128 @@ describe("credit cards", () => {
     expect(Number(txCountResult.rows[0].total)).toBe(1);
   });
 
+  it("POST /credit-cards/invoices/:invoiceId/reopen reabre fatura pendente e devolve compras para aberto", async () => {
+    const token = await registerAndLogin("credit-cards-reopen-invoice@test.dev");
+
+    const createCardRes = await request(app)
+      .post("/credit-cards")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Visa",
+        limitTotal: 1800,
+        closingDay: 10,
+        dueDay: 20,
+      });
+    const cardId = createCardRes.body.id;
+
+    await request(app)
+      .post(`/credit-cards/${cardId}/purchases`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Mercado",
+        amount: 180,
+        purchaseDate: "2026-03-05",
+      });
+
+    await request(app)
+      .post(`/credit-cards/${cardId}/purchases`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Farmácia",
+        amount: 70,
+        purchaseDate: "2026-03-08",
+      });
+
+    const closeRes = await request(app)
+      .post(`/credit-cards/${cardId}/close-invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ closingDate: "2026-03-15" });
+
+    expect(closeRes.status).toBe(200);
+
+    const reopenRes = await request(app)
+      .post(`/credit-cards/invoices/${closeRes.body.invoice.id}/reopen`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reopenRes.status).toBe(200);
+    expect(reopenRes.body).toMatchObject({
+      invoiceId: closeRes.body.invoice.id,
+      reopenedPurchasesCount: 2,
+      success: true,
+    });
+
+    const listRes = await request(app)
+      .get("/credit-cards")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.items[0]).toMatchObject({
+      openPurchasesCount: 2,
+      openPurchasesTotal: 250,
+      pendingInvoicesCount: 0,
+      pendingInvoicesTotal: 0,
+      usage: {
+        total: 1800,
+        used: 250,
+        available: 1550,
+        status: "using",
+      },
+    });
+
+    const billedPurchasesResult = await dbQuery(
+      `SELECT COUNT(*)::int AS total
+         FROM credit_card_purchases
+        WHERE credit_card_id = $1
+          AND status = 'billed'`,
+      [cardId],
+    );
+    expect(Number(billedPurchasesResult.rows[0].total)).toBe(0);
+  });
+
+  it("POST /credit-cards/invoices/:invoiceId/reopen bloqueia reabertura de fatura paga", async () => {
+    const token = await registerAndLogin("credit-cards-reopen-paid@test.dev");
+
+    const createCardRes = await request(app)
+      .post("/credit-cards")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Mastercard",
+        limitTotal: 1400,
+        closingDay: 10,
+        dueDay: 20,
+      });
+    const cardId = createCardRes.body.id;
+
+    await request(app)
+      .post(`/credit-cards/${cardId}/purchases`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Streaming",
+        amount: 59.9,
+        purchaseDate: "2026-03-05",
+      });
+
+    const closeRes = await request(app)
+      .post(`/credit-cards/${cardId}/close-invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ closingDate: "2026-03-15" });
+
+    await request(app)
+      .patch(`/bills/${closeRes.body.invoice.id}/mark-paid`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ paidAt: "2026-03-20T10:00:00.000Z" });
+
+    const reopenRes = await request(app)
+      .post(`/credit-cards/invoices/${closeRes.body.invoice.id}/reopen`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expectErrorResponseWithRequestId(
+      reopenRes,
+      409,
+      "Apenas faturas pendentes podem ser reabertas.",
+    );
+  });
+
   it("fecha apenas a parcela elegivel do ciclo e preserva as proximas abertas", async () => {
     const token = await registerAndLogin("credit-cards-installment-cycle@test.dev");
 
