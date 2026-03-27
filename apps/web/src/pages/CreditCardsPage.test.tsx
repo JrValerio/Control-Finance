@@ -48,7 +48,7 @@ const buildOpenPurchase = (): CreditCardPurchase => ({
   updatedAt: "2026-03-15T10:00:00.000Z",
 });
 
-const buildInvoice = (): CreditCardInvoice => ({
+const buildInvoice = (overrides: Partial<CreditCardInvoice> = {}): CreditCardInvoice => ({
   id: 91,
   title: "Fatura Nubank 2026-03",
   amount: 300,
@@ -57,6 +57,7 @@ const buildInvoice = (): CreditCardInvoice => ({
   paidAt: null,
   referenceMonth: "2026-03",
   isOverdue: false,
+  ...overrides,
 });
 
 const buildCard = (overrides: Partial<CreditCardItem> = {}): CreditCardItem => ({
@@ -163,6 +164,56 @@ describe("CreditCardsPage", () => {
     expect(screen.getByText("Mercado")).toBeInTheDocument();
     expect(screen.getByText("Fatura Nubank 2026-03")).toBeInTheDocument();
     expect(screen.getByText("24.00% do limite")).toBeInTheDocument();
+    expect(screen.getAllByText("Em uso").length).toBeGreaterThan(0);
+    expect(screen.getByText("Fatura atual")).toBeInTheDocument();
+    expect(screen.getByText("Pendente")).toBeInTheDocument();
+  });
+
+  it("desabilita fechar fatura quando nao ha compras abertas", async () => {
+    vi.mocked(creditCardsService.list).mockResolvedValueOnce({
+      items: [
+        buildCard({
+          openPurchasesCount: 0,
+          openPurchasesTotal: 0,
+          openPurchases: [],
+          invoices: [],
+          pendingInvoicesCount: 0,
+          pendingInvoicesTotal: 0,
+          usage: {
+            total: 2000,
+            used: 0,
+            available: 2000,
+            exceededBy: 0,
+            usagePct: 0,
+            status: "unused",
+          },
+        }),
+      ],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Nubank")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Fechar fatura" })).toBeDisabled();
+  });
+
+  it("destaca fatura atrasada com badge explicito", async () => {
+    vi.mocked(creditCardsService.list).mockResolvedValueOnce({
+      items: [
+        buildCard({
+          invoices: [
+            buildInvoice({
+              isOverdue: true,
+            }),
+          ],
+        }),
+      ],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Nubank")).toBeInTheDocument();
+    expect(screen.getByText("Atrasada")).toBeInTheDocument();
   });
 
   it("cria cartão novo pelo modal", async () => {
