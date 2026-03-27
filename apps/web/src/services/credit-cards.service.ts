@@ -91,6 +91,12 @@ export interface CloseInvoiceResult {
   total: number;
 }
 
+export interface ReopenInvoiceResult {
+  invoiceId: number;
+  reopenedPurchasesCount: number;
+  success: boolean;
+}
+
 const normalizeString = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
 const normalizeStringOrNull = (value: unknown) => {
@@ -231,6 +237,20 @@ export const creditCardsService = {
       invoice: normalizeInvoice((raw.invoice ?? {}) as Record<string, unknown>),
       purchasesCount: Number(raw.purchasesCount) || 0,
       total: Number(raw.total) || 0,
+    };
+  },
+
+  reopenInvoice: async (invoiceId: number): Promise<ReopenInvoiceResult> => {
+    const { data } = await api.post(`/credit-cards/invoices/${invoiceId}/reopen`);
+    const raw = data as {
+      invoiceId?: unknown;
+      reopenedPurchasesCount?: unknown;
+      success?: unknown;
+    };
+    return {
+      invoiceId: Number(raw.invoiceId) || 0,
+      reopenedPurchasesCount: Number(raw.reopenedPurchasesCount) || 0,
+      success: Boolean(raw.success),
     };
   },
 };

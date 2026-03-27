@@ -9,6 +9,7 @@ import {
   createCreditCardInstallmentsForUser,
   deleteCreditCardPurchaseForUser,
   closeCreditCardInvoiceForUser,
+  reopenCreditCardInvoiceForUser,
 } from "../services/credit-cards.service.js";
 
 const router = Router();
@@ -76,6 +77,15 @@ router.delete("/purchases/:purchaseId", creditCardsWriteRateLimiter, async (req,
 router.post("/:id/close-invoice", creditCardsWriteRateLimiter, async (req, res, next) => {
   try {
     const result = await closeCreditCardInvoiceForUser(req.user.id, req.params.id, req.body || {});
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/invoices/:invoiceId/reopen", creditCardsWriteRateLimiter, async (req, res, next) => {
+  try {
+    const result = await reopenCreditCardInvoiceForUser(req.user.id, req.params.invoiceId);
     res.status(200).json(result);
   } catch (error) {
     next(error);

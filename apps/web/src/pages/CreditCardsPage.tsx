@@ -133,6 +133,19 @@ const CreditCardsPage = ({
     }
   };
 
+  const handleReopenInvoice = async (invoiceId: number) => {
+    setPageError("");
+    try {
+      const result = await creditCardsService.reopenInvoice(invoiceId);
+      showSuccess(
+        `Fatura reaberta. ${result.reopenedPurchasesCount} compra${result.reopenedPurchasesCount === 1 ? "" : "s"} voltaram para aberto.`,
+      );
+      await loadCards();
+    } catch (error) {
+      setPageError(getApiErrorMessage(error, "Não foi possível reabrir a fatura."));
+    }
+  };
+
   const handleDeletePurchase = async (purchaseId: number) => {
     setPendingDeletePurchaseId(null);
     setPageError("");
@@ -354,13 +367,22 @@ const CreditCardsPage = ({
                                   {formatCurrency(invoice.amount)}
                                 </span>
                                 {invoice.status === "pending" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => void handlePayInvoice(invoice.id)}
-                                    className="rounded border border-green-300 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
-                                  >
-                                    Pagar fatura
-                                  </button>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleReopenInvoice(invoice.id)}
+                                      className="rounded border border-amber-300 px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                                    >
+                                      Reabrir
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handlePayInvoice(invoice.id)}
+                                      className="rounded border border-green-300 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
+                                    >
+                                      Pagar fatura
+                                    </button>
+                                  </div>
                                 ) : (
                                   <span className="rounded border border-green-200 bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">
                                     Paga

@@ -42,6 +42,14 @@ const normalizePurchaseId = (value) => {
   return parsed;
 };
 
+const normalizeInvoiceId = (value) => {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw createError(400, "ID de fatura invalido.");
+  }
+  return parsed;
+};
+
 const normalizeName = (value) => {
   if (!value || !String(value).trim()) {
     throw createError(400, "Nome do cartao e obrigatorio.");
@@ -651,6 +659,69 @@ export const closeCreditCardInvoiceForUser = async (userId, cardId, payload = {}
       invoice: mapInvoiceRow(invoice),
       purchasesCount: purchases.length,
       total: invoiceAmount,
+    };
+  });
+};
+
+export const reopenCreditCardInvoiceForUser = async (userId, invoiceId) => {
+  const normalizedUserId = normalizeUserId(userId);
+  const normalizedInvoiceId = normalizeInvoiceId(invoiceId);
+
+  return withDbTransaction(async (client) => {
+    const invoiceResult = await client.query(
+      `SELECT *
+         FROM bills
+        WHERE id = $1
+          AND user_id = $2
+          AND bill_type = $3
+          AND credit_card_id IS NOT NULL
+        LIMIT 1`,
+      [normalizedInvoiceId, normalizedUserId, CREDIT_CARD_INVOICE_BILL_TYPE],
+    );
+
+    if (invoiceResult.rows.length === 0) {
+      throw createError(404, "Fatura nao encontrada.");
+    }
+
+    const invoice = invoiceResult.rows[0];
+
+    if (invoice.status !== "pending") {
+      throw createError(409, "Apenas faturas pendentes podem ser reabertas.");
+    }
+
+    const purchasesResult = await client.query(
+      `SELECT id
+         FROM credit_card_purchases
+        WHERE user_id = $1
+          AND bill_id = $2
+        ORDER BY id ASC`,
+      [normalizedUserId, normalizedInvoiceId],
+    );
+
+    if (purchasesResult.rows.length > 0) {
+      await client.query(
+        `UPDATE credit_card_purchases
+            SET status = 'open',
+                statement_month = NULL,
+                bill_id = NULL,
+                updated_at = NOW()
+          WHERE user_id = $1
+            AND bill_id = $2`,
+        [normalizedUserId, normalizedInvoiceId],
+      );
+    }
+
+    await client.query(
+      `DELETE FROM bills
+        WHERE id = $1
+          AND user_id = $2`,
+      [normalizedInvoiceId, normalizedUserId],
+    );
+
+    return {
+      invoiceId: normalizedInvoiceId,
+      reopenedPurchasesCount: purchasesResult.rows.length,
+      success: true,
     };
   });
 };

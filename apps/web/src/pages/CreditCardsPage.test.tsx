@@ -20,6 +20,7 @@ vi.mock("../services/credit-cards.service", () => ({
     createInstallments: vi.fn(),
     removePurchase: vi.fn(),
     closeInvoice: vi.fn(),
+    reopenInvoice: vi.fn(),
   },
 }));
 
@@ -138,6 +139,11 @@ describe("CreditCardsPage", () => {
       purchasesCount: 1,
       total: 180,
     });
+    vi.mocked(creditCardsService.reopenInvoice).mockResolvedValue({
+      invoiceId: 91,
+      reopenedPurchasesCount: 1,
+      success: true,
+    });
     vi.mocked(billsService.markPaid).mockResolvedValue({
       bill: {} as never,
       transaction: {
@@ -247,6 +253,18 @@ describe("CreditCardsPage", () => {
 
     await waitFor(() => {
       expect(billsService.markPaid).toHaveBeenCalledWith(91);
+    });
+  });
+
+  it("reabre a fatura pendente pelo fluxo da tela", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Nubank");
+    await user.click(screen.getByRole("button", { name: "Reabrir" }));
+
+    await waitFor(() => {
+      expect(creditCardsService.reopenInvoice).toHaveBeenCalledWith(91);
     });
   });
 });
