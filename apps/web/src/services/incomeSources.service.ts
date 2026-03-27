@@ -43,6 +43,7 @@ export interface IncomeStatement {
   paymentDate: string | null;
   status: "draft" | "posted";
   postedTransactionId: number | null;
+  sourceImportSessionId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -91,6 +92,7 @@ export interface CreateStatementPayload {
   paymentDate?: string | null;
   grossAmount?: number | null;
   details?: Record<string, unknown> | null;
+  sourceImportSessionId?: string | null;
 }
 
 // ─── Raw API payload types ─────────────────────────────────────────────────────
@@ -137,6 +139,7 @@ interface RawStatement {
   paymentDate?: unknown;
   status?: unknown;
   postedTransactionId?: unknown;
+  sourceImportSessionId?: unknown;
   createdAt?: unknown;
   updatedAt?: unknown;
 }
@@ -192,6 +195,7 @@ const normalizeStatement = (raw: RawStatement): IncomeStatement => ({
   paymentDate: normalizeStringOrNull(raw.paymentDate),
   status: raw.status === "posted" ? "posted" : "draft",
   postedTransactionId: normalizeIntOrNull(raw.postedTransactionId),
+  sourceImportSessionId: normalizeStringOrNull(raw.sourceImportSessionId),
   createdAt: normalizeISOString(raw.createdAt),
   updatedAt: normalizeISOString(raw.updatedAt),
 });

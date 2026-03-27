@@ -42,6 +42,7 @@ const mockStatement = {
   paymentDate: null,
   status: "draft" as const,
   postedTransactionId: null,
+  sourceImportSessionId: null,
   createdAt: "2026-02-25T00:00:00Z",
   updatedAt: "2026-02-25T00:00:00Z",
 };

@@ -317,7 +317,14 @@ const ImportHistoryModal = ({ isOpen, onClose, onImportSessionReverted = undefin
                             {undoingSessionId === item.id ? "Desfazendo..." : "Desfazer"}
                           </button>
                         ) : (
-                          <span className="text-[11px] text-cf-text-secondary">Sem ação</span>
+                          <div className="space-y-1">
+                            <span className="text-[11px] text-cf-text-secondary">Sem ação</span>
+                            {item.undoBlockedReason ? (
+                              <p className="max-w-48 text-[11px] text-cf-text-secondary">
+                                {item.undoBlockedReason}
+                              </p>
+                            ) : null}
+                          </div>
                         )}
                       </td>
                     </tr>

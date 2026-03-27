@@ -221,6 +221,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
       paymentDate: suggestion.paymentDate ?? undefined,
       grossAmount: suggestion.grossAmount ?? null,
       details: Object.keys(details).length > 0 ? details : null,
+      sourceImportSessionId: dryRunResult?.importId ?? undefined,
     };
   }, [dryRunResult]);
 
