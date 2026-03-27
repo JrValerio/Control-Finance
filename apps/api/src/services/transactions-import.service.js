@@ -329,24 +329,24 @@ const parsePayloadJson = (payloadJson) => {
 };
 
 const buildUndoBlockedReason = ({
-  derivedIncomeStatements = 0,
-  derivedBills = 0,
+  blockingIncomeStatements = 0,
+  blockingBills = 0,
 } = {}) => {
   const blockers = [];
 
-  if (derivedIncomeStatements > 0) {
+  if (blockingIncomeStatements > 0) {
     blockers.push(
-      `${derivedIncomeStatements} ${
-        derivedIncomeStatements === 1
+      `${blockingIncomeStatements} ${
+        blockingIncomeStatements === 1
           ? "lancamento no historico de renda"
           : "lancamentos no historico de renda"
       }`,
     );
   }
 
-  if (derivedBills > 0) {
+  if (blockingBills > 0) {
     blockers.push(
-      `${derivedBills} ${derivedBills === 1 ? "conta derivada" : "contas derivadas"}`,
+      `${blockingBills} ${blockingBills === 1 ? "conta derivada" : "contas derivadas"}`,
     );
   }
 
@@ -355,6 +355,114 @@ const buildUndoBlockedReason = ({
   }
 
   return `Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: ${blockers.join(" e ")}.`;
+};
+
+const buildDeleteByIdsQuery = (tableName, ids = []) => {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return null;
+  }
+
+  const placeholders = ids.map((_, index) => `$${index + 1}`).join(", ");
+
+  return {
+    sql: `DELETE FROM ${tableName} WHERE id IN (${placeholders})`,
+    params: ids,
+  };
+};
+
+const evaluateImportSessionUndoPlan = async (
+  executeQuery,
+  userId,
+  sessionId,
+  {
+    activeDerivedIncomeStatements = undefined,
+    activeDerivedBills = undefined,
+  } = {},
+) => {
+  const plan = {
+    deletableIncomeStatementIds: [],
+    blockingIncomeStatements: 0,
+    deletableBillIds: [],
+    blockingBills: 0,
+  };
+
+  const shouldInspectIncomeStatements =
+    typeof activeDerivedIncomeStatements === "undefined" || activeDerivedIncomeStatements > 0;
+  const shouldInspectBills =
+    typeof activeDerivedBills === "undefined" || activeDerivedBills > 0;
+
+  if (shouldInspectIncomeStatements) {
+    const incomeStatementsResult = await executeQuery(
+      `SELECT st.id,
+              st.status,
+              st.posted_transaction_id,
+              tx.import_session_id AS posted_transaction_import_session_id
+         FROM income_statements st
+         JOIN income_sources src
+           ON src.id = st.income_source_id
+         LEFT JOIN transactions tx
+           ON tx.id = st.posted_transaction_id
+        WHERE src.user_id = $1
+          AND st.source_import_session_id = $2`,
+      [userId, sessionId],
+    );
+
+    incomeStatementsResult.rows.forEach((row) => {
+      const postedTransactionId =
+        row.posted_transaction_id != null ? Number(row.posted_transaction_id) : null;
+      const postedTransactionImportSessionId =
+        row.posted_transaction_import_session_id != null
+          ? String(row.posted_transaction_import_session_id)
+          : null;
+
+      if (postedTransactionId == null && row.status === "draft") {
+        plan.deletableIncomeStatementIds.push(Number(row.id));
+        return;
+      }
+
+      if (postedTransactionId != null && postedTransactionImportSessionId === sessionId) {
+        plan.deletableIncomeStatementIds.push(Number(row.id));
+        return;
+      }
+
+      plan.blockingIncomeStatements += 1;
+    });
+  }
+
+  if (shouldInspectBills) {
+    const billsResult = await executeQuery(
+      `SELECT b.id,
+              b.status,
+              b.credit_card_id,
+              COUNT(p.id)::int AS purchase_count
+         FROM bills b
+         LEFT JOIN credit_card_purchases p
+           ON p.bill_id = b.id
+        WHERE b.user_id = $1
+          AND b.source_import_session_id = $2
+        GROUP BY b.id, b.status, b.credit_card_id`,
+      [userId, sessionId],
+    );
+
+    billsResult.rows.forEach((row) => {
+      const purchaseCount = Number(row.purchase_count || 0);
+
+      if (row.status === "pending" && row.credit_card_id == null && purchaseCount === 0) {
+        plan.deletableBillIds.push(Number(row.id));
+        return;
+      }
+
+      plan.blockingBills += 1;
+    });
+  }
+
+  return {
+    ...plan,
+    undoBlockedReason: buildUndoBlockedReason({
+      blockingIncomeStatements: plan.blockingIncomeStatements,
+      blockingBills: plan.blockingBills,
+    }),
+  };
 };
 
 const ensureValidCsvHeaders = (headerRow) => {
@@ -974,7 +1082,7 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
     [userId, pagination.limit, pagination.offset],
   );
 
-  const items = result.rows.map((row) => {
+  const items = await Promise.all(result.rows.map(async (row) => {
     const payload = parsePayloadJson(row.payload_json);
     const summary = payload.summary || {};
     const imported = normalizeSummaryInteger(row.active_imported_count, 0);
@@ -984,10 +1092,18 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
       0,
     );
     const derivedBills = normalizeSummaryInteger(row.active_bills_count, 0);
-    const undoBlockedReason = buildUndoBlockedReason({
-      derivedIncomeStatements,
-      derivedBills,
-    });
+    const undoPlan =
+      derivedIncomeStatements > 0 || derivedBills > 0
+        ? await evaluateImportSessionUndoPlan(
+            dbQuery,
+            userId,
+            String(row.id),
+            {
+              activeDerivedIncomeStatements: derivedIncomeStatements,
+              activeDerivedBills: derivedBills,
+            },
+          )
+        : { undoBlockedReason: null };
 
     return {
       id: String(row.id),
@@ -1002,8 +1118,8 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
         typeof payload.documentType === "string" && payload.documentType.trim()
           ? payload.documentType.trim()
           : null,
-      canUndo: Boolean(committedAt) && imported > 0 && !undoBlockedReason,
-      undoBlockedReason,
+      canUndo: Boolean(committedAt) && imported > 0 && !undoPlan.undoBlockedReason,
+      undoBlockedReason: undoPlan.undoBlockedReason,
       summary: {
         totalRows: normalizeSummaryInteger(summary.totalRows, 0),
         validRows: normalizeSummaryInteger(summary.validRows, 0),
@@ -1015,7 +1131,7 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
         imported,
       },
     };
-  });
+  }));
 
   return {
     items,
@@ -1248,13 +1364,34 @@ export const deleteImportSessionForUser = async (userId, sessionId) => {
       0,
     );
     const derivedBills = normalizeSummaryInteger(billsResult.rows[0]?.count, 0);
-    const undoBlockedReason = buildUndoBlockedReason({
-      derivedIncomeStatements,
-      derivedBills,
-    });
+    const undoPlan = await evaluateImportSessionUndoPlan(
+      (sql, params) => transactionClient.query(sql, params),
+      userId,
+      normalizedSessionId,
+      {
+        activeDerivedIncomeStatements: derivedIncomeStatements,
+        activeDerivedBills: derivedBills,
+      },
+    );
 
-    if (undoBlockedReason) {
-      throw createError(409, undoBlockedReason);
+    if (undoPlan.undoBlockedReason) {
+      throw createError(409, undoPlan.undoBlockedReason);
+    }
+
+    const deleteIncomeStatementsQuery = buildDeleteByIdsQuery(
+      "income_statements",
+      undoPlan.deletableIncomeStatementIds,
+    );
+    if (deleteIncomeStatementsQuery) {
+      await transactionClient.query(
+        deleteIncomeStatementsQuery.sql,
+        deleteIncomeStatementsQuery.params,
+      );
+    }
+
+    const deleteBillsQuery = buildDeleteByIdsQuery("bills", undoPlan.deletableBillIds);
+    if (deleteBillsQuery) {
+      await transactionClient.query(deleteBillsQuery.sql, deleteBillsQuery.params);
     }
 
     const deleteResult = await transactionClient.query(
@@ -1263,10 +1400,22 @@ export const deleteImportSessionForUser = async (userId, sessionId) => {
       [userId, normalizedSessionId],
     );
 
-    return { deletedCount: Number(deleteResult.rowCount || 0) };
+    return {
+      deletedCount: Number(deleteResult.rowCount || 0),
+      deletedDerivedIncomeStatements: undoPlan.deletableIncomeStatementIds.length,
+      deletedDerivedBills: undoPlan.deletableBillIds.length,
+    };
   });
 
-  return { importSessionId: normalizedSessionId, deletedCount: result.deletedCount, success: true };
+  return {
+    importSessionId: normalizedSessionId,
+    deletedCount: result.deletedCount,
+    success: true,
+    deletedDerived: {
+      incomeStatements: result.deletedDerivedIncomeStatements,
+      bills: result.deletedDerivedBills,
+    },
+  };
 };
 
 export const bulkDeleteTransactionsForUser = async (userId, transactionIds) => {

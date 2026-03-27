@@ -1459,8 +1459,8 @@ describe("transaction imports", () => {
     expect(listResponse.body.data).toHaveLength(0);
   });
 
-  it("GET /transactions/imports marca sessao como nao desfeita quando ha renda derivada vinculada", async () => {
-    const email = "import-history-income-block@controlfinance.dev";
+  it("GET /transactions/imports mantem canUndo quando a sessao so tem renda derivada revertivel", async () => {
+    const email = "import-history-income-undoable@controlfinance.dev";
     const token = await registerAndLogin(email);
     await makeProUser(email);
 
@@ -1504,14 +1504,78 @@ describe("transaction imports", () => {
     expect(historyResponse.status).toBe(200);
     expect(historyResponse.body.items[0]).toMatchObject({
       id: sessionId,
+      canUndo: true,
+      undoBlockedReason: null,
+    });
+  });
+
+  it("GET /transactions/imports marca sessao como nao desfeita quando ha renda derivada bloqueante", async () => {
+    const email = "import-history-income-block@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    await makeProUser(email);
+
+    const csv = csvFile("date,type,value,description\n2026-03-01,Entrada,1412,Credito INSS");
+
+    const dryRunResponse = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryRunResponse.body.importId });
+
+    const sessionId = commitResponse.body.importSessionId;
+
+    const sourceResponse = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "INSS Beneficio" });
+
+    expect(sourceResponse.status).toBe(201);
+
+    const statementResponse = await request(app)
+      .post(`/income-sources/${sourceResponse.body.id}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-03",
+        netAmount: 1412,
+        paymentDate: "2026-03-05",
+        sourceImportSessionId: sessionId,
+      });
+
+    expect(statementResponse.status).toBe(201);
+
+    const { rows: manualTxRows } = await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date, description)
+       VALUES ((SELECT id FROM users WHERE email = $1), $2, $3, $4, $5)
+       RETURNING id`,
+      [email, "Entrada", 1412, "2026-03-05", "Credito manual conciliado"],
+    );
+
+    const linkResponse = await request(app)
+      .post(`/income-sources/statements/${statementResponse.body.statement.id}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: Number(manualTxRows[0].id) });
+
+    expect(linkResponse.status).toBe(200);
+
+    const historyResponse = await request(app)
+      .get("/transactions/imports")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(historyResponse.status).toBe(200);
+    expect(historyResponse.body.items[0]).toMatchObject({
+      id: sessionId,
       canUndo: false,
       undoBlockedReason:
         "Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: 1 lancamento no historico de renda.",
     });
   });
 
-  it("DELETE /transactions/imports/:sessionId bloqueia undo quando existe bill derivada da sessao", async () => {
-    const email = "import-undo-bill-block@controlfinance.dev";
+  it("DELETE /transactions/imports/:sessionId remove bill pendente derivada da sessao", async () => {
+    const email = "import-undo-bill-cascade@controlfinance.dev";
     const token = await registerAndLogin(email);
     await makeProUser(email);
 
@@ -1545,21 +1609,109 @@ describe("transaction imports", () => {
       .delete(`/transactions/imports/${sessionId}`)
       .set("Authorization", `Bearer ${token}`);
 
-    expectErrorResponseWithRequestId(
-      undoResponse,
-      409,
-      "Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: 1 conta derivada.",
-    );
+    expect(undoResponse.status).toBe(200);
+    expect(undoResponse.body).toMatchObject({
+      importSessionId: sessionId,
+      deletedCount: 1,
+      success: true,
+      deletedDerived: {
+        incomeStatements: 0,
+        bills: 1,
+      },
+    });
 
     const listResponse = await request(app)
       .get("/transactions")
       .set("Authorization", `Bearer ${token}`);
 
     expect(listResponse.status).toBe(200);
-    expect(listResponse.body.data).toHaveLength(1);
+    expect(listResponse.body.data).toHaveLength(0);
+
+    const billsResponse = await request(app)
+      .get("/bills")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(billsResponse.status).toBe(200);
+    expect(billsResponse.body.pagination.total).toBe(0);
   });
 
-  it("DELETE /transactions/imports/:sessionId bloqueia undo quando existe renda derivada da sessao", async () => {
+  it("DELETE /transactions/imports/:sessionId remove income statement da propria sessao quando ainda e seguro", async () => {
+    const email = "import-undo-income-cascade@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    await makeProUser(email);
+
+    const csv = csvFile("date,type,value,description\n2026-03-01,Entrada,1412,Credito INSS");
+
+    const dryRunResponse = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryRunResponse.body.importId });
+
+    const sessionId = commitResponse.body.importSessionId;
+    const importedTransactionId = Number(commitResponse.body.createdTransactions[0].id);
+
+    const sourceResponse = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "INSS Beneficio" });
+
+    expect(sourceResponse.status).toBe(201);
+
+    const statementResponse = await request(app)
+      .post(`/income-sources/${sourceResponse.body.id}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-03",
+        netAmount: 1412,
+        paymentDate: "2026-03-05",
+        sourceImportSessionId: sessionId,
+      });
+
+    expect(statementResponse.status).toBe(201);
+
+    const linkResponse = await request(app)
+      .post(`/income-sources/statements/${statementResponse.body.statement.id}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: importedTransactionId });
+
+    expect(linkResponse.status).toBe(200);
+
+    const undoResponse = await request(app)
+      .delete(`/transactions/imports/${sessionId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(undoResponse.status).toBe(200);
+    expect(undoResponse.body).toMatchObject({
+      importSessionId: sessionId,
+      deletedCount: 1,
+      success: true,
+      deletedDerived: {
+        incomeStatements: 1,
+        bills: 0,
+      },
+    });
+
+    const listResponse = await request(app)
+      .get("/transactions")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.data).toHaveLength(0);
+
+    const statementsResponse = await request(app)
+      .get(`/income-sources/${sourceResponse.body.id}/statements`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(statementsResponse.status).toBe(200);
+    expect(statementsResponse.body.statements).toHaveLength(0);
+  });
+
+  it("DELETE /transactions/imports/:sessionId bloqueia undo quando existe renda derivada conciliada fora da sessao", async () => {
     const email = "import-undo-income-block@controlfinance.dev";
     const token = await registerAndLogin(email);
     await makeProUser(email);
@@ -1597,6 +1749,20 @@ describe("transaction imports", () => {
 
     expect(statementResponse.status).toBe(201);
 
+    const { rows: manualTxRows } = await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date, description)
+       VALUES ((SELECT id FROM users WHERE email = $1), $2, $3, $4, $5)
+       RETURNING id`,
+      [email, "Entrada", 1412, "2026-03-05", "Credito manual conciliado"],
+    );
+
+    const linkResponse = await request(app)
+      .post(`/income-sources/statements/${statementResponse.body.statement.id}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: Number(manualTxRows[0].id) });
+
+    expect(linkResponse.status).toBe(200);
+
     const undoResponse = await request(app)
       .delete(`/transactions/imports/${sessionId}`)
       .set("Authorization", `Bearer ${token}`);
@@ -1612,7 +1778,63 @@ describe("transaction imports", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(listResponse.status).toBe(200);
-    expect(listResponse.body.data).toHaveLength(1);
+    expect(listResponse.body.data).toHaveLength(2);
+  });
+
+  it("DELETE /transactions/imports/:sessionId bloqueia undo quando existe bill derivada ja paga", async () => {
+    const email = "import-undo-bill-block@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    await makeProUser(email);
+
+    const csv = csvFile("date,type,value,description\n2026-03-01,Saida,120,Conta de luz");
+
+    const dryRunResponse = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryRunResponse.body.importId });
+
+    const sessionId = commitResponse.body.importSessionId;
+
+    const billResponse = await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Conta de luz",
+        amount: 120,
+        dueDate: "2026-03-10",
+        sourceImportSessionId: sessionId,
+      });
+
+    expect(billResponse.status).toBe(201);
+
+    const markPaidResponse = await request(app)
+      .patch(`/bills/${billResponse.body.id}/mark-paid`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ paidAt: "2026-03-09T10:00:00.000Z" });
+
+    expect(markPaidResponse.status).toBe(200);
+
+    const undoResponse = await request(app)
+      .delete(`/transactions/imports/${sessionId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expectErrorResponseWithRequestId(
+      undoResponse,
+      409,
+      "Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: 1 conta derivada.",
+    );
+
+    const listResponse = await request(app)
+      .get("/transactions")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.data).toHaveLength(2);
   });
 
   it("DELETE /transactions/imports/:sessionId retorna 404 para sessao de outro usuario", async () => {
