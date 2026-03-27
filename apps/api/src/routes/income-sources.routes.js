@@ -106,7 +106,7 @@ router.get("/:id/statements", async (req, res, next) => {
 router.post("/:id/statements", incomeSourcesWriteRateLimiter, async (req, res, next) => {
   try {
     const result = await createStatementDraftForSource(req.user.id, req.params.id, req.body || {});
-    res.status(201).json(result);
+    res.status(result.outcome === "created" ? 201 : 200).json(result);
   } catch (error) {
     next(error);
   }

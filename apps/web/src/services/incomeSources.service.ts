@@ -72,6 +72,7 @@ export interface IncomeSourceWithDeductions extends IncomeSource {
 }
 
 export interface IncomeStatementWithDeductions {
+  outcome?: "created" | "ignored" | "replaced";
   statement: IncomeStatement;
   deductions: IncomeStatementDeduction[];
 }
@@ -112,6 +113,7 @@ export interface CreateStatementPayload {
   grossAmount?: number | null;
   details?: Record<string, unknown> | null;
   sourceImportSessionId?: string | null;
+  existingCompetenceAction?: "ignore" | "replace";
   deductions?: Array<{
     label: string;
     amount: number;
@@ -185,6 +187,12 @@ interface RawStatementReconciliation {
   summary?: unknown;
   linkedTransaction?: unknown;
   candidates?: unknown;
+}
+
+interface RawStatementWithDeductions {
+  outcome?: unknown;
+  statement?: unknown;
+  deductions?: unknown;
 }
 
 // ─── Normalization ─────────────────────────────────────────────────────────────
@@ -307,15 +315,19 @@ const normalizeSource = (raw: RawSource): IncomeSourceWithDeductions => {
   };
 };
 
-const normalizeStatementWithDeductions = (raw: {
-  statement?: unknown;
-  deductions?: unknown;
-}): IncomeStatementWithDeductions => {
+const normalizeStatementWithDeductions = (raw: RawStatementWithDeductions): IncomeStatementWithDeductions => {
   const stmt = raw.statement as RawStatement;
   const deds = Array.isArray(raw.deductions)
     ? (raw.deductions as RawStatementDeduction[]).map(normalizeStatementDeduction)
     : [];
-  return { statement: normalizeStatement(stmt ?? {}), deductions: deds };
+  return {
+    outcome:
+      raw.outcome === "created" || raw.outcome === "ignored" || raw.outcome === "replaced"
+        ? raw.outcome
+        : undefined,
+    statement: normalizeStatement(stmt ?? {}),
+    deductions: deds,
+  };
 };
 
 // ─── Service ──────────────────────────────────────────────────────────────────
@@ -362,7 +374,7 @@ export const incomeSourcesService = {
     payload: CreateStatementPayload,
   ): Promise<IncomeStatementWithDeductions> => {
     const { data } = await api.post(`/income-sources/${sourceId}/statements`, payload);
-    return normalizeStatementWithDeductions(data as { statement?: unknown; deductions?: unknown });
+    return normalizeStatementWithDeductions(data as RawStatementWithDeductions);
   },
 
   updateStatement: async (
