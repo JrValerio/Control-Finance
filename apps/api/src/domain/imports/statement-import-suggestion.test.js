@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractInssSuggestion,
+  extractInssSuggestions,
   extractEnergyBillSuggestion,
   extractWaterBillSuggestion,
 } from "./statement-import.js";
@@ -30,6 +31,46 @@ Espécie: 32 - APOSENTADORIA POR TEMPO DE CONTRIBUICAO
 
 02/2026  R$ 1.500,00
 05/03/2026
+`.trim();
+
+const INSS_MULTI_COMPETENCE_SAMPLE = `
+INSS - Instituto Nacional do Seguro Social
+Historico de Creditos
+
+NB: 177.682.989-9
+Espécie: 21 - PENSÃO POR MORTE PREVIDENCIÁRIA
+CPF: 433.427.604-00
+Data de nascimento: 07/01/1955
+
+02/2026  R$ 2.803,52
+Crédito não retornado 05/03/2026
+101 VALOR TOTAL DE MR DO PERIODO R$ 4.958,67
+216 CONSIGNACAO EMPRESTIMO BANCARIO R$ 156,00
+216 CONSIGNACAO EMPRESTIMO BANCARIO R$ 90,30
+217 EMPRESTIMO SOBRE A RMC R$ 238,00
+268 CONSIGNACAO - CARTAO R$ 247,93
+
+03/2026  R$ 2.803,52
+Credito nao retornado 07/04/2026
+101 VALOR TOTAL DE MR DO PERIODO R$ 4.958,67
+216 CONSIGNACAO EMPRESTIMO BANCARIO R$ 75,17
+216 CONSIGNACAO EMPRESTIMO BANCARIO R$ 425,10
+268 CONSIGNACAO - CARTAO R$ 247,93
+`.trim();
+
+const INSS_WITH_STANDALONE_PAYMENT_LINE = `
+INSS - Instituto Nacional do Seguro Social
+Historico de Creditos
+NB: 177.682.989-9
+
+03/2026  R$ 2.803,52 CCF - CONTA-CORRENTE Não Não 01/03/2026
+a
+31/03/2026
+07/04/2026
+Banco: 341 - ITAU OP: 741159 - ATIBAIA AV DNA GERTRUDES Ocorrência: Crédito não retornado
+Data Cálculo: 09/03/2026 Origem: Maciça Validade Início: 07/04/2026 Fim: 29/05/2026
+101 VALOR TOTAL DE MR DO PERIODO R$ 4.958,67
+268 CONSIGNACAO - CARTAO R$ 247,93
 `.trim();
 
 describe("extractInssSuggestion", () => {
@@ -77,13 +118,81 @@ describe("extractInssSuggestion", () => {
     const result = extractInssSuggestion(INSS_SAMPLE);
     expect(Array.isArray(result.deductions)).toBe(true);
     expect(result.deductions).toHaveLength(2);
-    expect(result.deductions[0]).toMatchObject({ label: "emprestimo_consignado", amount: 1200 });
-    expect(result.deductions[1]).toMatchObject({ label: "cartao_rmc", amount: 955.15 });
+    expect(result.deductions[0]).toMatchObject({
+      code: "216",
+      label: "EMPRESTIMO CONSIGNADO",
+      amount: 1200,
+      consignacaoType: "loan",
+    });
+    expect(result.deductions[1]).toMatchObject({
+      code: "268",
+      label: "CARTAO RMC",
+      amount: 955.15,
+      consignacaoType: "card",
+    });
   });
 
   it("retorna deductions vazio quando nao ha rubricas de desconto", () => {
     const result = extractInssSuggestion(INSS_WITHOUT_GROSS);
     expect(result.deductions).toEqual([]);
+  });
+
+  it("gera uma sugestao por competencia com data de pagamento correta", () => {
+    const result = extractInssSuggestions(INSS_MULTI_COMPETENCE_SAMPLE);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      line: 7,
+      referenceMonth: "2026-02",
+      paymentDate: "2026-03-05",
+      netAmount: 2803.52,
+      grossAmount: 4958.67,
+      taxpayerCpf: "433.427.604-00",
+      birthYear: 1955,
+    });
+    expect(result[1]).toMatchObject({
+      line: 14,
+      referenceMonth: "2026-03",
+      paymentDate: "2026-04-07",
+      netAmount: 2803.52,
+      grossAmount: 4958.67,
+    });
+    expect(result[0].deductions).toEqual([
+      expect.objectContaining({
+        code: "216",
+        label: "CONSIGNACAO EMPRESTIMO BANCARIO",
+        amount: 156,
+        consignacaoType: "loan",
+      }),
+      expect.objectContaining({
+        code: "216",
+        label: "CONSIGNACAO EMPRESTIMO BANCARIO",
+        amount: 90.3,
+        consignacaoType: "loan",
+      }),
+      expect.objectContaining({
+        code: "217",
+        label: "EMPRESTIMO SOBRE A RMC",
+        amount: 238,
+        consignacaoType: "loan",
+      }),
+      expect.objectContaining({
+        code: "268",
+        label: "CONSIGNACAO - CARTAO",
+        amount: 247.93,
+        consignacaoType: "card",
+      }),
+    ]);
+  });
+
+  it("prefere a linha isolada da data de pagamento ao inves da data de calculo", () => {
+    const [result] = extractInssSuggestions(INSS_WITH_STANDALONE_PAYMENT_LINE);
+
+    expect(result).toMatchObject({
+      referenceMonth: "2026-03",
+      paymentDate: "2026-04-07",
+      netAmount: 2803.52,
+    });
   });
 });
 

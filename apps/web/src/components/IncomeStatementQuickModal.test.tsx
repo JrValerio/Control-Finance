@@ -94,7 +94,13 @@ describe("IncomeStatementQuickModal", () => {
       <IncomeStatementQuickModal
         isOpen
         onClose={vi.fn()}
-        prefill={{ referenceMonth: "2026-02", netAmount: 1412.0, paymentDate: "2026-02-25" }}
+        prefill={{
+          referenceMonth: "2026-02",
+          netAmount: 1412.0,
+          paymentDate: "2026-02-25",
+          grossAmount: 1800,
+          deductions: [{ code: "216", label: "EMPRESTIMO CONSIGNADO", amount: 388.0 }],
+        }}
       />,
     );
     await waitFor(() => {
@@ -102,6 +108,8 @@ describe("IncomeStatementQuickModal", () => {
     });
     expect(screen.getByLabelText(/Valor líquido/i)).toHaveValue(1412);
     expect(screen.getByLabelText(/Data de pagamento/i)).toHaveValue("2026-02-25");
+    expect(screen.getByText(/101 Valor total do período/i)).toBeInTheDocument();
+    expect(screen.getByText(/216 EMPRESTIMO CONSIGNADO/i)).toBeInTheDocument();
   });
 
   it("auto-selects single source", async () => {
@@ -117,7 +125,11 @@ describe("IncomeStatementQuickModal", () => {
       <IncomeStatementQuickModal
         isOpen
         onClose={vi.fn()}
-        prefill={{ referenceMonth: "2026-02", netAmount: 1412 }}
+        prefill={{
+          referenceMonth: "2026-02",
+          netAmount: 1412,
+          deductions: [{ code: "268", label: "CONSIGNACAO - CARTAO", amount: 247.93 }],
+        }}
         onCreated={onCreated}
       />,
     );
@@ -131,6 +143,17 @@ describe("IncomeStatementQuickModal", () => {
       expect(screen.getByText("Lancamento registrado com sucesso.")).toBeInTheDocument();
     });
     expect(onCreated).toHaveBeenCalledWith(mockStatement);
+    expect(incomeSourcesService.createStatement).toHaveBeenCalledWith(1, {
+      referenceMonth: "2026-02",
+      netAmount: 1412,
+      paymentDate: null,
+      grossAmount: null,
+      deductions: [
+        { label: "268 CONSIGNACAO - CARTAO", amount: 247.93, isVariable: false },
+      ],
+      details: null,
+      sourceImportSessionId: null,
+    });
     expect(incomeSourcesService.linkTransaction).not.toHaveBeenCalled();
     expect(incomeSourcesService.postStatement).not.toHaveBeenCalled();
   });

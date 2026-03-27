@@ -180,11 +180,49 @@ export interface ImportDryRunSummary {
   expense: number;
 }
 
+export interface ImportDryRunProfileDeduction {
+  code?: string | null;
+  label: string;
+  amount: number;
+  consignacaoType?: "loan" | "card" | "other" | null;
+}
+
+export interface ImportDryRunProfileSuggestion {
+  type: "profile";
+  line?: number | null;
+  profileKind?: string | null;
+  employerName?: string | null;
+  benefitId?: string | null;
+  benefitKind?: string | null;
+  taxpayerCpf?: string | null;
+  birthYear?: number | null;
+  referenceMonth?: string | null;
+  netAmount?: number | null;
+  paymentDate?: string | null;
+  grossAmount?: number | null;
+  deductions?: ImportDryRunProfileDeduction[];
+}
+
+export interface ImportDryRunBillSuggestion {
+  type: "bill";
+  billType?: "energy" | "water" | null;
+  issuer?: string | null;
+  referenceMonth?: string | null;
+  dueDate?: string | null;
+  amountDue?: number | null;
+  customerCode?: string | null;
+}
+
+export type ImportDryRunSuggestion = ImportDryRunProfileSuggestion | ImportDryRunBillSuggestion;
+
 export interface ImportDryRunResult {
   importId: string;
   expiresAt: string;
   summary: ImportDryRunSummary;
   rows: ImportDryRunRow[];
+  documentType?: string | null;
+  suggestion?: ImportDryRunSuggestion | null;
+  suggestions?: ImportDryRunSuggestion[];
 }
 
 export interface ImportCommitTransaction {
@@ -336,6 +374,9 @@ interface MonthlyBudgetUpsertApiResponse {
 interface ImportDryRunApiResponse {
   importId?: unknown;
   expiresAt?: unknown;
+  documentType?: unknown;
+  suggestion?: unknown;
+  suggestions?: unknown[];
   summary?: {
     totalRows?: unknown;
     validRows?: unknown;
@@ -426,6 +467,117 @@ interface ImportHistoryApiResponse {
     offset?: unknown;
   };
 }
+
+const normalizeImportDryRunProfileDeduction = (
+  raw: unknown,
+): ImportDryRunProfileDeduction | null => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+
+  const parsed = raw as {
+    code?: unknown;
+    label?: unknown;
+    amount?: unknown;
+    consignacaoType?: unknown;
+  };
+  const label = typeof parsed.label === "string" ? parsed.label.trim() : "";
+  if (!label) {
+    return null;
+  }
+
+  const normalizedType = String(parsed.consignacaoType || "").trim();
+
+  return {
+    code: typeof parsed.code === "string" && parsed.code.trim() ? parsed.code.trim() : null,
+    label,
+    amount: Number(parsed.amount) || 0,
+    consignacaoType:
+      normalizedType === "loan" || normalizedType === "card" || normalizedType === "other"
+        ? normalizedType
+        : null,
+  };
+};
+
+const normalizeImportDryRunSuggestion = (
+  raw: unknown,
+): ImportDryRunSuggestion | null => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+
+  const parsed = raw as Record<string, unknown>;
+  const type = String(parsed.type || "").trim();
+
+  if (type === "profile") {
+    return {
+      type: "profile",
+      line: parsed.line != null ? Number(parsed.line) || null : null,
+      profileKind:
+        typeof parsed.profileKind === "string" && parsed.profileKind.trim()
+          ? parsed.profileKind.trim()
+          : null,
+      employerName:
+        typeof parsed.employerName === "string" && parsed.employerName.trim()
+          ? parsed.employerName.trim()
+          : null,
+      benefitId:
+        typeof parsed.benefitId === "string" && parsed.benefitId.trim()
+          ? parsed.benefitId.trim()
+          : null,
+      benefitKind:
+        typeof parsed.benefitKind === "string" && parsed.benefitKind.trim()
+          ? parsed.benefitKind.trim()
+          : null,
+      taxpayerCpf:
+        typeof parsed.taxpayerCpf === "string" && parsed.taxpayerCpf.trim()
+          ? parsed.taxpayerCpf.trim()
+          : null,
+      birthYear: parsed.birthYear != null ? Number(parsed.birthYear) || null : null,
+      referenceMonth:
+        typeof parsed.referenceMonth === "string" && parsed.referenceMonth.trim()
+          ? parsed.referenceMonth.trim()
+          : null,
+      netAmount: parsed.netAmount != null ? Number(parsed.netAmount) || 0 : null,
+      paymentDate:
+        typeof parsed.paymentDate === "string" && parsed.paymentDate.trim()
+          ? parsed.paymentDate.trim()
+          : null,
+      grossAmount: parsed.grossAmount != null ? Number(parsed.grossAmount) || 0 : null,
+      deductions: Array.isArray(parsed.deductions)
+        ? (parsed.deductions as unknown[])
+            .map(normalizeImportDryRunProfileDeduction)
+            .filter(Boolean) as ImportDryRunProfileDeduction[]
+        : [],
+    };
+  }
+
+  if (type === "bill") {
+    const normalizedBillType = String(parsed.billType || "").trim();
+    return {
+      type: "bill",
+      billType:
+        normalizedBillType === "energy" || normalizedBillType === "water"
+          ? normalizedBillType
+          : null,
+      issuer:
+        typeof parsed.issuer === "string" && parsed.issuer.trim() ? parsed.issuer.trim() : null,
+      referenceMonth:
+        typeof parsed.referenceMonth === "string" && parsed.referenceMonth.trim()
+          ? parsed.referenceMonth.trim()
+          : null,
+      dueDate:
+        typeof parsed.dueDate === "string" && parsed.dueDate.trim() ? parsed.dueDate.trim() : null,
+      amountDue: parsed.amountDue != null ? Number(parsed.amountDue) || 0 : null,
+      customerCode:
+        typeof parsed.customerCode === "string" && parsed.customerCode.trim()
+          ? parsed.customerCode.trim()
+          : null,
+    };
+  }
+
+  return null;
+};
 
 const buildTransactionParams = (options: TransactionListOptions = {}): Record<string, string> => {
   const params: Record<string, string> = {};
@@ -825,6 +977,16 @@ export const transactionsService = {
     return {
       importId: String(responseBody.importId || ""),
       expiresAt: String(responseBody.expiresAt || ""),
+      documentType:
+        typeof responseBody.documentType === "string" && responseBody.documentType.trim()
+          ? responseBody.documentType.trim()
+          : null,
+      suggestion: normalizeImportDryRunSuggestion(responseBody.suggestion),
+      suggestions: Array.isArray(responseBody.suggestions)
+        ? responseBody.suggestions
+            .map(normalizeImportDryRunSuggestion)
+            .filter(Boolean) as ImportDryRunSuggestion[]
+        : [],
       summary: {
         totalRows: Number(responseBody.summary?.totalRows) || 0,
         validRows: Number(responseBody.summary?.validRows) || 0,

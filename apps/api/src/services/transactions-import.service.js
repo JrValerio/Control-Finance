@@ -15,7 +15,7 @@ import {
   parseInssCreditHistoryPdfText,
   parseGenericBankStatementPdfText,
   parseStatementCsvRows,
-  extractInssSuggestion,
+  extractInssSuggestions,
   extractPayrollSuggestion,
   extractEnergyBillSuggestion,
   extractWaterBillSuggestion,
@@ -570,8 +570,13 @@ const parseImportFileRows = async (importFile) => {
     if (documentType === "income_statement_inss") {
       try {
         const rows = parseInssCreditHistoryPdfText(text);
-        const suggestion = extractInssSuggestion(text);
-        return { rows, documentType, suggestion };
+        const suggestions = extractInssSuggestions(text);
+        return {
+          rows,
+          documentType,
+          suggestion: suggestions[0] ?? null,
+          suggestions,
+        };
       } catch (error) {
         throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no PDF.");
       }
@@ -585,22 +590,22 @@ const parseImportFileRows = async (importFile) => {
           "Nao foi possivel reconhecer os dados principais do holerite.",
         );
       }
-      return { rows: [], documentType, suggestion };
+      return { rows: [], documentType, suggestion, suggestions: suggestion ? [suggestion] : [] };
     }
 
     if (documentType === "utility_bill_energy") {
       const suggestion = extractEnergyBillSuggestion(text);
-      return { rows: [], documentType, suggestion };
+      return { rows: [], documentType, suggestion, suggestions: suggestion ? [suggestion] : [] };
     }
 
     if (documentType === "utility_bill_water") {
       const suggestion = extractWaterBillSuggestion(text);
-      return { rows: [], documentType, suggestion };
+      return { rows: [], documentType, suggestion, suggestions: suggestion ? [suggestion] : [] };
     }
 
     try {
       const rows = parseGenericBankStatementPdfText(text);
-      return { rows, documentType, suggestion: null };
+      return { rows, documentType, suggestion: null, suggestions: [] };
     } catch (error) {
       throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no PDF.");
     }
@@ -610,7 +615,7 @@ const parseImportFileRows = async (importFile) => {
     const documentType = detectDocumentType({ text: "", extension });
     try {
       const rows = parseOfxRows(fileBuffer);
-      return { rows, documentType, suggestion: null };
+      return { rows, documentType, suggestion: null, suggestions: [] };
     } catch (error) {
       throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no OFX.");
     }
@@ -619,7 +624,7 @@ const parseImportFileRows = async (importFile) => {
   try {
     const rows = parseCsvFileRows(fileBuffer);
     const documentType = detectDocumentType({ text: "", extension: ".csv" });
-    return { rows, documentType, suggestion: null };
+    return { rows, documentType, suggestion: null, suggestions: [] };
   } catch (error) {
     if (error?.message !== HEADER_ERROR_MESSAGE) {
       throw error;
@@ -629,7 +634,7 @@ const parseImportFileRows = async (importFile) => {
   try {
     const rows = parseStatementCsvRows(fileBuffer);
     const documentType = detectDocumentType({ text: "", extension: ".csv" });
-    return { rows, documentType, suggestion: null };
+    return { rows, documentType, suggestion: null, suggestions: [] };
   } catch (error) {
     if (
       error?.message === `Arquivo excede o limite de ${getImportCsvMaxRows()} linhas.`
@@ -945,7 +950,12 @@ const assertSessionReadyForCommit = (session, userId) => {
 };
 
 export const dryRunTransactionsImportForUser = async (userId, importFile) => {
-  const { rows: parsedRows, documentType, suggestion } = await parseImportFileRows(importFile);
+  const {
+    rows: parsedRows,
+    documentType,
+    suggestion,
+    suggestions = [],
+  } = await parseImportFileRows(importFile);
   const [categoryMap, categories, importRules] = await Promise.all([
     loadCategoryMapForUser(userId),
     loadCategoriesForUser(userId),
@@ -1024,6 +1034,7 @@ export const dryRunTransactionsImportForUser = async (userId, importFile) => {
     expiresAt: persistedSession.expiresAt,
     documentType,
     suggestion: suggestion || null,
+    suggestions,
     summary,
     rows,
   };

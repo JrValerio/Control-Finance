@@ -1,4 +1,4 @@
-import { dbQuery } from "../db/index.js";
+import { dbQuery, withDbTransaction } from "../db/index.js";
 import { calculateNetBenefit } from "../domain/salary/benefit.calculator.js";
 import { calculateNetSalary } from "../domain/salary/salary.calculator.js";
 
@@ -77,6 +77,33 @@ const validateConsignacaoInput = ({ description, amount, consignacaoType }) => {
   if (!["loan", "card", "other"].includes(consignacaoType)) {
     throw createError(422, "consignacao_type deve ser 'loan', 'card' ou 'other'.");
   }
+};
+
+const normalizeImportedConsignacoes = (value) => {
+  if (value == null) return [];
+  if (!Array.isArray(value)) {
+    throw createError(422, "consignacoes deve ser uma lista.");
+  }
+
+  return value.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw createError(422, "Cada consignação importada deve ser um objeto válido.");
+    }
+
+    const payload = {
+      description: item.description,
+      amount: item.amount,
+      consignacaoType: item.consignacao_type ?? item.consignacaoType,
+    };
+
+    validateConsignacaoInput(payload);
+
+    return {
+      description: String(payload.description).trim(),
+      amount: Number(payload.amount),
+      consignacaoType: payload.consignacaoType,
+    };
+  });
 };
 
 // ─── Shapers ──────────────────────────────────────────────────────────────────
@@ -248,6 +275,61 @@ export const addConsignacaoForUser = async (userId, body = {}) => {
 
   return toConsignacao(result.rows[0]);
 };
+
+export const syncImportedBenefitProfileForUser = async (userId, body = {}) =>
+  withDbTransaction(async (client) => {
+    const existingResult = await client.query(FIND_SQL, [userId]);
+    const existingProfile = existingResult.rows[0] ? toProfile(existingResult.rows[0]) : null;
+
+    const {
+      gross_salary: grossSalary,
+      payment_day: paymentDay = existingProfile?.paymentDay ?? 5,
+      birth_year: birthYear = existingProfile?.birthYear ?? null,
+      dependents = existingProfile?.dependents ?? 0,
+      consignacoes = [],
+    } = body;
+
+    validateProfileInput({
+      grossSalary,
+      dependents,
+      paymentDay,
+      profileType: "inss_beneficiary",
+      birthYear,
+    });
+
+    const normalizedConsignacoes = normalizeImportedConsignacoes(consignacoes);
+    const gross = Number(grossSalary);
+    const dep = Number(dependents);
+    const day = Number(paymentDay);
+    const year = birthYear != null ? Number(birthYear) : null;
+
+    let profileRows;
+    if (existingProfile) {
+      profileRows = await client.query(UPDATE_SQL, [gross, dep, day, "inss_beneficiary", year, userId]);
+    } else {
+      profileRows = await client.query(INSERT_SQL, [userId, gross, dep, day, "inss_beneficiary", year]);
+    }
+
+    const profile = toProfile(profileRows.rows[0]);
+
+    await client.query(
+      `DELETE FROM salary_consignacoes WHERE salary_profile_id = $1`,
+      [profile.id],
+    );
+
+    const insertedConsignacoes = [];
+    for (const consignacao of normalizedConsignacoes) {
+      const result = await client.query(INSERT_CONSIGNACAO_SQL, [
+        profile.id,
+        consignacao.description,
+        consignacao.amount,
+        consignacao.consignacaoType,
+      ]);
+      insertedConsignacoes.push(toConsignacao(result.rows[0]));
+    }
+
+    return withCalculation(profile, insertedConsignacoes);
+  });
 
 export const deleteConsignacaoForUser = async (userId, consignacaoId) => {
   // Resolve profile id for ownership check

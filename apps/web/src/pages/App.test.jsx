@@ -94,8 +94,9 @@ vi.mock("../services/credit-cards.service", () => ({
 
 vi.mock("../services/salary.service", () => ({
   salaryService: {
-    getProfile:    vi.fn(),
+    getProfile: vi.fn(),
     upsertProfile: vi.fn(),
+    syncImportedBenefitProfile: vi.fn(),
   },
 }));
 

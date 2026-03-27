@@ -112,6 +112,11 @@ export interface CreateStatementPayload {
   grossAmount?: number | null;
   details?: Record<string, unknown> | null;
   sourceImportSessionId?: string | null;
+  deductions?: Array<{
+    label: string;
+    amount: number;
+    isVariable?: boolean;
+  }>;
 }
 
 // ─── Raw API payload types ─────────────────────────────────────────────────────

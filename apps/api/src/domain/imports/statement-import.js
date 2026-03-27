@@ -46,6 +46,12 @@ const HEADER_ALIASES = {
 const PDF_WITHOUT_TEXT_GUIDANCE_MESSAGE = "PDF sem texto reconhecivel. Tente OFX ou CSV.";
 
 const collapseWhitespace = (value) => String(value || "").replace(/\s+/g, " ").trim();
+const normalizeImportText = (text) =>
+  String(text || "")
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => collapseWhitespace(line))
+    .filter(Boolean);
 
 const normalizeHeaderAlias = (value) =>
   collapseWhitespace(value)
@@ -391,27 +397,89 @@ export const parseGenericBankStatementPdfText = (text) => {
   return finalizeStatementRows(rows);
 };
 
-const parseRubricaTotal = (blockText, rubricaPattern) => {
-  const matches = blockText.matchAll(rubricaPattern);
-  let total = 0;
+const parseInssBlockDeductions = (blockLines) => {
+  const deductions = [];
 
-  for (const match of matches) {
-    const parsedValue = parseSignedAmount(match[1]);
-    if (parsedValue !== null) {
-      total += Math.abs(parsedValue);
+  blockLines.forEach((line) => {
+    const match = line.match(/^(\d{3})\s+(.+?)\s+R\$\s*([\d.,]+)/i);
+    if (!match || match[1] === "101") {
+      return;
+    }
+
+    const amount = parseSignedAmount(match[3]);
+    if (amount === null) {
+      return;
+    }
+
+    const code = String(match[1] || "").trim();
+    const label = collapseWhitespace(match[2] || "");
+    const normalizedLabel = normalizeForExtraction(label);
+    let consignacaoType = "other";
+
+    if (code === "268" || normalizedLabel.includes("cartao")) {
+      consignacaoType = "card";
+    } else if (code === "216" || code === "217" || normalizedLabel.includes("emprestimo")) {
+      consignacaoType = "loan";
+    }
+
+    deductions.push({
+      code,
+      label,
+      amount: Math.abs(amount),
+      consignacaoType,
+    });
+  });
+
+  return deductions;
+};
+
+const extractPaymentDateFromInssBlock = (blockLines) => {
+  const knownPaymentLine = blockLines.find((line) =>
+    /\b(?:Pago|Pagamento efetivado|Credito nao retornado|Crédito não retornado)\b/i.test(line),
+  );
+  if (knownPaymentLine) {
+    const match = knownPaymentLine.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
+    if (match) {
+      return match[1];
     }
   }
 
-  return Number(total.toFixed(2));
+  const standalonePaymentLine = blockLines.find((line, index) => {
+    const normalizedLine = collapseWhitespace(line);
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(normalizedLine)) {
+      return false;
+    }
+
+    const nextLine = collapseWhitespace(blockLines[index + 1] || "");
+    return /^(?:Banco:|Ocorr[eê]ncia:)/i.test(nextLine);
+  });
+  if (standalonePaymentLine) {
+    return standalonePaymentLine;
+  }
+
+  const validityLine = blockLines.find((line) => /\bValidade In[ií]cio\b/i.test(line));
+  if (validityLine) {
+    const match = validityLine.match(/Validade In[ií]cio[:\s]+(\d{2}\/\d{2}\/\d{4})/i);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  const fullDates = blockLines
+    .flatMap((line) => Array.from(line.matchAll(/\b(\d{2}\/\d{2}\/\d{4})\b/g)).map((item) => item[1]))
+    .filter((date) => !/^(07\/01\/1955)$/.test(date));
+
+  const candidate = [...fullDates].reverse().find((date) => {
+    const normalized = toIsoDateString(date);
+    return !Number.isNaN(new Date(`${normalized}T00:00:00Z`).getTime());
+  });
+
+  return candidate || null;
 };
 
-export const parseInssCreditHistoryPdfText = (text) => {
-  const lines = String(text || "")
-    .replace(/\r/g, "")
-    .split("\n")
-    .map((line) => collapseWhitespace(line))
-    .filter(Boolean);
-  const rows = [];
+const parseInssCreditEntries = (text) => {
+  const lines = normalizeImportText(text);
+  const entries = [];
 
   for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
     const headerMatch = lines[lineIndex].match(/^(\d{2}\/\d{4})\s+R\$\s*([\d.,]+)/);
@@ -438,41 +506,49 @@ export const parseInssCreditHistoryPdfText = (text) => {
     }
 
     const blockText = blockLines.join(" ");
-    const paymentDates = blockLines
-      .slice(0, 4)
-      .join(" ")
-      .match(/\d{2}\/\d{2}\/\d{4}/g) || [];
-    const paymentDate = paymentDates[paymentDates.length - 1] || "";
+    const paymentDateRaw = extractPaymentDateFromInssBlock(blockLines);
     const grossMatch = blockText.match(/101 VALOR TOTAL DE MR DO PERIODO R\$\s*([\d.,]+)/i);
     const grossAmount = grossMatch ? parseSignedAmount(grossMatch[1]) : null;
-    const loansTotal = parseRubricaTotal(
-      blockText,
-      /(?:216|217)\s+.*?R\$\s*([\d.,]+)/gi,
-    );
-    const cardTotal = parseRubricaTotal(blockText, /268\s+.*?R\$\s*([\d.,]+)/gi);
+
+    entries.push({
+      competence,
+      referenceMonth: toISOReferenceMonth(competence),
+      liquidAmount: Math.abs(liquidAmount),
+      paymentDate: paymentDateRaw ? toIsoDateString(paymentDateRaw) : null,
+      grossAmount: grossAmount !== null ? Math.abs(grossAmount) : null,
+      deductions: parseInssBlockDeductions(blockLines),
+      startLine,
+    });
+  }
+
+  return entries;
+};
+
+export const parseInssCreditHistoryPdfText = (text) => {
+  const entries = parseInssCreditEntries(text);
+  const rows = [];
+
+  entries.forEach((entry) => {
     const notesParts = [];
 
-    if (grossAmount !== null) {
-      notesParts.push(`MR ${formatValue(Math.abs(grossAmount))}`);
+    if (entry.grossAmount !== null) {
+      notesParts.push(`MR ${formatValue(entry.grossAmount)}`);
     }
-    if (loansTotal > 0) {
-      notesParts.push(`Emprestimos ${formatValue(loansTotal)}`);
-    }
-    if (cardTotal > 0) {
-      notesParts.push(`Cartao ${formatValue(cardTotal)}`);
-    }
+    entry.deductions.forEach((deduction) => {
+      notesParts.push(`${deduction.code} ${deduction.label} ${formatValue(deduction.amount)}`);
+    });
 
     rows.push({
-      line: startLine,
+      line: entry.startLine,
       raw: buildRawRow({
-        date: paymentDate ? toIsoDateString(paymentDate) : competence,
+        date: entry.paymentDate || (entry.referenceMonth ? `${entry.referenceMonth}-01` : ""),
         type: "Entrada",
-        value: formatValue(Math.abs(liquidAmount)),
-        description: `Credito INSS ${competence}`,
+        value: formatValue(entry.liquidAmount),
+        description: `Credito INSS ${entry.competence}`,
         notes: notesParts.join(" | "),
       }),
     });
-  }
+  });
 
   return finalizeStatementRows(rows);
 };
@@ -525,58 +601,43 @@ const extractAmountByPatterns = (normalizedText, patterns) => {
   return null;
 };
 
-export const extractInssSuggestion = (text) => {
+export const extractInssSuggestions = (text) => {
   const normalized = normalizeForExtraction(text);
 
   // Benefit ID (NB)
-  const nbMatch = normalized.match(/\bnb[:\s#°]*([\d.\-/]+)/i);
+  const nbMatch = normalized.match(/\bnb[:\s#°]*([\d./-]+)/i);
   const benefitId = nbMatch ? nbMatch[1].trim() : null;
 
   // Benefit kind (Espécie)
   const especieMatch = normalized.match(/especie[:\s]+(\d+)\s*[-–]\s*([^\n\r]{3,60})/i);
   const benefitKind = especieMatch ? collapseWhitespace(especieMatch[2]) : null;
+  const taxpayerCpfMatch = normalized.match(/\bcpf[:\s]+([\d.-]+)/i);
+  const taxpayerCpf = taxpayerCpfMatch ? taxpayerCpfMatch[1].trim() : null;
+  const birthDateMatch = normalized.match(/data de nascimento[:\s]+(\d{2})\/(\d{2})\/(\d{4})/i);
+  const birthYear = birthDateMatch ? Number(birthDateMatch[3]) : null;
 
-  // Most recent credit entry (first match — PDF lists newest first)
-  const entryMatch = normalized.match(/^(\d{2}\/\d{4})\s+r\$\s*([\d.,]+)/m);
-  if (!entryMatch) return null;
+  const entries = parseInssCreditEntries(text);
+  if (entries.length === 0) return [];
 
-  const referenceMonth = toISOReferenceMonth(entryMatch[1]);
-  const netAmount = parseSignedAmount(entryMatch[2]);
-  if (netAmount === null) return null;
-
-  // Find the block for this entry to get payment date and gross amount
-  const entryStart = normalized.indexOf(entryMatch[0]);
-  const nextEntryMatch = normalized.slice(entryStart + 1).match(/\d{2}\/\d{4}\s+r\$\s*[\d.,]+/);
-  const blockEnd = nextEntryMatch
-    ? entryStart + 1 + normalized.slice(entryStart + 1).indexOf(nextEntryMatch[0])
-    : entryStart + 2000;
-  const block = normalized.slice(entryStart, blockEnd);
-
-  const fullDates = block.match(/\d{2}\/\d{2}\/\d{4}/g) || [];
-  const paymentDateRaw = fullDates[fullDates.length - 1] || null;
-  const paymentDate = paymentDateRaw ? toIsoDateString(paymentDateRaw) : null;
-
-  const grossMatch = block.match(/101\s+valor total de mr do periodo\s+r\$\s*([\d.,]+)/i);
-  const grossAmount = grossMatch ? parseSignedAmount(grossMatch[1]) : null;
-
-  // Structured deductions: consigned loans (rubrics 216/217) and card (rubric 268)
-  const loansTotal = parseRubricaTotal(block, /(?:216|217)\s+.*?r\$\s*([\d.,]+)/gi);
-  const cardTotal = parseRubricaTotal(block, /268\s+.*?r\$\s*([\d.,]+)/gi);
-  const deductions = [];
-  if (loansTotal > 0) deductions.push({ label: "emprestimo_consignado", amount: loansTotal });
-  if (cardTotal > 0) deductions.push({ label: "cartao_rmc", amount: cardTotal });
-
-  return {
+  return entries.map((entry) => ({
     type: "profile",
+    line: entry.startLine,
     profileKind: "inss",
     benefitId,
     benefitKind,
-    referenceMonth,
-    paymentDate,
-    netAmount: Math.abs(netAmount),
-    grossAmount: grossAmount !== null ? Math.abs(grossAmount) : null,
-    deductions,
-  };
+    taxpayerCpf,
+    birthYear,
+    referenceMonth: entry.referenceMonth,
+    paymentDate: entry.paymentDate,
+    netAmount: entry.liquidAmount,
+    grossAmount: entry.grossAmount,
+    deductions: entry.deductions,
+  }));
+};
+
+export const extractInssSuggestion = (text) => {
+  const suggestions = extractInssSuggestions(text);
+  return suggestions[0] ?? null;
 };
 
 export const extractPayrollSuggestion = (text) => {
