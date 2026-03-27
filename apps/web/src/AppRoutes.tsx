@@ -3,6 +3,7 @@ import App from "./pages/App";
 import BillingSettings from "./pages/BillingSettings";
 import BillsPage from "./pages/BillsPage";
 import CategoriesSettings from "./pages/CategoriesSettings";
+import CreditCardsPage from "./pages/CreditCardsPage";
 import IncomeSourcesPage from "./pages/IncomeSourcesPage";
 import ForgotPassword from "./pages/ForgotPassword";
 import Login from "./pages/Login";
@@ -42,6 +43,10 @@ const Dashboard = () => {
     navigate("/app/bills");
   };
 
+  const handleOpenCreditCards = () => {
+    navigate("/app/credit-cards");
+  };
+
   const handleOpenIncomeSources = () => {
     navigate("/app/income-sources");
   };
@@ -58,6 +63,7 @@ const Dashboard = () => {
       onOpenProfileSettings={handleOpenProfileSettings}
       onOpenSecuritySettings={handleOpenSecuritySettings}
       onOpenBills={handleOpenBills}
+      onOpenCreditCards={handleOpenCreditCards}
       onOpenIncomeSources={handleOpenIncomeSources}
       onOpenTax={handleOpenTax}
     />
@@ -154,6 +160,16 @@ const BillsRoute = () => {
   return <BillsPage onBack={handleBack} onLogout={handleLogout} />;
 };
 
+const CreditCardsRoute = () => {
+  const navigate = useNavigate();
+
+  const handleBack = () => {
+    navigate("/app");
+  };
+
+  return <CreditCardsPage onBack={handleBack} />;
+};
+
 const IncomeSourcesRoute = () => {
   const navigate = useNavigate();
 
@@ -232,6 +248,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <BillsRoute />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/app/credit-cards"
+        element={
+          <ProtectedRoute>
+            <CreditCardsRoute />
           </ProtectedRoute>
         }
       />

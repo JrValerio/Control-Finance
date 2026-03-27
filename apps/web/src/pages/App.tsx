@@ -107,6 +107,7 @@ interface MonthOverMonthMetric {
 interface AppProps {
   onLogout?: () => void;
   onOpenBills?: () => void;
+  onOpenCreditCards?: () => void;
   onOpenIncomeSources?: () => void;
   onOpenTax?: () => void;
   onOpenCategoriesSettings?: () => void;
@@ -449,6 +450,7 @@ const calculateMonthOverMonthMetric = (
 const App = ({
   onLogout = undefined,
   onOpenBills = undefined,
+  onOpenCreditCards = undefined,
   onOpenIncomeSources = undefined,
   onOpenTax = undefined,
   onOpenCategoriesSettings = undefined,
@@ -1460,6 +1462,11 @@ const App = ({
     onOpenBills?.();
   };
 
+  const handleOpenCreditCards = () => {
+    closeMobileActionsMenu();
+    onOpenCreditCards?.();
+  };
+
   const handleOpenIncomeSources = () => {
     closeMobileActionsMenu();
     onOpenIncomeSources?.();
@@ -1663,6 +1670,16 @@ const App = ({
                         Pendências
                       </button>
                     ) : null}
+                    {onOpenCreditCards ? (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={handleOpenCreditCards}
+                        className="rounded px-2 py-2 text-left text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                      >
+                        Cartões
+                      </button>
+                    ) : null}
                     {onOpenIncomeSources ? (
                       <button
                         type="button"
@@ -1693,7 +1710,7 @@ const App = ({
                         Categorias
                       </button>
                     ) : null}
-                    {(onOpenBills || onOpenIncomeSources || onOpenTax || onOpenCategoriesSettings) ? (
+                    {(onOpenBills || onOpenCreditCards || onOpenIncomeSources || onOpenTax || onOpenCategoriesSettings) ? (
                       <div className="my-1 h-px bg-cf-border" role="separator" />
                     ) : null}
                     <button
@@ -1818,6 +1835,15 @@ const App = ({
                     className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
                   >
                     Pendências
+                  </button>
+                ) : null}
+                {onOpenCreditCards ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenCreditCards}
+                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                  >
+                    Cartões
                   </button>
                 ) : null}
                 {onOpenIncomeSources ? (

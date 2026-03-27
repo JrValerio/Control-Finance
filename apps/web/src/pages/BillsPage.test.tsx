@@ -128,6 +128,28 @@ describe("BillsPage", () => {
     });
   });
 
+  it("fatura de cartão não mostra editar nem excluir", async () => {
+    vi.mocked(billsService.list).mockResolvedValue(
+      buildListResult([
+        buildBill({
+          title: "Fatura Nubank 2026-03",
+          billType: "credit_card_invoice",
+          provider: "Nubank",
+        }),
+      ]),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Fatura do cartão")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Excluir" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Marcar como paga" })).toBeInTheDocument();
+  });
+
   it("clicar filtro Pendentes chama list com status pending", async () => {
     const user = userEvent.setup();
     renderPage();

@@ -349,6 +349,18 @@ describe("App", () => {
     expect(onOpenTax).toHaveBeenCalledTimes(1);
   });
 
+  it("abre Cartões pelo atalho do dashboard", async () => {
+    const user = userEvent.setup();
+    const onOpenCreditCards = vi.fn();
+
+    render(<App onOpenCreditCards={onOpenCreditCards} />);
+
+    await screen.findByText("Resumo financeiro");
+    await user.click(screen.getByRole("button", { name: "Cartões" }));
+
+    expect(onOpenCreditCards).toHaveBeenCalledTimes(1);
+  });
+
   it("carrega transacoes paginadas da API ao iniciar", async () => {
     transactionsService.listPage.mockResolvedValueOnce(
       buildPageResponse(

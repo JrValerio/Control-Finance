@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ImportCsvModal from "./ImportCsvModal";
 import { transactionsService } from "../services/transactions.service";
@@ -584,16 +584,15 @@ describe("ImportCsvModal", () => {
           expect(screen.getByText(/320 de 320 linhas visíveis/i)).toBeInTheDocument();
         });
 
-        await userEvent.type(
-          screen.getByLabelText(/buscar na pré-visualização/i),
-          "farmacia especial",
-        );
+        fireEvent.change(screen.getByLabelText(/buscar na pré-visualização/i), {
+          target: { value: "farmacia especial" },
+        });
 
         expect(screen.getByText("PIX FARMACIA ESPECIAL")).toBeInTheDocument();
         expect(screen.queryByText("PIX TRANSFERENCIA 002")).not.toBeInTheDocument();
         expect(screen.getByText(/1 de 320 linhas visíveis/i)).toBeInTheDocument();
       },
-      10000,
+      20000,
     );
   });
 

@@ -590,4 +590,73 @@ describe("bills", () => {
     expect(res.status).toBe(201);
     expect(res.body.billType).toBeNull();
   });
+
+  it("PATCH /bills/:id bloqueia edição de fatura de cartão", async () => {
+    const token = await registerAndLogin("bills-credit-card-edit@test.dev");
+
+    const cardRes = await request(app)
+      .post("/credit-cards")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Visa",
+        limitTotal: 1200,
+        closingDay: 10,
+        dueDay: 20,
+      });
+
+    await request(app)
+      .post(`/credit-cards/${cardRes.body.id}/purchases`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Restaurante",
+        amount: 89.9,
+        purchaseDate: "2026-03-05",
+      });
+
+    const closeRes = await request(app)
+      .post(`/credit-cards/${cardRes.body.id}/close-invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ closingDate: "2026-03-15" });
+
+    const res = await request(app)
+      .patch(`/bills/${closeRes.body.invoice.id}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Editar fatura" });
+
+    expectErrorResponseWithRequestId(res, 409, "Fatura de cartao nao pode ser editada por esta tela.");
+  });
+
+  it("DELETE /bills/:id bloqueia exclusão de fatura de cartão", async () => {
+    const token = await registerAndLogin("bills-credit-card-delete@test.dev");
+
+    const cardRes = await request(app)
+      .post("/credit-cards")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Elo",
+        limitTotal: 800,
+        closingDay: 10,
+        dueDay: 20,
+      });
+
+    await request(app)
+      .post(`/credit-cards/${cardRes.body.id}/purchases`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Cinema",
+        amount: 45,
+        purchaseDate: "2026-03-05",
+      });
+
+    const closeRes = await request(app)
+      .post(`/credit-cards/${cardRes.body.id}/close-invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ closingDate: "2026-03-15" });
+
+    const res = await request(app)
+      .delete(`/bills/${closeRes.body.invoice.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expectErrorResponseWithRequestId(res, 409, "Fatura de cartao nao pode ser excluida por esta tela.");
+  });
 });
