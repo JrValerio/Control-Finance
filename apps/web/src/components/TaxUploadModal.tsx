@@ -81,7 +81,7 @@ const TaxUploadModal = ({
   const isBusy = stage === "uploading" || stage === "processing";
   const isSuccess = stage === "success";
   const helperText = useMemo(
-    () => "Formatos aceitos hoje: PDF, CSV, PNG ou JPG, com até 10 MB.",
+    () => "Envie um PDF, CSV ou imagem do documento fiscal. O limite atual é de 10 MB.",
     [],
   );
 
@@ -139,8 +139,7 @@ const TaxUploadModal = ({
           <div>
             <h2 className="text-lg font-semibold text-cf-text-primary">Enviar documento fiscal</h2>
             <p className="mt-1 text-sm text-cf-text-secondary">
-              Exercício {taxYear}. O sistema envia, processa e atualiza a fila de revisão na mesma
-              tela.
+              Exercício {taxYear}. O documento entra na revisão fiscal sem você sair desta tela.
             </p>
           </div>
           <button

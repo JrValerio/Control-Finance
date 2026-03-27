@@ -581,12 +581,12 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       setIsManualFactModalOpen(false);
       showSuccess(
         createdFact.conflictCode
-          ? "Fato fiscal manual adicionado com alerta de possivel duplicidade. Revise antes de aprovar."
-          : "Fato fiscal manual adicionado a fila de revisao.",
+          ? "Fato manual adicionado com alerta de possível duplicidade. Revise antes de aprovar."
+          : "Fato manual adicionado à fila de revisão.",
       );
     } catch (error) {
       setManualFactErrorMessage(
-        getApiErrorMessage(error, "Nao foi possivel adicionar o fato fiscal manual."),
+        getApiErrorMessage(error, "Não foi possível adicionar o fato manual."),
       );
     } finally {
       setIsCreatingManualFact(false);
@@ -629,7 +629,9 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       await refreshAfterDocumentLifecycle();
       showSuccess(
         result.deletedFactsCount > 0
-          ? `Documento excluído. ${result.deletedFactsCount} fato(s) fiscal(is) vinculado(s) foram removidos.`
+          ? result.deletedFactsCount === 1
+            ? "Documento excluído. 1 fato fiscal vinculado foi removido."
+            : `Documento excluído. ${result.deletedFactsCount} fatos fiscais vinculados foram removidos.`
           : "Documento excluído.",
       );
     } catch (error) {
@@ -1119,7 +1121,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                     ? "Separando fatos que entram no cálculo oficial"
                     : excludedApprovedFactsCount > 0
                     ? `${excludedApprovedFactsCount} aprovado(s) ficaram fora por CPF divergente`
-                    : "Base que entra em obrigação e summary"
+                    : "Base que entra no cálculo e no resumo oficial"
                 }
               />
             </div>
@@ -1212,7 +1214,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               </p>
               <p className="mt-1 text-sm text-cf-text-secondary">
                 {documentsPage.total === 0
-                  ? "Sem informe em PDF? Use “Adicionar manualmente” ou “Sincronizar do app” para gerar fatos pendentes a partir das rendas e lançamentos ja alimentados."
+                  ? "Sem informe em PDF? Use “Adicionar manualmente” ou “Sincronizar do app” para gerar fatos pendentes a partir das rendas e lançamentos já alimentados."
                   : "Quando já existem documentos fiscais no exercício, a sincronização vinda do app fica bloqueada para evitar mistura entre as trilhas."}
               </p>
             </div>
@@ -1336,12 +1338,12 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
             <FactSummaryCard
               title="Aprovados"
               value={String(obligation.approvedFactsCount)}
-              helper="Entram em obrigação e summary"
+              helper="Já contam no cálculo e no resumo"
             />
             <FactSummaryCard
-              title="Fila atual"
+              title="Na revisão agora"
               value={String(factsPage.total)}
-              helper="Itens retornados pela API"
+              helper="Fatos exibidos nesta revisão"
             />
           </div>
 
@@ -1480,7 +1482,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
               <div>
                 <h2 className="text-lg font-bold text-cf-text-primary">Corrigir fato fiscal</h2>
                 <p className="mt-1 text-sm text-cf-text-secondary">
-                  Ajuste o valor ou a subcategoria antes de mover o fato para `corrected`.
+                  Ajuste o valor ou a subcategoria antes de marcar este fato como corrigido.
                 </p>
               </div>
               <button
