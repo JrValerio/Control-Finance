@@ -401,6 +401,37 @@ const formatSignedPercentage = (value: number | null) => {
   const prefix = normalizedValue > 0 ? "+" : "";
   return `${prefix}${normalizedValue.toFixed(1)}%`;
 };
+const formatAbsolutePercentage = (value: number | null) => {
+  if (value === null) {
+    return null;
+  }
+
+  const normalizedValue = Math.abs(Number(value) || 0);
+  return `${new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(normalizedValue)}%`;
+};
+const formatMonthOverMonthSummary = (metric: MonthOverMonthMetric) => {
+  if (metric.direction === "flat" && Math.abs(metric.delta) < 0.005) {
+    return "Vs. mês anterior: sem variação";
+  }
+
+  const deltaLabel = formatSignedCurrency(metric.delta);
+
+  if (metric.deltaPercent === null) {
+    return `Vs. mês anterior: sem base de comparação (${deltaLabel})`;
+  }
+
+  if (metric.direction === "flat") {
+    return `Vs. mês anterior: ficou estável (${deltaLabel})`;
+  }
+
+  const actionLabel = metric.direction === "up" ? "subiu" : "caiu";
+  const percentLabel = formatAbsolutePercentage(metric.deltaPercent) || "0,0%";
+
+  return `Vs. mês anterior: ${actionLabel} ${percentLabel} (${deltaLabel})`;
+};
 const getDirectionArrow = (direction: MonthOverMonthDirection): string => {
   if (direction === "up") {
     return "â†‘";
@@ -2341,16 +2372,10 @@ const App = ({
                   data-testid="mom-balance"
                 >
                   {isLoadingSummary
-                    ? "MoM: Calculando..."
+                    ? "Vs. mês anterior: calculando..."
                     : summaryError || momError
-                      ? "MoM: —"
-                      : `MoM: ${
-                          monthOverMonthMetrics.balance.direction === "up"
-                            ? "↑"
-                            : monthOverMonthMetrics.balance.direction === "down"
-                              ? "↓"
-                              : "→"
-                        } ${formatSignedPercentage(monthOverMonthMetrics.balance.deltaPercent)} (${formatSignedCurrency(monthOverMonthMetrics.balance.delta)})`}
+                      ? "Vs. mês anterior: indisponível"
+                      : formatMonthOverMonthSummary(monthOverMonthMetrics.balance)}
                 </p>
               </div>
               <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
@@ -2367,16 +2392,10 @@ const App = ({
                   data-testid="mom-income"
                 >
                   {isLoadingSummary
-                    ? "MoM: Calculando..."
+                    ? "Vs. mês anterior: calculando..."
                     : summaryError || momError
-                      ? "MoM: —"
-                      : `MoM: ${
-                          monthOverMonthMetrics.income.direction === "up"
-                            ? "↑"
-                            : monthOverMonthMetrics.income.direction === "down"
-                              ? "↓"
-                              : "→"
-                        } ${formatSignedPercentage(monthOverMonthMetrics.income.deltaPercent)} (${formatSignedCurrency(monthOverMonthMetrics.income.delta)})`}
+                      ? "Vs. mês anterior: indisponível"
+                      : formatMonthOverMonthSummary(monthOverMonthMetrics.income)}
                 </p>
               </div>
               <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
@@ -2393,16 +2412,10 @@ const App = ({
                   data-testid="mom-expense"
                 >
                   {isLoadingSummary
-                    ? "MoM: Calculando..."
+                    ? "Vs. mês anterior: calculando..."
                     : summaryError || momError
-                      ? "MoM: —"
-                      : `MoM: ${
-                          monthOverMonthMetrics.expense.direction === "up"
-                            ? "↑"
-                            : monthOverMonthMetrics.expense.direction === "down"
-                              ? "↓"
-                              : "→"
-                        } ${formatSignedPercentage(monthOverMonthMetrics.expense.deltaPercent)} (${formatSignedCurrency(monthOverMonthMetrics.expense.delta)})`}
+                      ? "Vs. mês anterior: indisponível"
+                      : formatMonthOverMonthSummary(monthOverMonthMetrics.expense)}
                 </p>
               </div>
             </div>
