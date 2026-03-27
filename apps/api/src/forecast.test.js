@@ -281,6 +281,62 @@ describe("computeForecast — flip detection (deterministic)", () => {
     expect(result.projectedBalance).toBe(0);
   });
 
+  it("calcula uso projetado do limite bancario quando a projeção entra no cheque especial", async () => {
+    await registerAndLogin("fc-bank-limit-using@test.dev");
+    const userId = await getUserIdByEmail("fc-bank-limit-using@test.dev");
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, bank_limit_total)
+       VALUES ($1, 1000)`,
+      [userId],
+    );
+
+    await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date)
+       VALUES ($1, 'Saida', 500, $2)`,
+      [userId, FIXED_MONTH_START],
+    );
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.adjustedProjectedBalance).toBeLessThan(0);
+    expect(result.bankLimit).toMatchObject({
+      total: 1000,
+      status: "using",
+      exceededBy: 0,
+    });
+    expect(result.bankLimit.used).toBeGreaterThan(0);
+    expect(result.bankLimit.remaining).toBeLessThan(1000);
+  });
+
+  it("marca limite bancario como excedido quando a projeção passa do cheque especial", async () => {
+    await registerAndLogin("fc-bank-limit-exceeded@test.dev");
+    const userId = await getUserIdByEmail("fc-bank-limit-exceeded@test.dev");
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, bank_limit_total)
+       VALUES ($1, 1000)`,
+      [userId],
+    );
+
+    await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date)
+       VALUES ($1, 'Saida', 900, $2)`,
+      [userId, FIXED_MONTH_START],
+    );
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.bankLimit).toMatchObject({
+      total: 1000,
+      used: 1000,
+      remaining: 0,
+      status: "exceeded",
+    });
+    expect(result.bankLimit.exceededBy).toBeGreaterThan(0);
+    expect(result.bankLimit.alertTriggered).toBe(true);
+  });
+
   it("getLatestForecast retorna null antes do primeiro compute", async () => {
     await registerAndLogin("fc-get-null-svc@test.dev");
     const userId = await getUserIdByEmail("fc-get-null-svc@test.dev");
@@ -413,6 +469,13 @@ describe("forecast — bills integration", () => {
 
   it("GET /forecasts/current enriquece com bills em tempo real", async () => {
     const token = await registerAndLogin("fc-bills-realtime@test.dev");
+    const userId = await getUserIdByEmail("fc-bills-realtime@test.dev");
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, salary_monthly, payday, bank_limit_total)
+       VALUES ($1, 100, 31, 800)`,
+      [userId],
+    );
 
     // Recompute without bills — stored projectedBalance has no bills
     await request(app)
@@ -423,7 +486,7 @@ describe("forecast — bills integration", () => {
     await request(app)
       .post("/bills")
       .set("Authorization", `Bearer ${token}`)
-      .send({ title: "Agua", amount: 80, dueDate: CURRENT_MONTH_END });
+      .send({ title: "Agua", amount: 180, dueDate: CURRENT_MONTH_END });
 
     // GET /current should reflect the fresh bill even without recompute
     const res = await request(app)
@@ -431,11 +494,16 @@ describe("forecast — bills integration", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.billsPendingTotal).toBe(80);
+    expect(res.body.billsPendingTotal).toBe(180);
     expect(res.body.billsPendingCount).toBe(1);
     expect(res.body.adjustedProjectedBalance).toBe(
-      Number((res.body.projectedBalance - 80).toFixed(2)),
+      Number((res.body.projectedBalance - 180).toFixed(2)),
     );
+    expect(res.body.bankLimit).toMatchObject({
+      total: 800,
+      used: 80,
+      status: "using",
+    });
   });
 
   it("recompute com multiplas bills soma corretamente", async () => {

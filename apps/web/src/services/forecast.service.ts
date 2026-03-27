@@ -1,5 +1,15 @@
 import { api } from "./api";
 
+export interface ForecastBankLimit {
+  total: number;
+  used: number;
+  remaining: number;
+  exceededBy: number;
+  usagePct: number;
+  status: "unused" | "using" | "exceeded";
+  alertTriggered: boolean;
+}
+
 export interface Forecast {
   month: string;
   projectedBalance: number;
@@ -13,6 +23,7 @@ export interface Forecast {
   billsPendingTotal: number;
   billsPendingCount: number;
   adjustedProjectedBalance: number;
+  bankLimit?: ForecastBankLimit | null;
 }
 
 export const forecastService = {

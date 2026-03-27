@@ -36,6 +36,15 @@ const normalizeSalaryMonthly = (value) => {
   return n;
 };
 
+const normalizeBankLimitTotal = (value) => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw createError(400, "bank_limit_total deve ser um numero.");
+  if (n < 0) throw createError(400, "bank_limit_total nao pode ser negativo.");
+  return n;
+};
+
 const normalizePayday = (value) => {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -150,6 +159,10 @@ const rowToProfile = (row) => ({
     row.salary_monthly !== null && row.salary_monthly !== undefined
       ? Number(row.salary_monthly)
       : null,
+  bankLimitTotal:
+    row.bank_limit_total !== null && row.bank_limit_total !== undefined
+      ? Number(row.bank_limit_total)
+      : null,
   payday: row.payday !== null && row.payday !== undefined ? Number(row.payday) : null,
   avatarUrl: row.avatar_url ?? null,
   taxpayerCpf: row.taxpayer_cpf ?? null,
@@ -193,7 +206,7 @@ export const getMyProfile = async (userId) => {
 
   const [profileResult, identitiesResult] = await Promise.all([
     dbQuery(
-      `SELECT display_name, salary_monthly, payday, avatar_url, taxpayer_cpf, ai_tone, ai_insight_frequency
+      `SELECT display_name, salary_monthly, bank_limit_total, payday, avatar_url, taxpayer_cpf, ai_tone, ai_insight_frequency
        FROM user_profiles WHERE user_id = $1 LIMIT 1`,
       [normalizedUserId],
     ),
@@ -226,6 +239,9 @@ export const updateMyProfile = async (userId, payload = {}) => {
 
   const salaryMonthly = normalizeSalaryMonthly(payload.salary_monthly);
   if (salaryMonthly !== undefined) updates.salary_monthly = salaryMonthly;
+
+  const bankLimitTotal = normalizeBankLimitTotal(payload.bank_limit_total);
+  if (bankLimitTotal !== undefined) updates.bank_limit_total = bankLimitTotal;
 
   const normalizedPayday = normalizePayday(payload.payday);
   if (normalizedPayday !== undefined) updates.payday = normalizedPayday;
@@ -285,7 +301,7 @@ export const updateMyProfile = async (userId, payload = {}) => {
   }
 
   const result = await dbQuery(
-    `SELECT display_name, salary_monthly, payday, avatar_url, taxpayer_cpf, ai_tone, ai_insight_frequency
+    `SELECT display_name, salary_monthly, bank_limit_total, payday, avatar_url, taxpayer_cpf, ai_tone, ai_insight_frequency
      FROM user_profiles WHERE user_id = $1 LIMIT 1`,
     [normalizedUserId],
   );

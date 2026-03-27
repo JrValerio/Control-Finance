@@ -132,8 +132,8 @@ describe("GET /me", () => {
     const userId = userResult.rows[0].id;
 
     await dbQuery(
-      `INSERT INTO user_profiles (user_id, display_name, salary_monthly, payday, avatar_url, taxpayer_cpf)
-       VALUES ($1, 'Joao Silva', 5000.00, 5, 'https://example.com/avatar.jpg', '52998224725')`,
+      `INSERT INTO user_profiles (user_id, display_name, salary_monthly, bank_limit_total, payday, avatar_url, taxpayer_cpf)
+       VALUES ($1, 'Joao Silva', 5000.00, 1500.00, 5, 'https://example.com/avatar.jpg', '52998224725')`,
       [userId],
     );
 
@@ -145,6 +145,7 @@ describe("GET /me", () => {
     expect(response.body.profile).toMatchObject({
       displayName: "Joao Silva",
       salaryMonthly: 5000,
+      bankLimitTotal: 1500,
       payday: 5,
       avatarUrl: "https://example.com/avatar.jpg",
       taxpayerCpf: "52998224725",
@@ -188,6 +189,7 @@ describe("PATCH /me/profile", () => {
       .send({
         display_name: "Maria Santos",
         salary_monthly: 7500,
+        bank_limit_total: 1200,
         payday: 10,
         avatar_url: "https://example.com/maria.jpg",
         taxpayer_cpf: "529.982.247-25",
@@ -197,6 +199,7 @@ describe("PATCH /me/profile", () => {
     expect(response.body).toMatchObject({
       displayName: "Maria Santos",
       salaryMonthly: 7500,
+      bankLimitTotal: 1200,
       payday: 10,
       avatarUrl: "https://example.com/maria.jpg",
       taxpayerCpf: "52998224725",
@@ -300,6 +303,17 @@ describe("PATCH /me/profile", () => {
       .send({ salary_monthly: -100 });
 
     expectErrorResponseWithRequestId(response, 400, "salary_monthly nao pode ser negativo.");
+  });
+
+  it("retorna 400 para bank_limit_total negativo", async () => {
+    const token = await registerAndLogin("patch-bank-limit-neg@test.dev");
+
+    const response = await request(app)
+      .patch("/me/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ bank_limit_total: -10 });
+
+    expectErrorResponseWithRequestId(response, 400, "bank_limit_total nao pode ser negativo.");
   });
 
   it("retorna 400 para avatar_url sem https://", async () => {
@@ -440,5 +454,24 @@ describe("PATCH /me/profile", () => {
     const beforeTs = new Date(before.rows[0].trial_ends_at).getTime();
     const afterTs = new Date(after.rows[0].trial_ends_at).getTime();
     expect(afterTs).toBe(beforeTs);
+  });
+
+  it("persiste bank_limit_total e retorna no round-trip GET /me", async () => {
+    const token = await registerAndLogin("patch-bank-limit-roundtrip@test.dev");
+
+    const patchResponse = await request(app)
+      .patch("/me/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ bank_limit_total: 890.55 });
+
+    expect(patchResponse.status).toBe(200);
+    expect(patchResponse.body.bankLimitTotal).toBe(890.55);
+
+    const getResponse = await request(app)
+      .get("/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body.profile.bankLimitTotal).toBe(890.55);
   });
 });

@@ -59,6 +59,38 @@ const rowToForecast = (row) => ({
   generatedAt: row.generated_at,
 });
 
+const buildBankLimitProjection = (bankLimitTotal, adjustedProjectedBalance) => {
+  if (bankLimitTotal == null) return null;
+
+  const total = Number(bankLimitTotal);
+  if (!Number.isFinite(total) || total <= 0) return null;
+
+  const projectedDeficit = adjustedProjectedBalance < 0
+    ? Math.abs(Number(adjustedProjectedBalance))
+    : 0;
+  const used = Number(Math.min(projectedDeficit, total).toFixed(2));
+  const remaining = Number(Math.max(total - used, 0).toFixed(2));
+  const exceededBy = Number(Math.max(projectedDeficit - total, 0).toFixed(2));
+  const usagePct = total > 0 ? Number(((used / total) * 100).toFixed(2)) : 0;
+
+  let status = "unused";
+  if (exceededBy > 0) {
+    status = "exceeded";
+  } else if (used > 0) {
+    status = "using";
+  }
+
+  return {
+    total: Number(total.toFixed(2)),
+    used,
+    remaining,
+    exceededBy,
+    usagePct,
+    status,
+    alertTriggered: status === "exceeded" || usagePct >= 80,
+  };
+};
+
 /**
  * Computes (or recomputes) the forecast for the given user and month,
  * persists it, and returns the result.
@@ -77,13 +109,15 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
 
   // 1. Profile (salary + payday)
   const profileResult = await dbQuery(
-    `SELECT salary_monthly, payday FROM user_profiles WHERE user_id = $1 LIMIT 1`,
+    `SELECT salary_monthly, payday, bank_limit_total FROM user_profiles WHERE user_id = $1 LIMIT 1`,
     [uid],
   );
   const profile = profileResult.rows[0] ?? null;
   const salaryMonthly =
     profile?.salary_monthly != null ? Number(profile.salary_monthly) : null;
   const payday = profile?.payday != null ? Number(profile.payday) : null;
+  const bankLimitTotal =
+    profile?.bank_limit_total != null ? Number(profile.bank_limit_total) : null;
 
   // 2. This-month totals
   const monthlyResult = await dbQuery(
@@ -218,6 +252,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
     billsPendingTotal: Number(billsTotal.toFixed(2)),
     billsPendingCount: billsCount,
     adjustedProjectedBalance,
+    bankLimit: buildBankLimitProjection(bankLimitTotal, adjustedProjectedBalance),
   };
 };
 
@@ -241,5 +276,17 @@ export const getLatestForecast = async (userId, { now = new Date() } = {}) => {
   forecast.billsPendingTotal = Number(billsTotal.toFixed(2));
   forecast.billsPendingCount = billsCount;
   forecast.adjustedProjectedBalance = Number((forecast.projectedBalance - billsTotal).toFixed(2));
+  const profileResult = await dbQuery(
+    `SELECT bank_limit_total FROM user_profiles WHERE user_id = $1 LIMIT 1`,
+    [uid],
+  );
+  const bankLimitTotal =
+    profileResult.rows[0]?.bank_limit_total != null
+      ? Number(profileResult.rows[0].bank_limit_total)
+      : null;
+  forecast.bankLimit = buildBankLimitProjection(
+    bankLimitTotal,
+    forecast.adjustedProjectedBalance,
+  );
   return forecast;
 };

@@ -46,6 +46,48 @@ const FlipBanner = ({ direction }: { direction: "pos_to_neg" | "neg_to_pos" }) =
   );
 };
 
+const BankLimitPanel = ({ forecast, money }: { forecast: Forecast; money: (value: unknown) => string }) => {
+  const bankLimit = forecast.bankLimit;
+  if (!bankLimit) return null;
+
+  const statusTone =
+    bankLimit.status === "exceeded"
+      ? "border-red-200 bg-red-50 text-red-700"
+      : bankLimit.alertTriggered
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : "border-cf-border bg-cf-bg-subtle text-cf-text-secondary";
+
+  const headline =
+    bankLimit.status === "exceeded"
+      ? `A projeção ultrapassa o limite em ${money(bankLimit.exceededBy)}.`
+      : bankLimit.status === "using"
+        ? `A projeção usa ${money(bankLimit.used)} do limite da conta.`
+        : "A projeção do mês não entra no limite da conta.";
+
+  return (
+    <div className={`mt-3 rounded border px-3 py-2.5 ${statusTone}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase">Limite bancário</p>
+          <p className="mt-1 text-sm font-semibold">{headline}</p>
+          <p className="mt-0.5 text-xs">
+            Total {money(bankLimit.total)} · disponível {money(bankLimit.remaining)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p className="text-xs font-medium uppercase">Uso projetado</p>
+          <p className="mt-1 text-base font-semibold">
+            {money(bankLimit.used)}
+          </p>
+          <p className="mt-0.5 text-xs">
+            {bankLimit.usagePct.toFixed(0)}% do limite
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ForecastCard = ({
   onOpenProfileSettings,
   trialExpired = false,
@@ -279,6 +321,8 @@ const ForecastCard = ({
           {forecast.flipDetected && forecast.flipDirection ? (
             <FlipBanner direction={forecast.flipDirection} />
           ) : null}
+
+          <BankLimitPanel forecast={forecast} money={money} />
         </>
       ) : null}
     </div>

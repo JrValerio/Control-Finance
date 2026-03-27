@@ -23,6 +23,7 @@ const buildMe = (overrides = {}) => ({
   profile: {
     displayName: "Jr Valerio",
     salaryMonthly: 5000,
+    bankLimitTotal: null,
     payday: 5,
     avatarUrl: null,
     taxpayerCpf: null,
@@ -49,6 +50,7 @@ describe("ProfileSettings — Dados da conta", () => {
     vi.mocked(profileService.updateProfile).mockResolvedValue({
       displayName: "Jr Valerio",
       salaryMonthly: 5000,
+      bankLimitTotal: null,
       payday: 5,
       avatarUrl: null,
       taxpayerCpf: null,
@@ -113,6 +115,7 @@ describe("ProfileSettings — Dados da conta", () => {
         profile: {
           displayName: "Jr Valerio",
           salaryMonthly: 5000,
+          bankLimitTotal: null,
           payday: 5,
           avatarUrl: null,
           taxpayerCpf: "52998224725",
@@ -133,6 +136,38 @@ describe("ProfileSettings — Dados da conta", () => {
     await waitFor(() =>
       expect(profileService.updateProfile).toHaveBeenCalledWith(
         expect.objectContaining({ taxpayer_cpf: "529.982.247-25" }),
+      ),
+    );
+  });
+
+  it("loads and submits bank limit with the profile", async () => {
+    const user = userEvent.setup();
+    vi.mocked(profileService.getMe).mockResolvedValue(
+      buildMe({
+        profile: {
+          displayName: "Jr Valerio",
+          salaryMonthly: 5000,
+          bankLimitTotal: 850,
+          payday: 5,
+          avatarUrl: null,
+          taxpayerCpf: null,
+        },
+      }),
+    );
+
+    renderPage();
+    await waitFor(() => expect(screen.getByLabelText("Limite bancário (R$)")).toBeInTheDocument());
+
+    const bankLimitInput = screen.getByLabelText("Limite bancário (R$)");
+    expect(bankLimitInput).toHaveValue(850);
+
+    await user.clear(bankLimitInput);
+    await user.type(bankLimitInput, "1200");
+    await user.click(screen.getByRole("button", { name: "Salvar perfil" }));
+
+    await waitFor(() =>
+      expect(profileService.updateProfile).toHaveBeenCalledWith(
+        expect.objectContaining({ bank_limit_total: 1200 }),
       ),
     );
   });
@@ -178,6 +213,7 @@ describe("ProfileSettings — Preferências (Copiloto)", () => {
     vi.mocked(profileService.updateProfile).mockResolvedValue({
       displayName: "Jr Valerio",
       salaryMonthly: 5000,
+      bankLimitTotal: null,
       payday: 5,
       avatarUrl: null,
       taxpayerCpf: null,

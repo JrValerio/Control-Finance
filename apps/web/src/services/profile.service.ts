@@ -3,6 +3,7 @@ import { api } from "./api";
 export interface UserProfile {
   displayName: string | null;
   salaryMonthly: number | null;
+  bankLimitTotal?: number | null;
   payday: number | null;
   avatarUrl: string | null;
   taxpayerCpf?: string | null;
@@ -24,6 +25,7 @@ export interface MeResponse {
 export interface ProfileUpdatePayload {
   display_name?: string | null;
   salary_monthly?: number | null;
+  bank_limit_total?: number | null;
   payday?: number | null;
   avatar_url?: string | null;
   taxpayer_cpf?: string | null;
