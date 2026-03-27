@@ -580,6 +580,98 @@ describe("transaction imports", () => {
     expect(response.body.rows[1].normalized.categoryId).toBe(transportCategory.body.id);
   });
 
+  it("POST/GET/DELETE /transactions/import/rules cria, lista e remove regras do usuario", async () => {
+    const token = await registerAndLogin("import-rules@controlfinance.dev");
+    await makeProUser("import-rules@controlfinance.dev");
+
+    const categoryResponse = await request(app)
+      .post("/categories")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Moradia" });
+
+    expect(categoryResponse.status).toBe(201);
+
+    const createResponse = await request(app)
+      .post("/transactions/import/rules")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        matchText: "neoenergia",
+        categoryId: categoryResponse.body.id,
+        transactionType: "Saida",
+      });
+
+    expect(createResponse.status).toBe(201);
+    expect(createResponse.body).toMatchObject({
+      matchText: "neoenergia",
+      categoryId: categoryResponse.body.id,
+      categoryName: "Moradia",
+      transactionType: "Saida",
+    });
+
+    const listResponse = await request(app)
+      .get("/transactions/import/rules")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listResponse.status).toBe(200);
+    expect(listResponse.body.items).toEqual([
+      expect.objectContaining({
+        id: createResponse.body.id,
+        matchText: "neoenergia",
+        categoryName: "Moradia",
+        transactionType: "Saida",
+      }),
+    ]);
+
+    const deleteResponse = await request(app)
+      .delete(`/transactions/import/rules/${createResponse.body.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(deleteResponse.status).toBe(200);
+    expect(deleteResponse.body).toEqual({
+      id: createResponse.body.id,
+      success: true,
+    });
+  });
+
+  it("POST /transactions/import/dry-run aplica regra salva antes da heuristica padrao", async () => {
+    const token = await registerAndLogin("import-rules-dry-run@controlfinance.dev");
+    await makeProUser("import-rules-dry-run@controlfinance.dev");
+
+    const categoryResponse = await request(app)
+      .post("/categories")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Saude" });
+
+    expect(categoryResponse.status).toBe(201);
+
+    const createRuleResponse = await request(app)
+      .post("/transactions/import/rules")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        matchText: "farmacia",
+        categoryId: categoryResponse.body.id,
+        transactionType: "Saida",
+      });
+
+    expect(createRuleResponse.status).toBe(201);
+
+    const csv = csvFile(
+      [
+        "date,type,value,description,notes,category",
+        "2026-03-02,Saida,89.9,PIX FARMACIA CENTRAL,,",
+      ].join("\n"),
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.rows[0].raw.category).toBe("Saude");
+    expect(response.body.rows[0].normalized.categoryId).toBe(categoryResponse.body.id);
+  });
+
   it("POST /transactions/import/dry-run valida linhas e persiste sessao", async () => {
     const token = await registerAndLogin("import-sessao@controlfinance.dev");
     await makeProUser("import-sessao@controlfinance.dev");

@@ -45,6 +45,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   const [previewStatusFilter, setPreviewStatusFilter] = useState("all");
   const [previewTypeFilter, setPreviewTypeFilter] = useState("all");
   const [previewCategoryFilter, setPreviewCategoryFilter] = useState("all");
+  const [importRules, setImportRules] = useState([]);
+  const [isSavingImportRule, setIsSavingImportRule] = useState(false);
+  const [deletingImportRuleId, setDeletingImportRuleId] = useState(null);
+  const [ruleFeedback, setRuleFeedback] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -77,6 +81,10 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     setPreviewStatusFilter("all");
     setPreviewTypeFilter("all");
     setPreviewCategoryFilter("all");
+    setImportRules([]);
+    setIsSavingImportRule(false);
+    setDeletingImportRuleId(null);
+    setRuleFeedback(null);
   }, [isOpen]);
 
   useEffect(() => {
@@ -105,6 +113,7 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
   useEffect(() => {
     if (!isOpen) return;
     categoriesService.listCategories().then(setCategories).catch(() => {});
+    transactionsService.listImportCategoryRules().then(setImportRules).catch(() => {});
   }, [isOpen]);
 
   const hasValidRows = useMemo(() => {
@@ -320,6 +329,40 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     [filteredPreviewRows],
   );
 
+  const selectedPreviewRows = useMemo(
+    () =>
+      (dryRunResult?.rows ?? []).filter(
+        (row) => row.status === "valid" && selectedPreviewLines.has(row.line),
+      ),
+    [dryRunResult, selectedPreviewLines],
+  );
+
+  const importRuleMatchText = useMemo(() => {
+    const searchTerm = previewSearch.trim();
+
+    if (searchTerm.length >= 2) {
+      return searchTerm;
+    }
+
+    if (selectedPreviewRows.length === 1) {
+      return String(selectedPreviewRows[0]?.raw?.description || "").trim();
+    }
+
+    return "";
+  }, [previewSearch, selectedPreviewRows]);
+
+  const importRuleTransactionType = useMemo(() => {
+    if (previewTypeFilter === "Entrada" || previewTypeFilter === "Saida") {
+      return previewTypeFilter;
+    }
+
+    const selectedTypes = [...new Set(selectedPreviewRows.map((row) => row.raw.type).filter(Boolean))];
+    return selectedTypes.length === 1 ? selectedTypes[0] : null;
+  }, [previewTypeFilter, selectedPreviewRows]);
+
+  const canSaveImportRule =
+    batchCategoryId !== "" && importRuleMatchText.length >= 2 && selectedPreviewRows.length > 0;
+
   const allVisibleValidSelected = useMemo(
     () =>
       validPreviewLines.length > 0 && validPreviewLines.every((line) => selectedPreviewLines.has(line)),
@@ -346,17 +389,87 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     });
   };
 
+  const applyBatchCategorySelection = useCallback(
+    (lines = [...selectedPreviewLines], categoryValue = batchCategoryId) => {
+      if (!Array.isArray(lines) || lines.length === 0) return;
+      const val = categoryValue === "" ? null : Number(categoryValue);
+      setCategoryOverrides((prev) => {
+        const next = { ...prev };
+        lines.forEach((line) => {
+          next[line] = val;
+        });
+        return next;
+      });
+      setSelectedPreviewLines(new Set());
+      setBatchCategoryId("");
+    },
+    [batchCategoryId, selectedPreviewLines],
+  );
+
   const handleApplyBatchCategory = () => {
-    if (selectedPreviewLines.size === 0) return;
-    const val = batchCategoryId === "" ? null : Number(batchCategoryId);
-    setCategoryOverrides((prev) => {
-      const next = { ...prev };
-      selectedPreviewLines.forEach((line) => { next[line] = val; });
-      return next;
-    });
-    setSelectedPreviewLines(new Set());
-    setBatchCategoryId("");
+    applyBatchCategorySelection([...selectedPreviewLines], batchCategoryId);
   };
+
+  const handleApplyBatchCategoryAndSaveRule = useCallback(async () => {
+    const selectedLines = [...selectedPreviewLines];
+
+    if (!canSaveImportRule || selectedLines.length === 0) {
+      return;
+    }
+
+    const categoryId = Number(batchCategoryId);
+    applyBatchCategorySelection(selectedLines, batchCategoryId);
+    setRuleFeedback(null);
+    setIsSavingImportRule(true);
+
+    try {
+      const savedRule = await transactionsService.createImportCategoryRule({
+        matchText: importRuleMatchText,
+        categoryId,
+        transactionType: importRuleTransactionType || undefined,
+      });
+      setImportRules((prev) => [savedRule, ...prev.filter((rule) => rule.id !== savedRule.id)]);
+      setRuleFeedback({
+        type: "success",
+        message: `Regra salva para "${savedRule.matchText}".`,
+      });
+    } catch (error) {
+      setRuleFeedback({
+        type: "error",
+        message: getApiErrorMessage(error, "Nao foi possivel salvar a regra."),
+      });
+    } finally {
+      setIsSavingImportRule(false);
+    }
+  }, [
+    applyBatchCategorySelection,
+    batchCategoryId,
+    canSaveImportRule,
+    importRuleMatchText,
+    importRuleTransactionType,
+    selectedPreviewLines,
+  ]);
+
+  const handleDeleteImportRule = useCallback(async (ruleId) => {
+    setDeletingImportRuleId(ruleId);
+    setRuleFeedback(null);
+
+    try {
+      await transactionsService.deleteImportCategoryRule(ruleId);
+      setImportRules((prev) => prev.filter((rule) => rule.id !== ruleId));
+      setRuleFeedback({
+        type: "success",
+        message: "Regra removida com sucesso.",
+      });
+    } catch (error) {
+      setRuleFeedback({
+        type: "error",
+        message: getApiErrorMessage(error, "Nao foi possivel remover a regra."),
+      });
+    } finally {
+      setDeletingImportRuleId(null);
+    }
+  }, []);
 
   const handleInlineCreateCategory = useCallback(
     async (line, rowType) => {
@@ -378,6 +491,11 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
     },
     [inlineCreateName],
   );
+
+  const selectedRuleCategory = categories.find((category) => Number(category.id) === Number(batchCategoryId));
+  const importRuleHelpText = importRuleMatchText
+    ? `A regra usara "${importRuleMatchText}"${importRuleTransactionType ? ` em ${importRuleTransactionType.toLowerCase()}` : ""}.`
+    : "Use a busca atual ou selecione uma unica linha para salvar uma regra reutilizavel.";
 
   const handleDryRun = async () => {
     if (!selectedFile) {
@@ -873,6 +991,61 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                     </p>
                   </div>
                 </div>
+                {importRules.length > 0 ? (
+                  <div className="rounded border border-cf-border bg-cf-surface px-3 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-xs font-semibold uppercase text-cf-text-secondary">
+                          Regras salvas
+                        </p>
+                        <p className="text-xs text-cf-text-secondary">
+                          Reaplicadas automaticamente nos próximos imports.
+                        </p>
+                      </div>
+                      <span className="text-xs text-cf-text-secondary">
+                        {importRules.length} {importRules.length === 1 ? "regra ativa" : "regras ativas"}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {importRules.map((rule) => (
+                        <div
+                          key={rule.id}
+                          className="flex items-start gap-2 rounded border border-cf-border bg-cf-bg-subtle px-2 py-2"
+                        >
+                          <div>
+                            <p className="text-xs font-semibold text-cf-text-primary">
+                              {rule.categoryName}
+                            </p>
+                            <p className="text-xs text-cf-text-secondary">
+                              Contem &quot;{rule.matchText}&quot;
+                              {rule.transactionType ? ` · ${rule.transactionType}` : ""}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteImportRule(rule.id)}
+                            disabled={deletingImportRuleId === rule.id}
+                            aria-label={`Remover regra ${rule.matchText}`}
+                            className="rounded border border-cf-border px-2 py-0.5 text-xs text-cf-text-secondary hover:bg-cf-surface disabled:opacity-60"
+                          >
+                            Remover
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+                {ruleFeedback ? (
+                  <div
+                    className={`rounded border px-3 py-2 text-xs ${
+                      ruleFeedback.type === "error"
+                        ? "border-red-300 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300"
+                        : "border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/40 dark:text-green-300"
+                    }`}
+                  >
+                    {ruleFeedback.message}
+                  </div>
+                ) : null}
                 {selectedPreviewLines.size > 0 && (
                   <div className="mb-1 flex flex-wrap items-center gap-2 rounded border border-brand-1/40 bg-brand-1/5 px-3 py-2">
                     <span className="text-xs font-medium text-cf-text-primary">
@@ -898,11 +1071,23 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined }) => {
                     </button>
                     <button
                       type="button"
+                      onClick={handleApplyBatchCategoryAndSaveRule}
+                      disabled={!canSaveImportRule || isSavingImportRule}
+                      className="rounded border border-cf-border px-2 py-0.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSavingImportRule ? "Salvando regra..." : "Aplicar e salvar regra"}
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setSelectedPreviewLines(new Set())}
                       className="rounded border border-cf-border px-2 py-0.5 text-xs text-cf-text-secondary hover:bg-cf-bg-subtle"
                     >
                       Cancelar
                     </button>
+                    <div className="basis-full text-[11px] text-cf-text-secondary">
+                      {importRuleHelpText}
+                      {selectedRuleCategory ? ` Categoria alvo: ${selectedRuleCategory.name}.` : ""}
+                    </div>
                   </div>
                 )}
                 <div className="max-h-80 overflow-auto rounded border border-cf-border">

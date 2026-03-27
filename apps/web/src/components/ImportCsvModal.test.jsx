@@ -13,6 +13,9 @@ vi.mock("../services/transactions.service", () => ({
     dryRunImportCsv: vi.fn(),
     commitImportCsv: vi.fn(),
     deleteImportSession: vi.fn(),
+    listImportCategoryRules: vi.fn(),
+    createImportCategoryRule: vi.fn(),
+    deleteImportCategoryRule: vi.fn(),
   },
 }));
 
@@ -85,6 +88,7 @@ describe("ImportCsvModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     categoriesService.listCategories.mockResolvedValue([]);
+    transactionsService.listImportCategoryRules.mockResolvedValue([]);
     incomeSourcesService.list.mockResolvedValue([]);
     incomeSourcesService.postStatement.mockResolvedValue({
       statement: {
@@ -494,6 +498,115 @@ describe("ImportCsvModal", () => {
       },
       10000,
     );
+  });
+
+  describe("import category rules", () => {
+    it("salva regra a partir da busca atual e da categoria em lote", async () => {
+      const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+      categoriesService.listCategories.mockResolvedValue([
+        { id: 7, name: "Saude" },
+      ]);
+      transactionsService.createImportCategoryRule.mockResolvedValue({
+        id: 91,
+        matchText: "farmacia",
+        transactionType: "Entrada",
+        categoryId: 7,
+        categoryName: "Saude",
+        createdAt: "2026-03-26T10:00:00Z",
+        updatedAt: "2026-03-26T10:00:00Z",
+      });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(
+        buildDryRunResponse({
+          rows: [
+            {
+              line: 2,
+              status: "valid",
+              raw: {
+                date: "2026-02-21",
+                type: "Entrada",
+                value: "100",
+                description: "PIX FARMACIA CENTRAL",
+                notes: "",
+                category: "",
+              },
+              normalized: {
+                date: "2026-02-21",
+                type: "Entrada",
+                value: 100,
+                description: "PIX FARMACIA CENTRAL",
+                notes: "",
+                categoryId: null,
+              },
+              errors: [],
+            },
+          ],
+        }),
+      );
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(screen.getByLabelText(/buscar na pré-visualização/i)).toBeInTheDocument();
+      });
+
+      await userEvent.type(screen.getByLabelText(/buscar na pré-visualização/i), "farmacia");
+      await userEvent.click(screen.getByLabelText(/selecionar todas as linhas válidas/i));
+      await userEvent.selectOptions(screen.getByLabelText(/categoria para aplicar em lote/i), "7");
+      await userEvent.click(screen.getByRole("button", { name: /aplicar e salvar regra/i }));
+
+      await waitFor(() => {
+        expect(transactionsService.createImportCategoryRule).toHaveBeenCalledWith({
+          matchText: "farmacia",
+          categoryId: 7,
+          transactionType: "Entrada",
+        });
+      });
+
+      expect(screen.getByText(/regra salva para "farmacia"/i)).toBeInTheDocument();
+      expect(screen.getAllByText("Saude")[0]).toBeInTheDocument();
+      expect(screen.getByText(/contem "farmacia" · entrada/i)).toBeInTheDocument();
+    });
+
+    it("lista e remove regras salvas de importação", async () => {
+      const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
+      transactionsService.listImportCategoryRules.mockResolvedValue([
+        {
+          id: 15,
+          matchText: "neoenergia",
+          transactionType: "Saida",
+          categoryId: 3,
+          categoryName: "Moradia",
+          createdAt: "2026-03-26T10:00:00Z",
+          updatedAt: "2026-03-26T10:00:00Z",
+        },
+      ]);
+      transactionsService.deleteImportCategoryRule.mockResolvedValue({
+        id: 15,
+        success: true,
+      });
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildDryRunResponse());
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Moradia")).toBeInTheDocument();
+      });
+
+      await userEvent.click(screen.getByRole("button", { name: /remover regra neoenergia/i }));
+
+      await waitFor(() => {
+        expect(transactionsService.deleteImportCategoryRule).toHaveBeenCalledWith(15);
+      });
+
+      expect(screen.queryByText("Moradia")).not.toBeInTheDocument();
+      expect(screen.getByText(/regra removida com sucesso/i)).toBeInTheDocument();
+    });
   });
 
   describe("income statement bridge", () => {
