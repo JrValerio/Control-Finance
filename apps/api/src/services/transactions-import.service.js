@@ -16,6 +16,7 @@ import {
   parseGenericBankStatementPdfText,
   parseStatementCsvRows,
   extractInssSuggestion,
+  extractPayrollSuggestion,
   extractEnergyBillSuggestion,
   extractWaterBillSuggestion,
 } from "../domain/imports/statement-import.js";
@@ -466,6 +467,17 @@ const parseImportFileRows = async (importFile) => {
       } catch (error) {
         throw createError(400, error.message || "Nao foi possivel reconhecer transacoes no PDF.");
       }
+    }
+
+    if (documentType === "income_statement_payroll") {
+      const suggestion = extractPayrollSuggestion(text);
+      if (!suggestion) {
+        throw createError(
+          400,
+          "Nao foi possivel reconhecer os dados principais do holerite.",
+        );
+      }
+      return { rows: [], documentType, suggestion };
     }
 
     if (documentType === "utility_bill_energy") {

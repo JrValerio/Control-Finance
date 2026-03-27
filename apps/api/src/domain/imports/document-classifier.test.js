@@ -56,6 +56,36 @@ describe("detectDocumentType", () => {
     });
   });
 
+  describe("income_statement_payroll", () => {
+    it("detecta holerite com termos principais e totais", () => {
+      const text = [
+        "Demonstrativo de Pagamento",
+        "Empresa: ACME LTDA",
+        "Salario base 4.500,00",
+        "Total de proventos 5.200,00",
+        "Liquido a receber 4.180,55",
+      ].join("\n");
+
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("income_statement_payroll");
+    });
+
+    it("detecta contracheque com matricula e descontos", () => {
+      const text = [
+        "Contracheque",
+        "Matricula 12345",
+        "Total de descontos 1.020,45",
+        "Valor liquido 3.879,55",
+      ].join("\n");
+
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("income_statement_payroll");
+    });
+
+    it("nao detecta payroll sem sinal principal", () => {
+      const text = "empresa salario base total de descontos liquido a receber";
+      expect(detectDocumentType({ text, extension: ".pdf" })).not.toBe("income_statement_payroll");
+    });
+  });
+
   describe("utility_bill_energy", () => {
     it("detecta conta de energia com neoenergia + kwh", () => {
       const text = "Neoenergia Elektro\nConsumo kWh\nTarifa de energia";

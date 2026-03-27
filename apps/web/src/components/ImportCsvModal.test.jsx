@@ -705,10 +705,10 @@ describe("ImportCsvModal", () => {
     });
   });
 
-  describe("income statement bridge", () => {
-    const buildInssResponse = () =>
-      buildDryRunResponse({
-        documentType: "income_statement_inss",
+    describe("income statement bridge", () => {
+      const buildInssResponse = () =>
+        buildDryRunResponse({
+          documentType: "income_statement_inss",
         summary: { totalRows: 0, validRows: 0, invalidRows: 0, income: 0, expense: 0 },
         rows: [],
         suggestion: {
@@ -718,10 +718,27 @@ describe("ImportCsvModal", () => {
           paymentDate: "2026-02-25",
           grossAmount: 1800.0,
           benefitKind: "Aposentadoria",
-        },
-      });
+          },
+        });
 
-    it("exibe botao de compor renda para suggestion type=profile", async () => {
+      const buildPayrollResponse = () =>
+        buildDryRunResponse({
+          documentType: "income_statement_payroll",
+          summary: { totalRows: 0, validRows: 0, invalidRows: 0, income: 0, expense: 0 },
+          rows: [],
+          suggestion: {
+            type: "profile",
+            profileKind: "clt",
+            employerName: "ACME LTDA",
+            referenceMonth: "2026-03",
+            netAmount: 4180.55,
+            paymentDate: "2026-03-30",
+            grossAmount: 5200,
+            deductions: [{ label: "descontos_folha", amount: 1019.45 }],
+          },
+        });
+
+      it("exibe botao de compor renda para suggestion type=profile", async () => {
       const file = new File(["dummy"], "inss.pdf", { type: "application/pdf" });
       transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildInssResponse());
 
@@ -846,6 +863,21 @@ describe("ImportCsvModal", () => {
       expect(
         screen.getByText(/perfil e planejamento atualizados com sucesso/i),
       ).toBeInTheDocument();
+    });
+
+    it("exibe badge e dados de holerite CLT no preview", async () => {
+      const file = new File(["dummy"], "holerite.pdf", { type: "application/pdf" });
+      transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildPayrollResponse());
+
+      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+      await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+      await waitFor(() => {
+        expect(screen.getByText("Holerite / CLT")).toBeInTheDocument();
+        expect(screen.getByText("Empresa: ACME LTDA")).toBeInTheDocument();
+        expect(screen.getByText("Tipo: Holerite / CLT")).toBeInTheDocument();
+      });
     });
 
     it("permite ignorar a sugestao de perfil depois de confirmar a renda", async () => {

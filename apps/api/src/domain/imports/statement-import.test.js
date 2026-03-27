@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   getPdfImportGuidanceError,
+  extractPayrollSuggestion,
   parseGenericBankStatementPdfText,
   parseInssCreditHistoryPdfText,
   parseStatementCsvRows,
@@ -212,5 +213,29 @@ describe("statement import parser", () => {
         },
       },
     ]);
+  });
+
+  it("extrai sugestao de holerite com bruto, liquido, descontos e empresa", () => {
+    const text = [
+      "Demonstrativo de Pagamento",
+      "Empresa: ACME LTDA",
+      "Competencia: 03/2026",
+      "Data de pagamento: 30/03/2026",
+      "Salario base 4.500,00",
+      "Total de proventos 5.200,00",
+      "Total de descontos 1.019,45",
+      "Liquido a receber 4.180,55",
+    ].join("\n");
+
+    expect(extractPayrollSuggestion(text)).toEqual({
+      type: "profile",
+      profileKind: "clt",
+      employerName: "ACME LTDA",
+      referenceMonth: "2026-03",
+      paymentDate: "2026-03-30",
+      netAmount: 4180.55,
+      grossAmount: 5200,
+      deductions: [{ label: "descontos_folha", amount: 1019.45 }],
+    });
   });
 });

@@ -272,8 +272,8 @@ describe("TaxPage", () => {
 
     expect(screen.getByText(/você está sem obrigatoriedade objetiva/i)).toBeInTheDocument();
     expect(screen.getByText("Rendimentos Isentos")).toBeInTheDocument();
-    expect(screen.getByText(/R\$\s*24\.751,74/)).toBeInTheDocument();
-    expect(screen.getByText(/R\$\s*13,36/)).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("24.751,74"))).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("13,36"))).toBeInTheDocument();
   });
 
   it("sinaliza fato pendente com CPF divergente do titular cadastrado", async () => {

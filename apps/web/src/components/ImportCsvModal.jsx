@@ -132,16 +132,18 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
   }, [dryRunResult]);
 
   const documentTypeBadge = useMemo(() => {
-    switch (dryRunResult?.documentType) {
-      case "bank_statement":
-        return { label: "Extrato bancário", className: "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-400" };
-      case "income_statement_inss":
-        return { label: "Comprovante INSS", className: "border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-400" };
-      case "utility_bill_energy":
-        return { label: "Conta de energia", className: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400" };
-      case "utility_bill_water":
-        return { label: "Conta de água", className: "border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-400" };
-      default:
+      switch (dryRunResult?.documentType) {
+        case "bank_statement":
+          return { label: "Extrato bancário", className: "border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-400" };
+        case "income_statement_inss":
+          return { label: "Comprovante INSS", className: "border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-700 dark:bg-purple-950/40 dark:text-purple-400" };
+        case "income_statement_payroll":
+          return { label: "Holerite / CLT", className: "border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300" };
+        case "utility_bill_energy":
+          return { label: "Conta de energia", className: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400" };
+        case "utility_bill_water":
+          return { label: "Conta de água", className: "border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-400" };
+        default:
         return null;
     }
   }, [dryRunResult]);
@@ -159,10 +161,16 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
 
     if (suggestion.type === "profile") {
       const lines = [];
+      if (suggestion.profileKind === "clt") lines.push("Tipo: Holerite / CLT");
+      if (suggestion.employerName) lines.push(`Empresa: ${suggestion.employerName}`);
       if (suggestion.referenceMonth) lines.push(`Competência: ${suggestion.referenceMonth}`);
       if (suggestion.paymentDate) lines.push(`Pagamento: ${suggestion.paymentDate}`);
       if (suggestion.netAmount != null) lines.push(`Líquido: R$ ${suggestion.netAmount.toFixed(2).replace(".", ",")}`);
-      if (suggestion.grossAmount != null) lines.push(`Bruto (MR): R$ ${suggestion.grossAmount.toFixed(2).replace(".", ",")}`);
+      if (suggestion.grossAmount != null) {
+        lines.push(
+          `${suggestion.profileKind === "inss" ? "Bruto (MR)" : "Bruto"}: R$ ${suggestion.grossAmount.toFixed(2).replace(".", ",")}`,
+        );
+      }
       if (suggestion.benefitKind) lines.push(`Espécie: ${suggestion.benefitKind}`);
       return { kind: "profile", lines };
     }
@@ -211,6 +219,8 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
     const suggestion = dryRunResult?.suggestion;
     if (suggestion?.type !== "profile") return null;
     const details = {};
+    if (suggestion.profileKind) details.profileKind = suggestion.profileKind;
+    if (suggestion.employerName) details.employerName = suggestion.employerName;
     if (suggestion.benefitKind) details.benefitKind = suggestion.benefitKind;
     if (Array.isArray(suggestion.deductions) && suggestion.deductions.length > 0) {
       details.deductions = suggestion.deductions;

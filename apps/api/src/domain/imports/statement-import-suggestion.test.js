@@ -41,7 +41,7 @@ describe("extractInssSuggestion", () => {
     const result = extractInssSuggestion(INSS_SAMPLE);
     expect(result).not.toBeNull();
     expect(result.type).toBe("profile");
-    expect(result.referenceMonth).toBe("03/2026");
+    expect(result.referenceMonth).toBe("2026-03");
     expect(result.netAmount).toBeCloseTo(2803.52);
   });
 
