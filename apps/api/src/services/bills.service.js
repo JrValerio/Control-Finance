@@ -299,6 +299,28 @@ export const updateBillForUser = async (userId, billId, payload = {}) => {
   const normalizedUserId = normalizeUserId(userId);
   const normalizedBillId = normalizeBillId(billId);
 
+  const existingResult = await dbQuery(
+    `SELECT id, status, bill_type
+     FROM bills
+     WHERE id = $1 AND user_id = $2
+     LIMIT 1`,
+    [normalizedBillId, normalizedUserId],
+  );
+
+  if (existingResult.rows.length === 0) {
+    throw createError(404, "Pendencia nao encontrada.");
+  }
+
+  const existingBill = existingResult.rows[0];
+
+  if (existingBill.bill_type === "credit_card_invoice") {
+    throw createError(409, "Fatura de cartao nao pode ser editada por esta tela.");
+  }
+
+  if (existingBill.status === "paid") {
+    throw createError(409, "Pendencia ja foi paga e nao pode ser editada.");
+  }
+
   const title = normalizeOptionalTitle(payload.title);
   const amount = normalizeOptionalAmount(payload.amount);
   const dueDate = normalizeOptionalDueDate(payload.dueDate);
@@ -332,13 +354,6 @@ export const updateBillForUser = async (userId, billId, payload = {}) => {
   );
 
   if (result.rows.length === 0) {
-    const check = await dbQuery(
-      `SELECT id FROM bills WHERE id = $1 AND user_id = $2 LIMIT 1`,
-      [normalizedBillId, normalizedUserId],
-    );
-    if (check.rows.length === 0) {
-      throw createError(404, "Pendencia nao encontrada.");
-    }
     throw createError(409, "Pendencia ja foi paga e nao pode ser editada.");
   }
 
@@ -349,14 +364,26 @@ export const deleteBillForUser = async (userId, billId) => {
   const normalizedUserId = normalizeUserId(userId);
   const normalizedBillId = normalizeBillId(billId);
 
+  const existingResult = await dbQuery(
+    `SELECT id, bill_type
+     FROM bills
+     WHERE id = $1 AND user_id = $2
+     LIMIT 1`,
+    [normalizedBillId, normalizedUserId],
+  );
+
+  if (existingResult.rows.length === 0) {
+    throw createError(404, "Pendencia nao encontrada.");
+  }
+
+  if (existingResult.rows[0].bill_type === "credit_card_invoice") {
+    throw createError(409, "Fatura de cartao nao pode ser excluida por esta tela.");
+  }
+
   const result = await dbQuery(
     `DELETE FROM bills WHERE id = $1 AND user_id = $2 RETURNING id`,
     [normalizedBillId, normalizedUserId],
   );
-
-  if (result.rows.length === 0) {
-    throw createError(404, "Pendencia nao encontrada.");
-  }
 
   return { id: Number(result.rows[0].id) };
 };

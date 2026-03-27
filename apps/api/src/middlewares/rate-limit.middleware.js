@@ -115,6 +115,7 @@ export const transactionsWriteRateLimiter = createUserWriteRateLimiter("transact
 export const categoriesWriteRateLimiter = createUserWriteRateLimiter("categories-write");
 export const budgetsWriteRateLimiter = createUserWriteRateLimiter("budgets-write");
 export const billsWriteRateLimiter = createUserWriteRateLimiter("bills-write");
+export const creditCardsWriteRateLimiter = createUserWriteRateLimiter("credit-cards-write");
 export const incomeSourcesWriteRateLimiter = createUserWriteRateLimiter("income-sources-write");
 export const goalsWriteRateLimiter = createUserWriteRateLimiter("goals-write");
 export const analyticsWriteRateLimiter = rateLimit({
@@ -147,6 +148,7 @@ export const resetWriteRateLimiterState = () => {
     categoriesWriteRateLimiter,
     budgetsWriteRateLimiter,
     billsWriteRateLimiter,
+    creditCardsWriteRateLimiter,
     incomeSourcesWriteRateLimiter,
     analyticsWriteRateLimiter,
   ].forEach((limiter) => {

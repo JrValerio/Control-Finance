@@ -27,6 +27,8 @@ const formatDueDate = (dateStr: string): string => {
   return `${day}/${month}/${year}`;
 };
 
+const isCreditCardInvoice = (bill: Bill) => bill.billType === "credit_card_invoice";
+
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
 const BillStatusBadge = ({ bill }: { bill: Bill }): JSX.Element => {
@@ -381,6 +383,11 @@ const BillsPage = ({
                         Ref. {bill.referenceMonth}
                       </span>
                     ) : null}
+                    {isCreditCardInvoice(bill) ? (
+                      <span className="rounded border border-purple-200 bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700">
+                        Fatura do cartão
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
@@ -398,7 +405,7 @@ const BillsPage = ({
                     </button>
                   ) : null}
 
-                  {bill.status === "pending" ? (
+                  {bill.status === "pending" && !isCreditCardInvoice(bill) ? (
                     <button
                       type="button"
                       onClick={() => openEditModal(bill)}
@@ -408,7 +415,7 @@ const BillsPage = ({
                     </button>
                   ) : null}
 
-                  {confirmingDeleteId === bill.id ? (
+                  {!isCreditCardInvoice(bill) && confirmingDeleteId === bill.id ? (
                     <span className="flex items-center gap-1">
                       <span className="text-xs text-cf-text-secondary">Confirmar?</span>
                       <button
@@ -426,7 +433,7 @@ const BillsPage = ({
                         Cancelar
                       </button>
                     </span>
-                  ) : (
+                  ) : !isCreditCardInvoice(bill) ? (
                     <button
                       type="button"
                       onClick={() => handleDeleteRequest(bill.id)}
@@ -434,7 +441,7 @@ const BillsPage = ({
                     >
                       Excluir
                     </button>
-                  )}
+                  ) : null}
                 </div>
               </div>
             ))
