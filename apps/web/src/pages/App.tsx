@@ -9,6 +9,7 @@ import UpgradeModal from "../components/UpgradeModal";
 import ForecastCard from "../components/ForecastCard";
 import FinancialAlertBanner from "../components/FinancialAlertBanner";
 import BillsSummaryWidget from "../components/BillsSummaryWidget";
+import CreditCardsSummaryWidget from "../components/CreditCardsSummaryWidget";
 import SalaryWidget from "../components/SalaryWidget";
 import TransactionList from "../components/TransactionList";
 import {
@@ -1633,12 +1634,20 @@ const App = ({
   return (
     <div className="App min-h-screen bg-cf-bg-page pb-10">
       <header className="w-full bg-cf-header-bg py-3 shadow-md sm:py-4">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <h1 className="text-2xl font-semibold sm:text-3xl lg:text-4xl">
-            <span className="text-brand-1">Control</span>
-            <span className="text-cf-text-primary">Finance</span>
-          </h1>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+              <div className="hidden lg:block" />
+              <div className="flex flex-col items-center text-center lg:justify-self-center">
+                <h1 className="text-2xl font-semibold sm:text-3xl lg:text-4xl">
+                  <span className="text-brand-1">Control</span>
+                  <span className="text-cf-text-primary">Finance</span>
+                </h1>
+                <p className="mt-1 text-xs text-cf-text-secondary sm:text-sm">
+                  Painel financeiro com importações, pendências, cartões e Central do Leão.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
             {useMobileActionsMenu ? (
               <div className="relative flex items-center gap-2">
                 <button
@@ -1797,7 +1806,7 @@ const App = ({
                 ) : null}
               </div>
             ) : (
-              <div className="flex min-w-0 items-center gap-1 rounded border border-cf-border bg-cf-surface/70 p-1 sm:gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={cycleTheme}
@@ -1806,73 +1815,6 @@ const App = ({
                 >
                   {themeLabel}
                 </button>
-                <button
-                  type="button"
-                  onClick={handleExportCsv}
-                  disabled={isExportingCsv}
-                  className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {isExportingCsv ? "Exportando CSV..." : "Exportar CSV"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOpenImportModal}
-                  className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                >
-                  Importar extrato
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOpenImportHistoryModal}
-                  className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                >
-                  Histórico de imports
-                </button>
-                {onOpenBills ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenBills}
-                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                  >
-                    Pendências
-                  </button>
-                ) : null}
-                {onOpenCreditCards ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenCreditCards}
-                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                  >
-                    Cartões
-                  </button>
-                ) : null}
-                {onOpenIncomeSources ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenIncomeSources}
-                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                  >
-                    Fontes de Renda
-                  </button>
-                ) : null}
-                {onOpenTax ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenTax}
-                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                  >
-                    Central do Leão
-                  </button>
-                ) : null}
-                {onOpenCategoriesSettings ? (
-                  <button
-                    type="button"
-                    onClick={handleOpenCategoriesSettings}
-                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
-                  >
-                    Categorias
-                  </button>
-                ) : null}
                 {(onOpenProfileSettings || onOpenBillingSettings || onOpenSecuritySettings || onLogout) ? (
                   <div className="relative">
                     <button
@@ -1951,6 +1893,83 @@ const App = ({
             >
               Registrar novo valor
             </button>
+              </div>
+            </div>
+
+            {!useMobileActionsMenu ? (
+              <nav
+                aria-label="Atalhos principais"
+                className="flex flex-wrap items-center justify-center gap-2 rounded border border-cf-border bg-cf-surface/70 p-2"
+              >
+                <button
+                  type="button"
+                  onClick={handleExportCsv}
+                  disabled={isExportingCsv}
+                  className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isExportingCsv ? "Exportando CSV..." : "Exportar CSV"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenImportModal}
+                  className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                >
+                  Importar extrato
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenImportHistoryModal}
+                  className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                >
+                  Histórico de imports
+                </button>
+                {onOpenBills ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenBills}
+                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                  >
+                    Pendências
+                  </button>
+                ) : null}
+                {onOpenCreditCards ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenCreditCards}
+                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                  >
+                    Cartões
+                  </button>
+                ) : null}
+                {onOpenIncomeSources ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenIncomeSources}
+                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                  >
+                    Fontes de Renda
+                  </button>
+                ) : null}
+                {onOpenTax ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenTax}
+                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                  >
+                    Central do Leão
+                  </button>
+                ) : null}
+                {onOpenCategoriesSettings ? (
+                  <button
+                    type="button"
+                    onClick={handleOpenCategoriesSettings}
+                    className="whitespace-nowrap rounded border border-cf-border bg-cf-surface px-2.5 py-1.5 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                  >
+                    Categorias
+                  </button>
+                ) : null}
+              </nav>
+            ) : null}
           </div>
         </div>
       </header>
@@ -2435,15 +2454,28 @@ const App = ({
               </div>
             ) : null}
           </section>
-        <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+        <section className="space-y-4" aria-labelledby="operational-overview-title">
+          <div>
+            <h3 id="operational-overview-title" className="text-sm font-medium text-cf-text-primary">
+              Painel operacional
+            </h3>
+            <p className="mt-1 text-xs text-cf-text-secondary">
+              Pendências, cartões, renda e projeção em um ponto só para o mês atual.
+            </p>
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-3">
+            <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+            <BillsSummaryWidget onOpenBills={handleOpenBills} />
+            <CreditCardsSummaryWidget onOpenCreditCards={handleOpenCreditCards} />
+          </div>
+        </section>
+
+        <SalaryWidget />
 
         <Suspense fallback={null}>
           <HealthOverview />
         </Suspense>
-
-        <BillsSummaryWidget onOpenBills={handleOpenBills} />
-
-        <SalaryWidget />
 
         <Suspense fallback={null}>
           <GoalsSection />
