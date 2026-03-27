@@ -327,6 +327,35 @@ const parsePayloadJson = (payloadJson) => {
   return {};
 };
 
+const buildUndoBlockedReason = ({
+  derivedIncomeStatements = 0,
+  derivedBills = 0,
+} = {}) => {
+  const blockers = [];
+
+  if (derivedIncomeStatements > 0) {
+    blockers.push(
+      `${derivedIncomeStatements} ${
+        derivedIncomeStatements === 1
+          ? "lancamento no historico de renda"
+          : "lancamentos no historico de renda"
+      }`,
+    );
+  }
+
+  if (derivedBills > 0) {
+    blockers.push(
+      `${derivedBills} ${derivedBills === 1 ? "conta derivada" : "contas derivadas"}`,
+    );
+  }
+
+  if (blockers.length === 0) {
+    return null;
+  }
+
+  return `Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: ${blockers.join(" e ")}.`;
+};
+
 const ensureValidCsvHeaders = (headerRow) => {
   const normalizedHeaders = headerRow.map(normalizeHeader);
   const uniqueHeaders = new Set(normalizedHeaders);
@@ -889,7 +918,9 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
              s.expires_at,
              s.committed_at,
              s.payload_json,
-             COALESCE(tx.active_imported_count, 0) AS active_imported_count
+             COALESCE(tx.active_imported_count, 0) AS active_imported_count,
+             COALESCE(ist.active_income_statements_count, 0) AS active_income_statements_count,
+             COALESCE(b.active_bills_count, 0) AS active_bills_count
       FROM transaction_import_sessions s
       LEFT JOIN (
         SELECT import_session_id,
@@ -902,6 +933,28 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
       ) tx
         ON tx.import_session_id = s.id
        AND tx.user_id = s.user_id
+      LEFT JOIN (
+        SELECT st.source_import_session_id AS import_session_id,
+               src.user_id,
+               COUNT(*)::int AS active_income_statements_count
+        FROM income_statements st
+        JOIN income_sources src
+          ON src.id = st.income_source_id
+        WHERE st.source_import_session_id IS NOT NULL
+        GROUP BY st.source_import_session_id, src.user_id
+      ) ist
+        ON ist.import_session_id = s.id
+       AND ist.user_id = s.user_id
+      LEFT JOIN (
+        SELECT source_import_session_id AS import_session_id,
+               user_id,
+               COUNT(*)::int AS active_bills_count
+        FROM bills
+        WHERE source_import_session_id IS NOT NULL
+        GROUP BY source_import_session_id, user_id
+      ) b
+        ON b.import_session_id = s.id
+       AND b.user_id = s.user_id
       WHERE s.user_id = $1
       ORDER BY s.created_at DESC
       LIMIT $2 OFFSET $3
@@ -914,6 +967,15 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
     const summary = payload.summary || {};
     const imported = normalizeSummaryInteger(row.active_imported_count, 0);
     const committedAt = toIsoDateString(row.committed_at);
+    const derivedIncomeStatements = normalizeSummaryInteger(
+      row.active_income_statements_count,
+      0,
+    );
+    const derivedBills = normalizeSummaryInteger(row.active_bills_count, 0);
+    const undoBlockedReason = buildUndoBlockedReason({
+      derivedIncomeStatements,
+      derivedBills,
+    });
 
     return {
       id: String(row.id),
@@ -928,7 +990,8 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
         typeof payload.documentType === "string" && payload.documentType.trim()
           ? payload.documentType.trim()
           : null,
-      canUndo: Boolean(committedAt) && imported > 0,
+      canUndo: Boolean(committedAt) && imported > 0 && !undoBlockedReason,
+      undoBlockedReason,
       summary: {
         totalRows: normalizeSummaryInteger(summary.totalRows, 0),
         validRows: normalizeSummaryInteger(summary.validRows, 0),
@@ -1148,6 +1211,39 @@ export const deleteImportSessionForUser = async (userId, sessionId) => {
     );
     const session = sessionResult.rows[0] || null;
     assertSessionOwnership(session, userId);
+
+    const [incomeStatementsResult, billsResult] = await Promise.all([
+      transactionClient.query(
+        `SELECT COUNT(*)::int AS count
+         FROM income_statements st
+         JOIN income_sources src
+           ON src.id = st.income_source_id
+         WHERE src.user_id = $1
+           AND st.source_import_session_id = $2`,
+        [userId, normalizedSessionId],
+      ),
+      transactionClient.query(
+        `SELECT COUNT(*)::int AS count
+         FROM bills
+         WHERE user_id = $1
+           AND source_import_session_id = $2`,
+        [userId, normalizedSessionId],
+      ),
+    ]);
+
+    const derivedIncomeStatements = normalizeSummaryInteger(
+      incomeStatementsResult.rows[0]?.count,
+      0,
+    );
+    const derivedBills = normalizeSummaryInteger(billsResult.rows[0]?.count, 0);
+    const undoBlockedReason = buildUndoBlockedReason({
+      derivedIncomeStatements,
+      derivedBills,
+    });
+
+    if (undoBlockedReason) {
+      throw createError(409, undoBlockedReason);
+    }
 
     const deleteResult = await transactionClient.query(
       `UPDATE transactions SET deleted_at = NOW()

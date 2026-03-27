@@ -13,6 +13,7 @@ export interface IncomeStatementPrefill {
   paymentDate?: string;
   grossAmount?: number | null;
   details?: Record<string, unknown> | null;
+  sourceImportSessionId?: string | null;
 }
 
 interface Props {
@@ -118,6 +119,7 @@ export default function IncomeStatementQuickModal({
         paymentDate: paymentDate.trim() || null,
         grossAmount: prefill?.grossAmount ?? null,
         details: prefill?.details ?? null,
+        sourceImportSessionId: prefill?.sourceImportSessionId ?? null,
       });
 
       let finalStatement = statement;

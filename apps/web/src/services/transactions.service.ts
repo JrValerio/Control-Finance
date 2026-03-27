@@ -226,6 +226,7 @@ export interface ImportHistoryItem {
   fileName: string | null;
   documentType: string | null;
   canUndo: boolean;
+  undoBlockedReason: string | null;
   summary: ImportHistorySummary;
 }
 
@@ -408,6 +409,7 @@ interface ImportHistoryApiResponse {
     fileName?: unknown;
     documentType?: unknown;
     canUndo?: unknown;
+    undoBlockedReason?: unknown;
     summary?: {
       totalRows?: unknown;
       validRows?: unknown;
@@ -967,6 +969,10 @@ export const transactionsService = {
               ? item.documentType.trim()
               : null,
           canUndo: Boolean(item?.canUndo),
+          undoBlockedReason:
+            typeof item?.undoBlockedReason === "string" && item.undoBlockedReason.trim()
+              ? item.undoBlockedReason.trim()
+              : null,
           summary: {
             totalRows: Number(item?.summary?.totalRows) || 0,
             validRows: Number(item?.summary?.validRows) || 0,

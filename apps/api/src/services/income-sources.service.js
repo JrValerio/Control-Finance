@@ -167,6 +167,12 @@ const normalizeOptionalNotes = (value) => {
   return trimmed;
 };
 
+const normalizeOptionalImportSessionId = (value) => {
+  if (value == null || value === "") return null;
+  const trimmed = String(value).trim();
+  return trimmed || null;
+};
+
 // ─── Row mappers ───────────────────────────────────────────────────────────────
 
 const mapSourceRow = (row) => ({
@@ -202,6 +208,9 @@ const mapStatementRow = (row) => ({
   paymentDate: row.payment_date != null ? toISODate(row.payment_date) : null,
   status: String(row.status),
   postedTransactionId: row.posted_transaction_id != null ? Number(row.posted_transaction_id) : null,
+  sourceImportSessionId: row.source_import_session_id != null
+    ? String(row.source_import_session_id)
+    : null,
   createdAt: toISODateTime(row.created_at),
   updatedAt: toISODateTime(row.updated_at),
 });
@@ -447,6 +456,9 @@ export const createStatementDraftForSource = async (userId, sourceId, payload) =
   const paymentDate = normalizePaymentDate(payload.paymentDate ?? null);
   const grossAmount = normalizeOptionalGrossAmount(payload.grossAmount ?? null);
   const details = normalizeDetails(payload.details ?? null);
+  const sourceImportSessionId = normalizeOptionalImportSessionId(
+    payload.sourceImportSessionId ?? null,
+  );
 
   return withDbTransaction(async (client) => {
     // Fetch active deductions to clone
@@ -468,12 +480,12 @@ export const createStatementDraftForSource = async (userId, sourceId, payload) =
       const { rows } = await client.query(
         `INSERT INTO income_statements
            (income_source_id, reference_month, net_amount, total_deductions, payment_date,
-            gross_amount, details_json)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+            gross_amount, details_json, source_import_session_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *`,
         [
           sid, referenceMonth, netAmount, toMoney(totalDeductions), paymentDate,
-          grossAmount, details != null ? JSON.stringify(details) : null,
+          grossAmount, details != null ? JSON.stringify(details) : null, sourceImportSessionId,
         ],
       );
       stmtRow = rows[0];

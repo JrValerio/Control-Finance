@@ -37,6 +37,8 @@ describe("ImportHistoryModal", () => {
             fileName: "itau-90-dias.ofx",
             documentType: "bank_statement",
             canUndo: false,
+            undoBlockedReason:
+              "Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: 1 conta derivada.",
             summary: {
               totalRows: 5,
               validRows: 3,
@@ -60,6 +62,11 @@ describe("ImportHistoryModal", () => {
     expect(screen.getByText("Duplicadas: 1")).toBeInTheDocument();
     expect(screen.getByText("Conflitos: 1")).toBeInTheDocument();
     expect(screen.getByText("Sem ação")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: 1 conta derivada.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("confirma e desfaz a sessao com refresh do histórico", async () => {
@@ -77,6 +84,7 @@ describe("ImportHistoryModal", () => {
               fileName: "inss.pdf",
               documentType: "income_statement_inss",
               canUndo: true,
+              undoBlockedReason: null,
               summary: {
                 totalRows: 2,
                 validRows: 2,
@@ -102,6 +110,7 @@ describe("ImportHistoryModal", () => {
               fileName: "inss.pdf",
               documentType: "income_statement_inss",
               canUndo: false,
+              undoBlockedReason: null,
               summary: {
                 totalRows: 2,
                 validRows: 2,
