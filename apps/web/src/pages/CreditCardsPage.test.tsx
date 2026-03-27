@@ -17,6 +17,7 @@ vi.mock("../services/credit-cards.service", () => ({
     create: vi.fn(),
     update: vi.fn(),
     createPurchase: vi.fn(),
+    createInstallments: vi.fn(),
     removePurchase: vi.fn(),
     closeInvoice: vi.fn(),
   },
@@ -38,6 +39,9 @@ const buildOpenPurchase = (): CreditCardPurchase => ({
   purchaseDate: "2026-03-15",
   status: "open",
   statementMonth: null,
+  installmentGroupId: null,
+  installmentNumber: null,
+  installmentCount: null,
   notes: null,
   createdAt: "2026-03-15T10:00:00.000Z",
   updatedAt: "2026-03-15T10:00:00.000Z",
@@ -95,6 +99,39 @@ describe("CreditCardsPage", () => {
     vi.mocked(creditCardsService.create).mockResolvedValue(buildCard());
     vi.mocked(creditCardsService.update).mockResolvedValue(buildCard());
     vi.mocked(creditCardsService.createPurchase).mockResolvedValue(buildOpenPurchase());
+    vi.mocked(creditCardsService.createInstallments).mockResolvedValue({
+      purchases: [
+        {
+          ...buildOpenPurchase(),
+          id: 21,
+          amount: 60,
+          purchaseDate: "2026-03-15",
+          installmentGroupId: "grp_1",
+          installmentNumber: 1,
+          installmentCount: 3,
+        },
+        {
+          ...buildOpenPurchase(),
+          id: 22,
+          amount: 60,
+          purchaseDate: "2026-04-15",
+          installmentGroupId: "grp_1",
+          installmentNumber: 2,
+          installmentCount: 3,
+        },
+        {
+          ...buildOpenPurchase(),
+          id: 23,
+          amount: 60,
+          purchaseDate: "2026-05-15",
+          installmentGroupId: "grp_1",
+          installmentNumber: 3,
+          installmentCount: 3,
+        },
+      ],
+      installmentCount: 3,
+      totalAmount: 180,
+    });
     vi.mocked(creditCardsService.removePurchase).mockResolvedValue(undefined);
     vi.mocked(creditCardsService.closeInvoice).mockResolvedValue({
       invoice: buildInvoice(),
@@ -164,6 +201,32 @@ describe("CreditCardsPage", () => {
         expect.objectContaining({
           title: "Farmácia",
           amount: 89.9,
+        }),
+      );
+    });
+  });
+
+  it("adiciona compra parcelada no cartão", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("Nubank");
+    await user.click(screen.getByRole("button", { name: "Nova compra" }));
+    await user.type(screen.getByLabelText("Descrição"), "Curso");
+    await user.type(screen.getByLabelText("Valor"), "180,00");
+    await user.click(screen.getByLabelText("Parcelar esta compra"));
+    const countInput = screen.getByRole("spinbutton", { name: "Parcelas" });
+    await user.clear(countInput);
+    await user.type(countInput, "3");
+    await user.click(screen.getByRole("button", { name: "Adicionar em 3x" }));
+
+    await waitFor(() => {
+      expect(creditCardsService.createInstallments).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({
+          title: "Curso",
+          amount: 180,
+          installmentCount: 3,
         }),
       );
     });

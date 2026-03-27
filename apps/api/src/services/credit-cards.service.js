@@ -2,6 +2,8 @@ import { dbQuery, withDbTransaction } from "../db/index.js";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const CREDIT_CARD_INVOICE_BILL_TYPE = "credit_card_invoice";
+const MIN_INSTALLMENT_COUNT = 2;
+const MAX_INSTALLMENT_COUNT = 24;
 
 const createError = (status, message) => {
   const error = new Error(message);
@@ -82,6 +84,22 @@ const normalizePurchaseDate = (value) => {
   return value;
 };
 
+const normalizeInstallmentCount = (value, { required = false } = {}) => {
+  if (value === undefined || value === null || value === "") {
+    if (required) {
+      throw createError(400, "Informe entre 2 e 24 parcelas.");
+    }
+    return 1;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < MIN_INSTALLMENT_COUNT || parsed > MAX_INSTALLMENT_COUNT) {
+    throw createError(400, "Informe entre 2 e 24 parcelas.");
+  }
+
+  return parsed;
+};
+
 const normalizeOptionalText = (value, fieldName) => {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
@@ -117,6 +135,32 @@ const clampDateDay = (year, monthIndex, day) => {
   const clampedDay = Math.min(day, lastDay);
   return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(clampedDay).padStart(2, "0")}`;
 };
+
+const addMonthsClamped = (isoDate, n) => {
+  const [yearPart, monthPart, dayPart] = isoDate.split("-").map(Number);
+  const targetYear = yearPart + Math.floor((monthPart - 1 + n) / 12);
+  const targetMonth = ((monthPart - 1 + n) % 12) + 1;
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+  const clampedDay = Math.min(dayPart, lastDay);
+  return [
+    targetYear,
+    String(targetMonth).padStart(2, "0"),
+    String(clampedDay).padStart(2, "0"),
+  ].join("-");
+};
+
+const splitInstallmentAmounts = (totalAmount, installmentCount) => {
+  const totalCents = Math.round(normalizeAmount(totalAmount, "Valor da compra") * 100);
+  const baseAmountCents = Math.floor(totalCents / installmentCount);
+  const remainder = totalCents % installmentCount;
+
+  return Array.from({ length: installmentCount }, (_, index) =>
+    Number(((baseAmountCents + (index < remainder ? 1 : 0)) / 100).toFixed(2)),
+  );
+};
+
+const buildInstallmentGroupId = (userId, cardId) =>
+  `cc_install_${userId}_${cardId}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
 const resolveNextDueDate = (closingDate, dueDay) => {
   const [yearPart, monthPart, dayPart] = closingDate.split("-").map(Number);
@@ -154,6 +198,11 @@ const mapPurchaseRow = (row) => ({
   purchaseDate: toISODateOnly(row.purchase_date),
   status: row.status,
   statementMonth: row.statement_month || null,
+  installmentGroupId: row.installment_group_id || null,
+  installmentNumber:
+    row.installment_number != null ? Number(row.installment_number) : null,
+  installmentCount:
+    row.installment_count != null ? Number(row.installment_count) : null,
   notes: row.notes || null,
   createdAt: toISODateTime(row.created_at),
   updatedAt: toISODateTime(row.updated_at),
@@ -372,13 +421,77 @@ export const createCreditCardPurchaseForUser = async (userId, cardId, payload = 
     }
 
     const result = await client.query(
-      `INSERT INTO credit_card_purchases (user_id, credit_card_id, title, amount, purchase_date, notes)
+      `INSERT INTO credit_card_purchases (
+         user_id,
+         credit_card_id,
+         title,
+         amount,
+         purchase_date,
+         notes
+       )
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
       [normalizedUserId, normalizedCardId, title, amount, purchaseDate, notes ?? null],
     );
 
     return mapPurchaseRow(result.rows[0]);
+  });
+};
+
+export const createCreditCardInstallmentsForUser = async (userId, cardId, payload = {}) => {
+  const normalizedUserId = normalizeUserId(userId);
+  const normalizedCardId = normalizeCardId(cardId);
+  const title = normalizeName(payload.title);
+  const totalAmount = normalizeAmount(payload.amount, "Valor da compra");
+  const purchaseDate = normalizePurchaseDate(payload.purchaseDate);
+  const notes = normalizeOptionalText(payload.notes, "Notas");
+  const installmentCount = normalizeInstallmentCount(payload.installmentCount, { required: true });
+  const installmentAmounts = splitInstallmentAmounts(totalAmount, installmentCount);
+  const installmentGroupId = buildInstallmentGroupId(normalizedUserId, normalizedCardId);
+
+  return withDbTransaction(async (client) => {
+    const card = await getCardForUserOrThrow(client, normalizedUserId, normalizedCardId);
+
+    if (!card.is_active) {
+      throw createError(409, "Cartao inativo. Reative antes de lancar compras.");
+    }
+
+    const purchases = [];
+    for (let index = 0; index < installmentCount; index += 1) {
+      const result = await client.query(
+        `INSERT INTO credit_card_purchases (
+           user_id,
+           credit_card_id,
+           title,
+           amount,
+           purchase_date,
+           notes,
+           installment_group_id,
+           installment_number,
+           installment_count
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          normalizedUserId,
+          normalizedCardId,
+          title,
+          installmentAmounts[index],
+          addMonthsClamped(purchaseDate, index),
+          notes ?? null,
+          installmentGroupId,
+          index + 1,
+          installmentCount,
+        ],
+      );
+      purchases.push(mapPurchaseRow(result.rows[0]));
+    }
+
+    return {
+      purchases,
+      installmentCount,
+      totalAmount,
+    };
   });
 };
 
@@ -399,6 +512,37 @@ export const deleteCreditCardPurchaseForUser = async (userId, purchaseId) => {
     }
 
     const purchase = result.rows[0];
+
+    if (purchase.installment_group_id) {
+      const groupResult = await client.query(
+        `SELECT id, status
+           FROM credit_card_purchases
+          WHERE user_id = $1
+            AND installment_group_id = $2
+          ORDER BY installment_number ASC, id ASC`,
+        [normalizedUserId, purchase.installment_group_id],
+      );
+
+      const hasBilledInstallment = groupResult.rows.some((row) => row.status !== "open");
+      if (hasBilledInstallment) {
+        throw createError(
+          409,
+          "Compra parcelada ja entrou em fatura fechada e nao pode ser excluida por completo.",
+        );
+      }
+
+      await client.query(
+        `DELETE FROM credit_card_purchases
+          WHERE user_id = $1
+            AND installment_group_id = $2`,
+        [normalizedUserId, purchase.installment_group_id],
+      );
+
+      return {
+        id: normalizedPurchaseId,
+        deletedCount: groupResult.rows.length,
+      };
+    }
 
     if (purchase.status !== "open") {
       throw createError(409, "Compra ja entrou em fatura fechada e nao pode ser excluida.");

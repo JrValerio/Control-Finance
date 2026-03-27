@@ -6,6 +6,7 @@ import {
   createCreditCardForUser,
   updateCreditCardForUser,
   createCreditCardPurchaseForUser,
+  createCreditCardInstallmentsForUser,
   deleteCreditCardPurchaseForUser,
   closeCreditCardInvoiceForUser,
 } from "../services/credit-cards.service.js";
@@ -45,6 +46,19 @@ router.post("/:id/purchases", creditCardsWriteRateLimiter, async (req, res, next
   try {
     const purchase = await createCreditCardPurchaseForUser(req.user.id, req.params.id, req.body || {});
     res.status(201).json(purchase);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:id/installments", creditCardsWriteRateLimiter, async (req, res, next) => {
+  try {
+    const result = await createCreditCardInstallmentsForUser(
+      req.user.id,
+      req.params.id,
+      req.body || {},
+    );
+    res.status(201).json(result);
   } catch (error) {
     next(error);
   }

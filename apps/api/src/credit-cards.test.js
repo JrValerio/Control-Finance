@@ -119,6 +119,9 @@ describe("credit cards", () => {
       status: "open",
       billId: null,
       statementMonth: null,
+      installmentGroupId: null,
+      installmentNumber: null,
+      installmentCount: null,
     });
 
     const listRes = await request(app)
@@ -144,6 +147,70 @@ describe("credit cards", () => {
     );
 
     expect(Number(txCountResult.rows[0].total)).toBe(0);
+  });
+
+  it("POST /credit-cards/:id/installments cria compra parcelada mensal sem distorcer o uso do limite", async () => {
+    const token = await registerAndLogin("credit-cards-installments@test.dev");
+
+    const createCardRes = await request(app)
+      .post("/credit-cards")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Nubank",
+        limitTotal: 2000,
+        closingDay: 10,
+        dueDay: 20,
+      });
+
+    const installmentsRes = await request(app)
+      .post(`/credit-cards/${createCardRes.body.id}/installments`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Notebook",
+        amount: 300,
+        purchaseDate: "2026-03-05",
+        installmentCount: 3,
+      });
+
+    expect(installmentsRes.status).toBe(201);
+    expect(installmentsRes.body).toMatchObject({
+      installmentCount: 3,
+      totalAmount: 300,
+    });
+    expect(installmentsRes.body.purchases).toHaveLength(3);
+    expect(installmentsRes.body.purchases[0]).toMatchObject({
+      title: "Notebook",
+      amount: 100,
+      purchaseDate: "2026-03-05",
+      installmentNumber: 1,
+      installmentCount: 3,
+    });
+    expect(installmentsRes.body.purchases[1]).toMatchObject({
+      purchaseDate: "2026-04-05",
+      installmentNumber: 2,
+      installmentCount: 3,
+    });
+    expect(installmentsRes.body.purchases[2]).toMatchObject({
+      purchaseDate: "2026-05-05",
+      installmentNumber: 3,
+      installmentCount: 3,
+    });
+
+    const listRes = await request(app)
+      .get("/credit-cards")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.items[0]).toMatchObject({
+      openPurchasesCount: 3,
+      openPurchasesTotal: 300,
+      usage: {
+        total: 2000,
+        used: 300,
+        available: 1700,
+        status: "using",
+      },
+    });
   });
 
   it("POST /credit-cards/:id/close-invoice bloqueia fechamento antes do dia configurado", async () => {
@@ -279,6 +346,75 @@ describe("credit cards", () => {
     expect(Number(txCountResult.rows[0].total)).toBe(1);
   });
 
+  it("fecha apenas a parcela elegivel do ciclo e preserva as proximas abertas", async () => {
+    const token = await registerAndLogin("credit-cards-installment-cycle@test.dev");
+
+    const createCardRes = await request(app)
+      .post("/credit-cards")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Visa",
+        limitTotal: 1200,
+        closingDay: 10,
+        dueDay: 20,
+      });
+    const cardId = createCardRes.body.id;
+
+    await request(app)
+      .post(`/credit-cards/${cardId}/installments`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Celular",
+        amount: 300,
+        purchaseDate: "2026-03-05",
+        installmentCount: 3,
+      });
+
+    const firstCloseRes = await request(app)
+      .post(`/credit-cards/${cardId}/close-invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ closingDate: "2026-03-15" });
+
+    expect(firstCloseRes.status).toBe(200);
+    expect(firstCloseRes.body).toMatchObject({
+      purchasesCount: 1,
+      total: 100,
+      invoice: {
+        amount: 100,
+        referenceMonth: "2026-03",
+      },
+    });
+
+    const afterFirstCloseRes = await request(app)
+      .get("/credit-cards")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(afterFirstCloseRes.body.items[0]).toMatchObject({
+      openPurchasesCount: 2,
+      openPurchasesTotal: 200,
+      pendingInvoicesCount: 1,
+      pendingInvoicesTotal: 100,
+      usage: {
+        used: 300,
+        available: 900,
+      },
+    });
+    expect(afterFirstCloseRes.body.items[0].openPurchases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          installmentNumber: 2,
+          installmentCount: 3,
+          purchaseDate: "2026-04-05",
+        }),
+        expect.objectContaining({
+          installmentNumber: 3,
+          installmentCount: 3,
+          purchaseDate: "2026-05-05",
+        }),
+      ]),
+    );
+  });
+
   it("DELETE /credit-cards/purchases/:purchaseId bloqueia compra que ja entrou em fatura fechada", async () => {
     const token = await registerAndLogin("credit-cards-delete-billed@test.dev");
 
@@ -311,5 +447,50 @@ describe("credit cards", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expectErrorResponseWithRequestId(deleteRes, 409, "Compra ja entrou em fatura fechada e nao pode ser excluida.");
+  });
+
+  it("DELETE /credit-cards/purchases/:purchaseId exclui grupo parcelado inteiro enquanto tudo estiver aberto", async () => {
+    const token = await registerAndLogin("credit-cards-delete-installments@test.dev");
+
+    const createCardRes = await request(app)
+      .post("/credit-cards")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Inter",
+        limitTotal: 900,
+        closingDay: 8,
+        dueDay: 18,
+      });
+
+    const installmentsRes = await request(app)
+      .post(`/credit-cards/${createCardRes.body.id}/installments`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Curso",
+        amount: 180,
+        purchaseDate: "2026-03-03",
+        installmentCount: 3,
+      });
+
+    const deleteRes = await request(app)
+      .delete(`/credit-cards/purchases/${installmentsRes.body.purchases[0].id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(deleteRes.status).toBe(204);
+
+    const listRes = await request(app)
+      .get("/credit-cards")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.items[0]).toMatchObject({
+      openPurchasesCount: 0,
+      openPurchasesTotal: 0,
+      usage: {
+        used: 0,
+        available: 900,
+        status: "unused",
+      },
+    });
   });
 });

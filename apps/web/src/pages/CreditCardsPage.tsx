@@ -84,12 +84,23 @@ const CreditCardsPage = ({
     amount: number;
     purchaseDate: string;
     notes: string | null;
+    installmentCount?: number;
   }) => {
     if (!purchaseCard) return;
 
     try {
-      await creditCardsService.createPurchase(purchaseCard.id, payload);
-      showSuccess("Compra adicionada ao cartão.");
+      if ((payload.installmentCount ?? 1) > 1) {
+        const result = await creditCardsService.createInstallments(purchaseCard.id, {
+          ...payload,
+          installmentCount: payload.installmentCount ?? 2,
+        });
+        showSuccess(
+          `Compra parcelada adicionada em ${result.installmentCount}x, total de ${formatCurrency(result.totalAmount)}.`,
+        );
+      } else {
+        await creditCardsService.createPurchase(purchaseCard.id, payload);
+        showSuccess("Compra adicionada ao cartão.");
+      }
       setPurchaseCard(null);
       await loadCards();
     } catch (error) {
@@ -272,6 +283,9 @@ const CreditCardsPage = ({
                                 <p className="text-sm font-medium text-cf-text-primary">{purchase.title}</p>
                                 <p className="text-xs text-cf-text-secondary">
                                   {formatDate(purchase.purchaseDate)}
+                                  {purchase.installmentCount && purchase.installmentNumber
+                                    ? ` · Parcela ${purchase.installmentNumber}/${purchase.installmentCount}`
+                                    : ""}
                                   {purchase.notes ? ` · ${purchase.notes}` : ""}
                                 </p>
                               </div>

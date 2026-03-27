@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { getTodayISODate, isValidISODate, parseCurrencyInput } from "./DatabaseUtils";
 
+const MIN_INSTALLMENT_COUNT = 2;
+const MAX_INSTALLMENT_COUNT = 24;
+
 interface CreditCardPurchaseModalProps {
   isOpen: boolean;
   cardName: string;
@@ -10,6 +13,7 @@ interface CreditCardPurchaseModalProps {
     amount: number;
     purchaseDate: string;
     notes: string | null;
+    installmentCount?: number;
   }) => Promise<void> | void;
 }
 
@@ -23,6 +27,8 @@ const CreditCardPurchaseModal = ({
   const [amount, setAmount] = useState("");
   const [purchaseDate, setPurchaseDate] = useState(getTodayISODate());
   const [notes, setNotes] = useState("");
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [installmentCount, setInstallmentCount] = useState(String(MIN_INSTALLMENT_COUNT));
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -32,6 +38,8 @@ const CreditCardPurchaseModal = ({
     setAmount("");
     setPurchaseDate(getTodayISODate());
     setNotes("");
+    setIsInstallment(false);
+    setInstallmentCount(String(MIN_INSTALLMENT_COUNT));
     setIsSaving(false);
     setErrorMessage("");
   }, [isOpen]);
@@ -68,6 +76,22 @@ const CreditCardPurchaseModal = ({
       return;
     }
 
+    let normalizedInstallmentCount: number | undefined;
+    if (isInstallment) {
+      normalizedInstallmentCount = Math.max(
+        MIN_INSTALLMENT_COUNT,
+        Math.min(MAX_INSTALLMENT_COUNT, parseInt(installmentCount, 10) || MIN_INSTALLMENT_COUNT),
+      );
+      if (
+        !Number.isInteger(normalizedInstallmentCount)
+        || normalizedInstallmentCount < MIN_INSTALLMENT_COUNT
+        || normalizedInstallmentCount > MAX_INSTALLMENT_COUNT
+      ) {
+        setErrorMessage("Informe entre 2 e 24 parcelas.");
+        return;
+      }
+    }
+
     setIsSaving(true);
     try {
       await onSave({
@@ -75,6 +99,7 @@ const CreditCardPurchaseModal = ({
         amount: parsedAmount,
         purchaseDate,
         notes: notes.trim() || null,
+        installmentCount: normalizedInstallmentCount,
       });
     } catch (error) {
       const err = error as { response?: { data?: { message?: string } }; message?: string };
@@ -169,6 +194,44 @@ const CreditCardPurchaseModal = ({
             />
           </div>
 
+          <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-3">
+            <label className="flex items-center gap-2 text-sm font-medium text-cf-text-primary">
+              <input
+                type="checkbox"
+                checked={isInstallment}
+                onChange={(event) => setIsInstallment(event.target.checked)}
+                disabled={isSaving}
+              />
+              Parcelar esta compra
+            </label>
+
+            {isInstallment ? (
+              <div className="mt-3 flex flex-col gap-1.5">
+                <label
+                  htmlFor="credit-card-purchase-installment-count"
+                  className="text-sm font-medium text-cf-text-primary"
+                >
+                  Parcelas
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    id="credit-card-purchase-installment-count"
+                    type="number"
+                    min={MIN_INSTALLMENT_COUNT}
+                    max={MAX_INSTALLMENT_COUNT}
+                    value={installmentCount}
+                    onChange={(event) => setInstallmentCount(event.target.value)}
+                    className="w-20 rounded border border-cf-border-input bg-cf-surface px-3 py-2 text-sm text-cf-text-primary"
+                    disabled={isSaving}
+                  />
+                  <span className="text-xs text-cf-text-secondary">
+                    As parcelas futuras entram nos próximos fechamentos mensais.
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           {errorMessage ? (
             <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
               {errorMessage}
@@ -189,7 +252,11 @@ const CreditCardPurchaseModal = ({
               className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2 disabled:opacity-60"
               disabled={isSaving}
             >
-              {isSaving ? "Salvando..." : "Adicionar compra"}
+              {isSaving
+                ? "Salvando..."
+                : isInstallment
+                  ? `Adicionar em ${parseInt(installmentCount, 10) || MIN_INSTALLMENT_COUNT}x`
+                  : "Adicionar compra"}
             </button>
           </div>
         </form>
