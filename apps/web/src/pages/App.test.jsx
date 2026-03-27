@@ -1921,7 +1921,7 @@ describe("App", () => {
 
     await user.click(screen.getByRole("button", { name: "Histórico de importações" }));
 
-    expect(await screen.findByText("Nenhuma importação para mostrar.")).toBeInTheDocument();
+    expect(await screen.findByText("Nenhuma importação encontrada por enquanto.")).toBeInTheDocument();
   });
 
   it("exibe erro ao carregar historico de imports", async () => {
@@ -1996,7 +1996,7 @@ describe("App", () => {
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Histórico de importações" }));
-    expect(await screen.findByText("Mostrando 1 a 20")).toBeInTheDocument();
+    expect(await screen.findByText("Mostrando 1 a 20 desta página")).toBeInTheDocument();
     const historyDialog = screen.getByRole("dialog", { name: "Histórico de importações" });
 
     await user.click(within(historyDialog).getByRole("button", { name: "Próxima" }));
@@ -2007,7 +2007,7 @@ describe("App", () => {
         offset: 20,
       });
     });
-    expect(await screen.findByText("Mostrando 21 a 21")).toBeInTheDocument();
+    expect(await screen.findByText("Mostrando 21 a 21 desta página")).toBeInTheDocument();
   });
 
   it("abre menu de acoes no mobile e fecha ao clicar fora sem disparar logout", async () => {
