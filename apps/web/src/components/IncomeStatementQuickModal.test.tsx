@@ -10,6 +10,7 @@ import {
 vi.mock("../services/incomeSources.service", () => ({
   incomeSourcesService: {
     list: vi.fn(),
+    listStatements: vi.fn(),
     createStatement: vi.fn(),
     linkTransaction: vi.fn(),
     postStatement: vi.fn(),
@@ -68,7 +69,9 @@ describe("IncomeStatementQuickModal", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(incomeSourcesService.list).mockResolvedValue([buildSource()]);
+    vi.mocked(incomeSourcesService.listStatements).mockResolvedValue([]);
     vi.mocked(incomeSourcesService.createStatement).mockResolvedValue({
+      outcome: "created",
       statement: mockStatement,
       deductions: [],
     });
@@ -128,9 +131,9 @@ describe("IncomeStatementQuickModal", () => {
         prefill={{
           referenceMonth: "2026-02",
           netAmount: 1412,
-          deductions: [{ code: "268", label: "CONSIGNACAO - CARTAO", amount: 247.93 }],
-        }}
-        onCreated={onCreated}
+        deductions: [{ code: "268", label: "CONSIGNACAO - CARTAO", amount: 247.93 }],
+      }}
+      onCreated={onCreated}
       />,
     );
     await waitFor(() => {
@@ -156,6 +159,92 @@ describe("IncomeStatementQuickModal", () => {
     });
     expect(incomeSourcesService.linkTransaction).not.toHaveBeenCalled();
     expect(incomeSourcesService.postStatement).not.toHaveBeenCalled();
+  });
+
+  it("exige decisão explícita quando a competência já existe", async () => {
+    vi.mocked(incomeSourcesService.listStatements).mockResolvedValue([
+      { ...mockStatement, referenceMonth: "2026-02", netAmount: 1412, paymentDate: "2026-02-25" },
+    ]);
+
+    render(
+      <IncomeStatementQuickModal
+        isOpen
+        onClose={vi.fn()}
+        prefill={{ referenceMonth: "2026-02", netAmount: 1412 }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/competência já existente/i)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Registrar somente no historico" }));
+
+    expect(
+      screen.getByText(/Escolha se deseja ignorar ou substituir a competência existente/i),
+    ).toBeInTheDocument();
+    expect(incomeSourcesService.createStatement).not.toHaveBeenCalled();
+  });
+
+  it("permite ignorar competência existente sem alterar dados", async () => {
+    const onIgnored = vi.fn();
+    vi.mocked(incomeSourcesService.listStatements).mockResolvedValue([
+      { ...mockStatement, referenceMonth: "2026-02", netAmount: 1412, paymentDate: "2026-02-25" },
+    ]);
+
+    render(
+      <IncomeStatementQuickModal
+        isOpen
+        onClose={vi.fn()}
+        prefill={{ referenceMonth: "2026-02", netAmount: 1412 }}
+        onIgnored={onIgnored}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/competência já existente/i)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Ignorar" }));
+    await userEvent.click(screen.getByRole("button", { name: "Ignorar competência" }));
+
+    expect(onIgnored).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceMonth: "2026-02" }),
+    );
+    expect(incomeSourcesService.createStatement).not.toHaveBeenCalled();
+  });
+
+  it("envia replace explícito ao substituir competência existente", async () => {
+    vi.mocked(incomeSourcesService.listStatements).mockResolvedValue([
+      { ...mockStatement, referenceMonth: "2026-02", netAmount: 1412, paymentDate: "2026-02-25" },
+    ]);
+    vi.mocked(incomeSourcesService.createStatement).mockResolvedValue({
+      outcome: "replaced",
+      statement: mockStatement,
+      deductions: [],
+    });
+
+    render(
+      <IncomeStatementQuickModal
+        isOpen
+        onClose={vi.fn()}
+        prefill={{ referenceMonth: "2026-02", netAmount: 1412 }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/competência já existente/i)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Substituir" }));
+    await userEvent.click(screen.getByRole("button", { name: "Registrar somente no historico" }));
+
+    await waitFor(() => {
+      expect(incomeSourcesService.createStatement).toHaveBeenCalledWith(1, expect.objectContaining({
+        referenceMonth: "2026-02",
+        existingCompetenceAction: "replace",
+      }));
+    });
   });
 
   it("shows error message when createStatement rejects", async () => {
@@ -226,6 +315,50 @@ describe("IncomeStatementQuickModal", () => {
 
     expect(incomeSourcesService.postStatement).toHaveBeenCalledWith(10);
     expect(onCreated).toHaveBeenCalledWith(mockPostResult.statement);
+  });
+
+  it("não relança a entrada ao substituir competência já lançada", async () => {
+    vi.mocked(incomeSourcesService.listStatements).mockResolvedValue([
+      {
+        ...mockStatement,
+        referenceMonth: "2026-02",
+        status: "posted",
+        postedTransactionId: 99,
+        paymentDate: "2026-02-25",
+      },
+    ]);
+    vi.mocked(incomeSourcesService.createStatement).mockResolvedValue({
+      outcome: "replaced",
+      statement: {
+        ...mockStatement,
+        status: "posted",
+        postedTransactionId: 99,
+        paymentDate: "2026-02-25",
+      },
+      deductions: [],
+    });
+
+    render(
+      <IncomeStatementQuickModal
+        isOpen
+        onClose={vi.fn()}
+        defaultComposeIncome
+        prefill={{ referenceMonth: "2026-02", netAmount: 1412, paymentDate: "2026-02-25" }}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/competência já existente/i)).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Substituir" }));
+    await userEvent.click(screen.getByRole("button", { name: "Registrar e lancar entrada" }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/competência existente foi substituída/i)).toBeInTheDocument();
+    });
+
+    expect(incomeSourcesService.postStatement).not.toHaveBeenCalled();
   });
 
   it("shows amber warning when linkage fails after successful statement creation", async () => {

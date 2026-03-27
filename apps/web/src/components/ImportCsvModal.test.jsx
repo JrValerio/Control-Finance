@@ -30,6 +30,7 @@ vi.mock("../services/categories.service", () => ({
 vi.mock("../services/incomeSources.service", () => ({
   incomeSourcesService: {
     list: vi.fn(),
+    listStatements: vi.fn(),
     createStatement: vi.fn(),
     linkTransaction: vi.fn(),
     postStatement: vi.fn(),
@@ -98,6 +99,7 @@ describe("ImportCsvModal", () => {
     categoriesService.listCategories.mockResolvedValue([]);
     transactionsService.listImportCategoryRules.mockResolvedValue([]);
     incomeSourcesService.list.mockResolvedValue([]);
+    incomeSourcesService.listStatements.mockResolvedValue([]);
     incomeSourcesService.postStatement.mockResolvedValue({
       statement: {
         id: 11,

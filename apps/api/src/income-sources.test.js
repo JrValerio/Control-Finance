@@ -499,6 +499,128 @@ describe("income-sources", () => {
     expectErrorResponseWithRequestId(res, 409, "Ja existe um extrato para 2026-01.");
   });
 
+  it("POST /income-sources/:id/statements permite ignorar competência já existente", async () => {
+    const token = await registerAndLogin("inss-stmt-ignore@test.dev");
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Pensao" });
+    const sourceId = srcRes.body.id;
+
+    const first = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ referenceMonth: "2026-01", netAmount: 2500, paymentDate: "2026-01-25" });
+
+    const res = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-01",
+        netAmount: 2803.52,
+        paymentDate: "2026-01-31",
+        existingCompetenceAction: "ignore",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.outcome).toBe("ignored");
+    expect(res.body.statement).toMatchObject({
+      id: first.body.statement.id,
+      referenceMonth: "2026-01",
+      netAmount: 2500,
+      paymentDate: "2026-01-25",
+    });
+
+    const listRes = await request(app)
+      .get(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.statements).toHaveLength(1);
+    expect(listRes.body.statements[0].netAmount).toBe(2500);
+  });
+
+  it("POST /income-sources/:id/statements substitui competência existente sem duplicar e atualiza transação sintética", async () => {
+    const token = await registerAndLogin("inss-stmt-replace@test.dev");
+
+    const srcRes = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Pensao INSS" });
+    const sourceId = srcRes.body.id;
+
+    const first = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-02",
+        netAmount: 2500,
+        paymentDate: "2026-03-05",
+        grossAmount: 4000,
+        deductions: [
+          { label: "216 CONSIGNACAO EMPRESTIMO BANCARIO", amount: 100, isVariable: false },
+        ],
+      });
+
+    const statementId = first.body.statement.id;
+
+    const postRes = await request(app)
+      .post(`/income-sources/statements/${statementId}/post`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(postRes.status).toBe(200);
+
+    const res = await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-02",
+        netAmount: 2803.52,
+        paymentDate: "2026-03-07",
+        grossAmount: 4958.67,
+        deductions: [
+          { label: "216 CONSIGNACAO EMPRESTIMO BANCARIO", amount: 156, isVariable: false },
+          { label: "268 CONSIGNACAO - CARTAO", amount: 247.93, isVariable: false },
+        ],
+        existingCompetenceAction: "replace",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.outcome).toBe("replaced");
+    expect(res.body.statement).toMatchObject({
+      id: statementId,
+      referenceMonth: "2026-02",
+      netAmount: 2803.52,
+      grossAmount: 4958.67,
+      totalDeductions: 403.93,
+      paymentDate: "2026-03-07",
+      status: "posted",
+    });
+    expect(res.body.deductions).toHaveLength(2);
+
+    const listRes = await request(app)
+      .get(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.statements).toHaveLength(1);
+    expect(listRes.body.statements[0].id).toBe(statementId);
+
+    const txRes = await dbQuery(
+      `SELECT value, date, description
+         FROM transactions
+        WHERE id = $1`,
+      [postRes.body.transaction.id],
+    );
+
+    expect(txRes.rows[0]).toMatchObject({
+      value: 2803.52,
+      description: "Pensao INSS – 2026-02",
+    });
+    expect(new Date(txRes.rows[0].date).toISOString().slice(0, 10)).toBe("2026-03-07");
+  });
+
   it("POST /income-sources/:id/statements persiste grossAmount e details", async () => {
     const token = await registerAndLogin("inss-stmt-gross@test.dev");
 

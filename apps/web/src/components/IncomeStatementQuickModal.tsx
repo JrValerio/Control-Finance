@@ -3,6 +3,7 @@ import {
   incomeSourcesService,
   type IncomeSourceWithDeductions,
   type IncomeStatement,
+  type IncomeStatementWithDeductions,
   type PostStatementResult,
 } from "../services/incomeSources.service";
 import { getApiErrorMessage } from "../utils/apiError";
@@ -33,6 +34,7 @@ interface Props {
   transactionId?: number | null;
   defaultComposeIncome?: boolean;
   onCreated?: (statement: IncomeStatement) => void;
+  onIgnored?: (statement: IncomeStatement) => void;
 }
 
 type FinalizationMode = "none" | "link" | "post";
@@ -45,6 +47,7 @@ export default function IncomeStatementQuickModal({
   transactionId,
   defaultComposeIncome = false,
   onCreated,
+  onIgnored,
 }: Props) {
   const [sources, setSources] = useState<IncomeSourceWithDeductions[]>([]);
   const [isLoadingSources, setIsLoadingSources] = useState(false);
@@ -60,6 +63,10 @@ export default function IncomeStatementQuickModal({
   const [finalizationMode, setFinalizationMode] = useState<FinalizationMode>("none");
   const [finalizationStatus, setFinalizationStatus] = useState<FinalizationStatus>("idle");
   const [finalizationError, setFinalizationError] = useState("");
+  const [statementOutcome, setStatementOutcome] = useState<IncomeStatementWithDeductions["outcome"]>();
+  const [existingStatement, setExistingStatement] = useState<IncomeStatement | null>(null);
+  const [isCheckingExistingStatement, setIsCheckingExistingStatement] = useState(false);
+  const [existingCompetenceAction, setExistingCompetenceAction] = useState<"" | "ignore" | "replace">("");
 
   // Reset + fetch sources on open
   useEffect(() => {
@@ -75,6 +82,10 @@ export default function IncomeStatementQuickModal({
       setFinalizationMode("none");
       setFinalizationStatus("idle");
       setFinalizationError("");
+      setStatementOutcome(undefined);
+      setExistingStatement(null);
+      setIsCheckingExistingStatement(false);
+      setExistingCompetenceAction("");
       setSources([]);
       return;
     }
@@ -87,6 +98,10 @@ export default function IncomeStatementQuickModal({
     setFinalizationMode("none");
     setFinalizationStatus("idle");
     setFinalizationError("");
+    setStatementOutcome(undefined);
+    setExistingStatement(null);
+    setIsCheckingExistingStatement(false);
+    setExistingCompetenceAction("");
 
     setIsLoadingSources(true);
     incomeSourcesService
@@ -100,6 +115,51 @@ export default function IncomeStatementQuickModal({
       .catch(() => {})
       .finally(() => setIsLoadingSources(false));
   }, [defaultComposeIncome, isOpen, prefill?.netAmount, prefill?.paymentDate, prefill?.referenceMonth, transactionId]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
+    const trimmedReferenceMonth = referenceMonth.trim();
+    if (!sourceId || !trimmedReferenceMonth) {
+      setExistingStatement(null);
+      setIsCheckingExistingStatement(false);
+      setExistingCompetenceAction("");
+      return undefined;
+    }
+
+    let cancelled = false;
+    setIsCheckingExistingStatement(true);
+
+    incomeSourcesService
+      .listStatements(Number(sourceId))
+      .then((statements) => {
+        if (cancelled) {
+          return;
+        }
+
+        const match =
+          statements.find((statement) => statement.referenceMonth === trimmedReferenceMonth) ?? null;
+
+        setExistingStatement(match);
+        setExistingCompetenceAction("");
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setExistingStatement(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsCheckingExistingStatement(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, referenceMonth, sourceId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,14 +179,27 @@ export default function IncomeStatementQuickModal({
       return;
     }
 
+    if (existingStatement && !existingCompetenceAction) {
+      setErrorMessage("Escolha se deseja ignorar ou substituir a competência existente.");
+      return;
+    }
+
+    if (existingStatement && existingCompetenceAction === "ignore") {
+      setErrorMessage("");
+      onIgnored?.(existingStatement);
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage("");
     try {
-      const { statement } = await incomeSourcesService.createStatement(parsedSourceId, {
+      const result = await incomeSourcesService.createStatement(parsedSourceId, {
         referenceMonth: referenceMonth.trim(),
         netAmount: parsedNet,
         paymentDate: paymentDate.trim() || null,
         grossAmount: prefill?.grossAmount ?? null,
+        existingCompetenceAction:
+          existingStatement && existingCompetenceAction ? existingCompetenceAction : undefined,
         deductions: Array.isArray(prefill?.deductions)
           ? prefill.deductions.map((deduction) => ({
               label: `${deduction.code ? `${deduction.code} ` : ""}${deduction.label}`.trim(),
@@ -137,38 +210,51 @@ export default function IncomeStatementQuickModal({
         details: prefill?.details ?? null,
         sourceImportSessionId: prefill?.sourceImportSessionId ?? null,
       });
+      const { statement } = result;
+      setStatementOutcome(result.outcome);
 
       let finalStatement = statement;
       let shouldNotifyCreated = true;
+      const statementAlreadyPosted = finalStatement.status === "posted";
 
       if (composeIncome) {
         if (transactionId) {
-          setFinalizationMode("link");
-          setFinalizationStatus("linking");
-          try {
-            finalStatement = await incomeSourcesService.linkTransaction(statement.id, transactionId);
+          if (statementAlreadyPosted && finalStatement.postedTransactionId === transactionId) {
+            setFinalizationMode("link");
             setFinalizationStatus("linked");
-          } catch (linkErr) {
-            setFinalizationStatus("failed");
-            setFinalizationError(
-              getApiErrorMessage(linkErr, "Nao foi possivel vincular a transacao importada."),
-            );
-            shouldNotifyCreated = false;
+          } else {
+            setFinalizationMode("link");
+            setFinalizationStatus("linking");
+            try {
+              finalStatement = await incomeSourcesService.linkTransaction(statement.id, transactionId);
+              setFinalizationStatus("linked");
+            } catch (linkErr) {
+              setFinalizationStatus("failed");
+              setFinalizationError(
+                getApiErrorMessage(linkErr, "Nao foi possivel vincular a transacao importada."),
+              );
+              shouldNotifyCreated = false;
+            }
           }
         } else {
-          setFinalizationMode("post");
-          setFinalizationStatus("posting");
-          try {
-            const postResult = await incomeSourcesService.postStatement(statement.id);
-            finalStatement = postResult.statement;
-            setPostedTransaction(postResult.transaction);
+          if (statementAlreadyPosted) {
+            setFinalizationMode("post");
             setFinalizationStatus("posted");
-          } catch (postErr) {
-            setFinalizationStatus("failed");
-            setFinalizationError(
-              getApiErrorMessage(postErr, "Nao foi possivel lancar a entrada automaticamente."),
-            );
-            shouldNotifyCreated = false;
+          } else {
+            setFinalizationMode("post");
+            setFinalizationStatus("posting");
+            try {
+              const postResult = await incomeSourcesService.postStatement(statement.id);
+              finalStatement = postResult.statement;
+              setPostedTransaction(postResult.transaction);
+              setFinalizationStatus("posted");
+            } catch (postErr) {
+              setFinalizationStatus("failed");
+              setFinalizationError(
+                getApiErrorMessage(postErr, "Nao foi possivel lancar a entrada automaticamente."),
+              );
+              shouldNotifyCreated = false;
+            }
           }
         }
       }
@@ -227,6 +313,12 @@ export default function IncomeStatementQuickModal({
                   ? "Renda registrada e entrada lancada com sucesso."
                   : "Lancamento registrado com sucesso."}
               </p>
+
+              {statementOutcome === "replaced" ? (
+                <p className="mt-1 text-xs font-medium text-green-700 dark:text-green-400">
+                  A competência existente foi substituída com segurança.
+                </p>
+              ) : null}
 
               {finalizationStatus === "linking" && (
                 <p className="mt-1 text-xs text-green-600 dark:text-green-400">
@@ -339,6 +431,55 @@ export default function IncomeStatementQuickModal({
                 />
               </div>
 
+              {isCheckingExistingStatement ? (
+                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                  Verificando se esta competência já existe nesta fonte...
+                </div>
+              ) : null}
+
+              {existingStatement ? (
+                <div className="rounded border border-amber-300 bg-amber-50 px-3 py-3 dark:border-amber-800 dark:bg-amber-950/40">
+                  <p className="text-xs font-semibold uppercase text-amber-800 dark:text-amber-300">
+                    Competência já existente
+                  </p>
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                    Já existe um extrato para {existingStatement.referenceMonth} nesta fonte.
+                  </p>
+                  <ul className="mt-2 space-y-0.5 text-xs text-amber-700 dark:text-amber-300">
+                    <li>Status: {existingStatement.status === "posted" ? "Lançado" : "Rascunho"}</li>
+                    <li>Valor líquido: R$ {existingStatement.netAmount.toFixed(2).replace(".", ",")}</li>
+                    {existingStatement.paymentDate ? <li>Pagamento: {existingStatement.paymentDate}</li> : null}
+                  </ul>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setExistingCompetenceAction("ignore")}
+                      className={`rounded border px-3 py-1 text-xs font-semibold ${
+                        existingCompetenceAction === "ignore"
+                          ? "border-amber-600 bg-amber-600 text-white"
+                          : "border-amber-300 bg-white text-amber-700 hover:bg-amber-100 dark:border-amber-700 dark:bg-transparent dark:text-amber-300 dark:hover:bg-amber-900/30"
+                      }`}
+                    >
+                      Ignorar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExistingCompetenceAction("replace")}
+                      className={`rounded border px-3 py-1 text-xs font-semibold ${
+                        existingCompetenceAction === "replace"
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-blue-300 bg-white text-blue-700 hover:bg-blue-100 dark:border-blue-700 dark:bg-transparent dark:text-blue-300 dark:hover:bg-blue-900/30"
+                      }`}
+                    >
+                      Substituir
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300">
+                    Ignorar não altera nada. Substituir reescreve esta competência sem duplicar consignações.
+                  </p>
+                </div>
+              ) : null}
+
               <div>
                 <label
                   htmlFor="income-quick-net"
@@ -449,11 +590,13 @@ export default function IncomeStatementQuickModal({
               <div className="flex gap-2 pt-1">
                 <button
                   type="submit"
-                  disabled={isSubmitting || sources.length === 0}
+                  disabled={isSubmitting || sources.length === 0 || isCheckingExistingStatement}
                   className="rounded border border-brand-1 bg-brand-1 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSubmitting
                     ? "Registrando..."
+                    : existingStatement && existingCompetenceAction === "ignore"
+                      ? "Ignorar competência"
                     : composeIncome
                       ? transactionId
                         ? "Registrar e vincular entrada"

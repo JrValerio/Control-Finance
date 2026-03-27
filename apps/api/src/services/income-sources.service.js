@@ -173,6 +173,20 @@ const normalizeOptionalImportSessionId = (value) => {
   return trimmed || null;
 };
 
+const normalizeExistingCompetenceAction = (value) => {
+  if (value == null || value === "") return "error";
+  if (typeof value !== "string") {
+    throw createError(400, "Acao de competencia existente invalida.");
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!["error", "ignore", "replace"].includes(normalized)) {
+    throw createError(400, "Acao de competencia existente invalida.");
+  }
+
+  return normalized;
+};
+
 const normalizeStatementSnapshotDeductions = (value) => {
   if (value == null) {
     return [];
@@ -691,6 +705,31 @@ const requireStatementOwnership = async (uid, statementId) => {
   return rows[0];
 };
 
+const loadStatementSnapshotDeductions = async (client, statementId) => {
+  const { rows } = await client.query(
+    `SELECT * FROM income_statement_deductions WHERE statement_id = $1 ORDER BY id ASC`,
+    [statementId],
+  );
+  return rows.map(mapStatementDeductionRow);
+};
+
+const insertStatementSnapshotDeductions = async (client, statementId, snapshotTemplateRows) => {
+  const snapshotDeductions = [];
+
+  for (const deduction of snapshotTemplateRows) {
+    const { rows } = await client.query(
+      `INSERT INTO income_statement_deductions
+         (statement_id, label, amount, is_variable)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [statementId, deduction.label, deduction.amount, deduction.isVariable],
+    );
+    snapshotDeductions.push(mapStatementDeductionRow(rows[0]));
+  }
+
+  return snapshotDeductions;
+};
+
 export const createStatementDraftForSource = async (userId, sourceId, payload) => {
   const uid = normalizeUserId(userId);
   const sid = normalizeSourceId(sourceId);
@@ -705,12 +744,27 @@ export const createStatementDraftForSource = async (userId, sourceId, payload) =
   const sourceImportSessionId = normalizeOptionalImportSessionId(
     payload.sourceImportSessionId ?? null,
   );
+  const existingCompetenceAction = normalizeExistingCompetenceAction(
+    payload.existingCompetenceAction ?? null,
+  );
   const hasExplicitSnapshotDeductions = Object.prototype.hasOwnProperty.call(payload, "deductions");
   const explicitSnapshotDeductions = hasExplicitSnapshotDeductions
     ? normalizeStatementSnapshotDeductions(payload.deductions)
     : null;
 
   return withDbTransaction(async (client) => {
+    const { rows: sourceRows } = await client.query(
+      `SELECT id, name, category_id
+         FROM income_sources
+        WHERE id = $1 AND user_id = $2
+        LIMIT 1`,
+      [sid, uid],
+    );
+    if (!sourceRows[0]) {
+      throw createError(404, "Fonte de renda nao encontrada.");
+    }
+    const sourceRow = sourceRows[0];
+
     let snapshotTemplateRows = [];
 
     if (explicitSnapshotDeductions !== null) {
@@ -735,6 +789,94 @@ export const createStatementDraftForSource = async (userId, sourceId, payload) =
       0,
     );
 
+    const { rows: existingRows } = await client.query(
+      `SELECT st.*
+         FROM income_statements st
+        WHERE st.income_source_id = $1 AND st.reference_month = $2
+        LIMIT 1`,
+      [sid, referenceMonth],
+    );
+    const existingStatement = existingRows[0] ?? null;
+
+    if (existingStatement) {
+      if (existingCompetenceAction === "ignore") {
+        const deductions = await loadStatementSnapshotDeductions(client, existingStatement.id);
+        return {
+          outcome: "ignored",
+          statement: mapStatementRow(existingStatement),
+          deductions,
+        };
+      }
+
+      if (existingCompetenceAction !== "replace") {
+        throw createError(409, `Ja existe um extrato para ${referenceMonth}.`);
+      }
+
+      const { rows: updatedRows } = await client.query(
+        `UPDATE income_statements
+            SET net_amount = $1,
+                total_deductions = $2,
+                payment_date = $3,
+                gross_amount = $4,
+                details_json = $5,
+                source_import_session_id = $6,
+                updated_at = NOW()
+          WHERE id = $7
+          RETURNING *`,
+        [
+          netAmount,
+          toMoney(totalDeductions),
+          paymentDate,
+          grossAmount,
+          details != null ? JSON.stringify(details) : null,
+          sourceImportSessionId,
+          existingStatement.id,
+        ],
+      );
+      const stmtRow = updatedRows[0];
+
+      await client.query(`DELETE FROM income_statement_deductions WHERE statement_id = $1`, [
+        stmtRow.id,
+      ]);
+
+      const snapshotDeductions = await insertStatementSnapshotDeductions(
+        client,
+        stmtRow.id,
+        snapshotTemplateRows,
+      );
+
+      if (stmtRow.posted_transaction_id != null) {
+        const syntheticDescription = `${sourceRow.name} – ${referenceMonth}`;
+        await client.query(
+          `UPDATE transactions
+              SET value = $1,
+                  date = $2,
+                  description = $3,
+                  category_id = $4
+            WHERE id = $5
+              AND user_id = $6
+              AND type = $7
+              AND description = $8`,
+          [
+            netAmount,
+            paymentDate ?? toISODate(),
+            syntheticDescription,
+            sourceRow.category_id ?? null,
+            Number(stmtRow.posted_transaction_id),
+            uid,
+            TRANSACTION_TYPE_ENTRY,
+            syntheticDescription,
+          ],
+        );
+      }
+
+      return {
+        outcome: "replaced",
+        statement: mapStatementRow(stmtRow),
+        deductions: snapshotDeductions,
+      };
+    }
+
     // Create statement (409 if unique constraint fires)
     let stmtRow;
     try {
@@ -757,20 +899,14 @@ export const createStatementDraftForSource = async (userId, sourceId, payload) =
       throw err;
     }
 
-    // Persist snapshot deductions for this specific statement/competence.
-    const snapshotDeductions = [];
-    for (const deduction of snapshotTemplateRows) {
-      const { rows } = await client.query(
-        `INSERT INTO income_statement_deductions
-           (statement_id, label, amount, is_variable)
-         VALUES ($1, $2, $3, $4)
-         RETURNING *`,
-        [stmtRow.id, deduction.label, deduction.amount, deduction.isVariable],
-      );
-      snapshotDeductions.push(mapStatementDeductionRow(rows[0]));
-    }
+    const snapshotDeductions = await insertStatementSnapshotDeductions(
+      client,
+      stmtRow.id,
+      snapshotTemplateRows,
+    );
 
     return {
+      outcome: "created",
       statement: mapStatementRow(stmtRow),
       deductions: snapshotDeductions,
     };

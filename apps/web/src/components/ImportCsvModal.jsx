@@ -1591,6 +1591,12 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
           setIsIncomeModalOpen(false);
           setIncomeStatementCreated(true);
         }}
+        onIgnored={(statement) => {
+          setIsIncomeModalOpen(false);
+          setSuccessMessage(
+            `Competência ${statement.referenceMonth} já existia e foi ignorada. Nenhum dado foi alterado.`,
+          );
+        }}
       />
 
       <ConfirmDialog
