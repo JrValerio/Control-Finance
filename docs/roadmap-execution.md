@@ -253,12 +253,41 @@ Reusa `transactions` sem nova infra.
 
 ---
 
-## 9. Importação Inteligente de Documentos fora da trilha fiscal (roadmap — não abre agora)
+## 9. Importação Inteligente de Documentos fora da trilha fiscal (entregue no MVP)
 
-> Observação: a trilha fiscal IRPF já abriu seu subdomínio próprio em `/tax`.
-> Esta nota vale para futuras frentes documentais fora da Central do Leão.
+> Observação: a trilha fiscal IRPF abriu seu subdomínio próprio em `/tax`.
+> Em paralelo, a frente de importação inteligente evoluiu o app financeiro principal sem misturar os dois domínios.
 
-Se essa frente for aberta no futuro, deve nascer como **subdomínio próprio**, não como extensão de `transactions`.
+### Estado atual
+
+**Importação inteligente de renda e extratos** já foi entregue em `main` no recorte MVP.
+
+PRs mergeados:
+
+1. `#298` dedupe entre comprovante de renda e extrato bancário
+2. `#299` documento importado pode compor renda estruturada
+3. `#300` sugestão confirmável para perfil e planejamento
+4. `#301` preview com busca e filtros para extratos grandes
+5. `#302` categorização em lote + regras reaproveitáveis
+6. `#303` guard rails operacionais e histórico auditável de imports
+7. `#304` limite bancário / cheque especial
+8. `#305` cartão + ciclo inicial de fatura
+
+Documentos de referência:
+
+- `docs/roadmaps/importacao-inteligente-renda-extratos.md`
+- `docs/audits/importacao-inteligente-mvp-auditoria-final.md`
+
+Leitura correta do estado:
+
+- fundação do épico: entregue
+- guard rails do MVP: entregues
+- limite bancário: entregue
+- cartão e fatura: entregues no recorte inicial
+- gaps atuais: refino, reconciliação e consistência operacional de undo
+
+Essa frente não deve voltar para o backlog como “fundação pendente”.
+Os próximos passos devem nascer como **follow-ups pós-MVP**, não como repetição da trilha já mergeada.
 
 ### Domínios prováveis
 
