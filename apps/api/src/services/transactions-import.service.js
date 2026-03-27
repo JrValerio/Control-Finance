@@ -20,8 +20,10 @@ import {
   extractWaterBillSuggestion,
 } from "../domain/imports/statement-import.js";
 import { detectDocumentType } from "../domain/imports/document-classifier.js";
+import { applyTransactionImportCategoryRules } from "../domain/imports/transaction-import-rules.js";
 import { applySmartClassification } from "../domain/imports/transaction-classifier.js";
 import { normalizeCategoryNameKey } from "./categories-normalization.js";
+import { loadActiveTransactionImportCategoryRulesByUser } from "./transactions-import-rules.service.js";
 
 const CATEGORY_ENTRY = TRANSACTION_TYPE_ENTRY;
 const CATEGORY_EXIT = TRANSACTION_TYPE_EXIT;
@@ -795,11 +797,13 @@ const assertSessionReadyForCommit = (session, userId) => {
 
 export const dryRunTransactionsImportForUser = async (userId, importFile) => {
   const { rows: parsedRows, documentType, suggestion } = await parseImportFileRows(importFile);
-  const [categoryMap, categories] = await Promise.all([
+  const [categoryMap, categories, importRules] = await Promise.all([
     loadCategoryMapForUser(userId),
     loadCategoriesForUser(userId),
+    loadActiveTransactionImportCategoryRulesByUser(userId),
   ]);
-  const classifiedRows = applySmartClassification(parsedRows, categories);
+  const rowsWithRuleSuggestions = applyTransactionImportCategoryRules(parsedRows, importRules);
+  const classifiedRows = applySmartClassification(rowsWithRuleSuggestions, categories);
   const validatedRows = classifiedRows.map((row) => {
     const normalizedRow = normalizeCsvRow(row.raw, categoryMap);
     return {

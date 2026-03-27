@@ -104,6 +104,9 @@ vi.mock("../services/transactions.service", () => ({
     getImportHistory: vi.fn(),
     dryRunImportCsv: vi.fn(),
     commitImportCsv: vi.fn(),
+    listImportCategoryRules: vi.fn(),
+    createImportCategoryRule: vi.fn(),
+    deleteImportCategoryRule: vi.fn(),
     deleteImportSession: vi.fn(),
     bulkDeleteTransactions: vi.fn(),
     create: vi.fn(),
@@ -291,6 +294,9 @@ describe("App", () => {
         balance: 100,
       },
     });
+    transactionsService.listImportCategoryRules.mockResolvedValue([]);
+    transactionsService.createImportCategoryRule.mockResolvedValue({});
+    transactionsService.deleteImportCategoryRule.mockResolvedValue({ success: true });
     transactionsService.update.mockResolvedValue({});
     transactionsService.restore.mockResolvedValue({});
     transactionsService.bulkDeleteTransactions.mockResolvedValue({ deletedCount: 0, success: true });

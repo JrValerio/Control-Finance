@@ -32,6 +32,11 @@ import {
   getTransactionsImportMetricsByUser,
   listTransactionsImportSessionsByUser,
 } from "../services/transactions-import.service.js";
+import {
+  deleteTransactionImportCategoryRuleForUser,
+  listTransactionImportCategoryRulesByUser,
+  upsertTransactionImportCategoryRuleForUser,
+} from "../services/transactions-import-rules.service.js";
 
 const router = Router();
 const IMPORT_MAX_FILE_SIZE_BYTES = Number(
@@ -433,6 +438,37 @@ router.post("/import/commit", importRateLimiter, requireFeature("csv_import"), a
       message: error?.message || "Unexpected error.",
     });
 
+    next(error);
+  }
+});
+
+router.get("/import/rules", requireFeature("csv_import"), async (req, res, next) => {
+  try {
+    const items = await listTransactionImportCategoryRulesByUser(req.user.id);
+    res.status(200).json({ items });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/import/rules", transactionsWriteRateLimiter, requireFeature("csv_import"), async (req, res, next) => {
+  try {
+    const rule = await upsertTransactionImportCategoryRuleForUser(req.user.id, {
+      matchText: req.body?.matchText,
+      categoryId: req.body?.categoryId,
+      transactionType: req.body?.transactionType,
+    });
+    res.status(201).json(rule);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete("/import/rules/:ruleId", transactionsWriteRateLimiter, requireFeature("csv_import"), async (req, res, next) => {
+  try {
+    const result = await deleteTransactionImportCategoryRuleForUser(req.user.id, req.params.ruleId);
+    res.status(200).json(result);
+  } catch (error) {
     next(error);
   }
 });

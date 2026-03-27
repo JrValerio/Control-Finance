@@ -239,6 +239,16 @@ export interface ImportHistoryOptions {
   offset?: number;
 }
 
+export interface ImportCategoryRule {
+  id: number;
+  matchText: string;
+  transactionType: TransactionType | null;
+  categoryId: number;
+  categoryName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface TransactionsApiResponse {
   data?: unknown;
   meta?: {
@@ -813,6 +823,67 @@ export const transactionsService = {
         expense: Number(responseBody.summary?.expense) || 0,
       },
       rows,
+    };
+  },
+  listImportCategoryRules: async (): Promise<ImportCategoryRule[]> => {
+    const { data } = await api.get("/transactions/import/rules");
+    const items = Array.isArray((data as { items?: unknown[] })?.items)
+      ? ((data as { items?: unknown[] }).items as unknown[])
+      : [];
+
+    return items.map((item) => {
+      const transactionType = String((item as { transactionType?: unknown })?.transactionType || "")
+        .trim();
+
+      return {
+        id: Number((item as { id?: unknown })?.id) || 0,
+        matchText: String((item as { matchText?: unknown })?.matchText || ""),
+        transactionType:
+          transactionType === "Entrada" || transactionType === "Saida"
+            ? (transactionType as TransactionType)
+            : null,
+        categoryId: Number((item as { categoryId?: unknown })?.categoryId) || 0,
+        categoryName: String((item as { categoryName?: unknown })?.categoryName || ""),
+        createdAt: String((item as { createdAt?: unknown })?.createdAt || ""),
+        updatedAt: String((item as { updatedAt?: unknown })?.updatedAt || ""),
+      };
+    });
+  },
+  createImportCategoryRule: async (payload: {
+    matchText: string;
+    categoryId: number;
+    transactionType?: TransactionType;
+  }): Promise<ImportCategoryRule> => {
+    const { data } = await api.post("/transactions/import/rules", payload);
+    const response = data as {
+      id?: unknown;
+      matchText?: unknown;
+      transactionType?: unknown;
+      categoryId?: unknown;
+      categoryName?: unknown;
+      createdAt?: unknown;
+      updatedAt?: unknown;
+    };
+    const transactionType = String(response.transactionType || "").trim();
+
+    return {
+      id: Number(response.id) || 0,
+      matchText: String(response.matchText || ""),
+      transactionType:
+        transactionType === "Entrada" || transactionType === "Saida"
+          ? (transactionType as TransactionType)
+          : null,
+      categoryId: Number(response.categoryId) || 0,
+      categoryName: String(response.categoryName || ""),
+      createdAt: String(response.createdAt || ""),
+      updatedAt: String(response.updatedAt || ""),
+    };
+  },
+  deleteImportCategoryRule: async (ruleId: number): Promise<{ id: number; success: boolean }> => {
+    const { data } = await api.delete(`/transactions/import/rules/${ruleId}`);
+    return {
+      id: Number((data as { id?: unknown })?.id) || 0,
+      success: Boolean((data as { success?: unknown })?.success),
     };
   },
   commitImportCsv: async (
