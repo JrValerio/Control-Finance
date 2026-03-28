@@ -143,6 +143,7 @@ describe("ImportCsvModal", () => {
 
     expect(screen.getByTestId("import-csv-modal-shell")).toHaveClass("flex", "flex-col", "overflow-hidden");
     expect(screen.getByTestId("import-csv-modal-body")).toHaveClass("min-h-0", "overflow-y-auto");
+    expect(screen.getByTestId("import-csv-modal-footer")).toHaveClass("border-t");
   });
 
   it("shows validation message when preview is requested without file", async () => {
