@@ -120,7 +120,13 @@ const getProfileSuggestionTiming = (suggestion) => {
   return { label: "Entra neste mês", className: "border-green-300 bg-green-100 text-green-700" };
 };
 
-const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory = undefined }) => {
+const ImportCsvModal = ({
+  isOpen,
+  onClose,
+  onImported = undefined,
+  onOpenHistory = undefined,
+  onDataChanged = undefined,
+}) => {
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isDryRunning, setIsDryRunning] = useState(false);
@@ -801,6 +807,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
       }));
       const commitResult = await transactionsService.commitImportCsv(dryRunResult.importId, overridesArray);
       setLastCommitResult(commitResult);
+      if (onDataChanged) {
+        await onDataChanged(commitResult);
+      }
     } catch (error) {
       const apiMessage = getApiErrorMessage(error, "Não foi possível confirmar a importação.");
       setErrorMessage(
@@ -1682,6 +1691,9 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
         onCreated={() => {
           setIsIncomeModalOpen(false);
           setIncomeStatementCreated(true);
+          if (onDataChanged) {
+            void onDataChanged();
+          }
         }}
         onIgnored={(statement) => {
           setIsIncomeModalOpen(false);
@@ -1708,6 +1720,7 @@ ImportCsvModal.propTypes = {
   onClose: PropTypes.func.isRequired,
   onImported: PropTypes.func,
   onOpenHistory: PropTypes.func,
+  onDataChanged: PropTypes.func,
 };
 
 export default ImportCsvModal;

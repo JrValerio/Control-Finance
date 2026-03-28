@@ -239,6 +239,7 @@ describe("ImportCsvModal", () => {
 
   it("commits import and calls onImported callback when Fechar is clicked", async () => {
     const onImported = vi.fn();
+    const onDataChanged = vi.fn();
     const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
 
     transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildDryRunResponse());
@@ -248,7 +249,7 @@ describe("ImportCsvModal", () => {
       summary: { income: 100, expense: 20, balance: 80 },
     });
 
-    render(<ImportCsvModal isOpen onClose={vi.fn()} onImported={onImported} />);
+    render(<ImportCsvModal isOpen onClose={vi.fn()} onImported={onImported} onDataChanged={onDataChanged} />);
 
     await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
     await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
@@ -263,6 +264,7 @@ describe("ImportCsvModal", () => {
     await waitFor(() => {
       expect(screen.getByText("1 lançamento importado.")).toBeInTheDocument();
     });
+    expect(onDataChanged).toHaveBeenCalledTimes(1);
 
     // onImported not yet called — deferred until user clicks Fechar
     expect(onImported).not.toHaveBeenCalled();
@@ -277,6 +279,7 @@ describe("ImportCsvModal", () => {
   it("abre o histórico depois do commit sem perder o refresh do app", async () => {
     const onImported = vi.fn();
     const onOpenHistory = vi.fn();
+    const onDataChanged = vi.fn();
     const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
 
     transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildDryRunResponse());
@@ -292,6 +295,7 @@ describe("ImportCsvModal", () => {
         onClose={vi.fn()}
         onImported={onImported}
         onOpenHistory={onOpenHistory}
+        onDataChanged={onDataChanged}
       />,
     );
 
@@ -307,6 +311,7 @@ describe("ImportCsvModal", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Ver histórico" })).toBeInTheDocument();
     });
+    expect(onDataChanged).toHaveBeenCalledTimes(1);
 
     await userEvent.click(screen.getByRole("button", { name: "Ver histórico" }));
 
@@ -986,8 +991,9 @@ describe("ImportCsvModal", () => {
       });
     });
 
-    it("sugere atualizar perfil e planejamento depois de confirmar a renda estruturada", async () => {
+  it("sugere atualizar perfil e planejamento depois de confirmar a renda estruturada", async () => {
       const file = new File(["dummy"], "inss.pdf", { type: "application/pdf" });
+      const onDataChanged = vi.fn();
       transactionsService.dryRunImportCsv.mockResolvedValueOnce(buildInssResponse());
       incomeSourcesService.list.mockResolvedValue([
         {
@@ -1020,7 +1026,7 @@ describe("ImportCsvModal", () => {
         deductions: [],
       });
 
-      render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+      render(<ImportCsvModal isOpen onClose={vi.fn()} onDataChanged={onDataChanged} />);
       await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
       await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
 
@@ -1047,6 +1053,7 @@ describe("ImportCsvModal", () => {
           screen.getByRole("button", { name: "Atualizar perfil e planejamento" }),
         ).toBeInTheDocument();
       });
+      expect(onDataChanged).toHaveBeenCalledTimes(1);
 
       await userEvent.click(
         screen.getByRole("button", { name: "Atualizar perfil e planejamento" }),

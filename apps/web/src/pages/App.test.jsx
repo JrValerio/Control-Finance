@@ -2253,16 +2253,21 @@ describe("App", () => {
       );
     });
 
-    // Modal shows committed state — click Fechar to trigger onImported
-    await user.click(screen.getByRole("button", { name: "Fechar" }));
-
     await waitFor(() => {
       expect(transactionsService.listPage).toHaveBeenCalledTimes(2);
       expect(transactionsService.getMonthlySummary).toHaveBeenCalledTimes(2);
       expect(transactionsService.getMonthlySummaryCompare).toHaveBeenCalledTimes(2);
     });
 
-    expect(screen.queryByLabelText("Arquivo do extrato")).not.toBeInTheDocument();
+    // Modal shows committed state — click Fechar only closes the modal now
+    await user.click(screen.getByRole("button", { name: "Fechar" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Arquivo do extrato")).not.toBeInTheDocument();
+    });
+    expect(transactionsService.listPage).toHaveBeenCalledTimes(2);
+    expect(transactionsService.getMonthlySummary).toHaveBeenCalledTimes(2);
+    expect(transactionsService.getMonthlySummaryCompare).toHaveBeenCalledTimes(2);
   });
 
   it("exibe mensagem de erro quando dry-run falha", async () => {
