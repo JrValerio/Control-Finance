@@ -1550,26 +1550,30 @@ const App = ({
     onLogout?.();
   };
 
-  const handleImportCommitted = useCallback(async () => {
+  const handleImportDataChanged = useCallback(async () => {
     await loadTransactions();
     await loadMonthlySummary();
     await loadMonthlyBudgets();
-    setImportModalOpen(false);
   }, [loadMonthlyBudgets, loadMonthlySummary, loadTransactions]);
 
-  const handleOpenImportHistoryAfterImport = useCallback(async () => {
-    await loadTransactions();
-    await loadMonthlySummary();
-    await loadMonthlyBudgets();
+  const handleImportCommitted = useCallback(async (result?: unknown | null) => {
+    if (result == null) {
+      await handleImportDataChanged();
+    }
+    setImportModalOpen(false);
+  }, [handleImportDataChanged]);
+
+  const handleOpenImportHistoryAfterImport = useCallback(async (result?: unknown | null) => {
+    if (result == null) {
+      await handleImportDataChanged();
+    }
     setImportModalOpen(false);
     setImportHistoryModalOpen(true);
-  }, [loadMonthlyBudgets, loadMonthlySummary, loadTransactions]);
+  }, [handleImportDataChanged]);
 
   const handleImportSessionReverted = useCallback(async () => {
-    await loadTransactions();
-    await loadMonthlySummary();
-    await loadMonthlyBudgets();
-  }, [loadMonthlyBudgets, loadMonthlySummary, loadTransactions]);
+    await handleImportDataChanged();
+  }, [handleImportDataChanged]);
 
   const handleViewBudgetTransactions = (budget: MonthlyBudget) => {
     const monthRange = getMonthRange(selectedSummaryMonth);
@@ -3072,6 +3076,7 @@ const App = ({
         onClose={() => setImportModalOpen(false)}
         onImported={handleImportCommitted}
         onOpenHistory={handleOpenImportHistoryAfterImport}
+        onDataChanged={handleImportDataChanged}
       />
 
       <ImportHistoryModal
