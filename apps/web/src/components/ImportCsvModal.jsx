@@ -858,37 +858,43 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
 
   return (
     <div
-      className="fixed inset-0 z-50 flex min-h-screen items-start justify-center overflow-y-auto bg-black/50 p-2 sm:p-6 sm:items-center"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-2 sm:p-6"
       onClick={handleBackdropClick}
       role="presentation"
     >
-      <div
-        className="flex max-h-[calc(100dvh-1rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-cf-surface shadow-xl sm:max-h-[calc(100dvh-3rem)]"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="import-csv-modal-title"
-        data-testid="import-csv-modal-shell"
-      >
-        <div className="border-b border-cf-border px-4 py-4 sm:px-6">
-          <div className="flex items-center justify-between">
-            <h2 id="import-csv-modal-title" className="text-lg font-semibold text-cf-text-primary">
-              Importar extrato
-            </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="text-ui-200 transition-colors hover:text-ui-100"
-              aria-label="Fechar modal de importação de extrato"
-            >
-              X
-            </button>
-          </div>
-        </div>
-
+      <div className="flex min-h-full items-center justify-center">
         <div
-          className="min-h-0 overflow-y-auto px-4 py-4 sm:px-6"
-          data-testid="import-csv-modal-body"
+          className="flex w-full max-w-4xl max-h-[min(92vh,1080px)] flex-col overflow-hidden rounded-lg border border-cf-border bg-cf-surface shadow-xl"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="import-csv-modal-title"
+          data-testid="import-csv-modal-shell"
         >
+          <div className="border-b border-cf-border px-4 py-4 sm:px-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="import-csv-modal-title" className="text-lg font-semibold text-cf-text-primary">
+                  Importar extrato
+                </h2>
+                <p className="mt-1 text-sm text-cf-text-secondary">
+                  Revise o arquivo, resolva conflitos e confirme o que entra no seu painel antes de importar.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-ui-200 transition-colors hover:text-ui-100"
+                aria-label="Fechar modal de importação de extrato"
+              >
+                X
+              </button>
+            </div>
+          </div>
+
+          <div
+            className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6"
+            data-testid="import-csv-modal-body"
+          >
           <p className="mb-4 text-sm text-cf-text-secondary">
             Envie um CSV, OFX ou PDF para revisar, categorizar e confirmar o que entra no seu painel financeiro antes de importar.
           </p>
@@ -935,79 +941,27 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
 
           {lastCommitResult ? (
             <div className="mt-3 rounded border border-green-200 bg-green-50 px-3 py-3 dark:border-green-800 dark:bg-green-950/40">
-            <p className="mb-2 text-sm font-semibold text-green-700 dark:text-green-400">
-              {lastCommitResult.imported === 1
-                ? "1 lançamento importado."
-                : `${lastCommitResult.imported} lançamentos importados.`}
-            </p>
-            <div className="mb-3 grid gap-2 sm:grid-cols-3">
-              <div className="rounded border border-green-200 bg-white px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
-                <p className="font-semibold uppercase">Entradas</p>
-                <p>{formatCurrency(lastCommitResult.summary?.income || 0)}</p>
+              <p className="mb-2 text-sm font-semibold text-green-700 dark:text-green-400">
+                {lastCommitResult.imported === 1
+                  ? "1 lançamento importado."
+                  : `${lastCommitResult.imported} lançamentos importados.`}
+              </p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <div className="rounded border border-green-200 bg-white px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
+                  <p className="font-semibold uppercase">Entradas</p>
+                  <p>{formatCurrency(lastCommitResult.summary?.income || 0)}</p>
+                </div>
+                <div className="rounded border border-green-200 bg-white px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
+                  <p className="font-semibold uppercase">Saídas</p>
+                  <p>{formatCurrency(lastCommitResult.summary?.expense || 0)}</p>
+                </div>
+                <div className="rounded border border-green-200 bg-white px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
+                  <p className="font-semibold uppercase">Saldo</p>
+                  <p>{formatCurrency(lastCommitResult.summary?.balance || 0)}</p>
+                </div>
               </div>
-              <div className="rounded border border-green-200 bg-white px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
-                <p className="font-semibold uppercase">Saídas</p>
-                <p>{formatCurrency(lastCommitResult.summary?.expense || 0)}</p>
-              </div>
-              <div className="rounded border border-green-200 bg-white px-3 py-2 text-xs text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300">
-                <p className="font-semibold uppercase">Saldo</p>
-                <p>{formatCurrency(lastCommitResult.summary?.balance || 0)}</p>
-              </div>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleCloseAfterCommit}
-                disabled={isUndoing}
-                className="rounded border border-green-400 bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-green-700 dark:bg-green-900/40 dark:text-green-300"
-              >
-                Fechar
-              </button>
-              <button
-                type="button"
-                onClick={handleOpenHistoryAfterCommit}
-                disabled={isUndoing}
-                className="rounded border border-cf-border bg-white px-3 py-1.5 text-sm font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Ver histórico
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowUndoConfirm(true)}
-                disabled={isUndoing}
-                className="rounded border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-700 dark:bg-red-950/40 dark:text-red-400"
-              >
-                {isUndoing ? "Desfazendo..." : "Desfazer importação"}
-              </button>
-            </div>
-            </div>
-          ) : (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={handleDryRun}
-                disabled={isDryRunning || isCommitting}
-                className="rounded border border-brand-1 bg-brand-1 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isDryRunning ? "Processando..." : "Pré-visualizar"}
-              </button>
-              <button
-                type="button"
-                onClick={handleCommit}
-                disabled={!hasValidRows || isDryRunning || isCommitting}
-                className="rounded border border-cf-border bg-cf-surface px-3 py-1.5 text-sm font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isCommitting ? "Importando..." : "Importar"}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-1.5 text-sm font-semibold text-cf-text-secondary"
-              >
-                Fechar
-              </button>
-            </div>
-          )}
+          ) : null}
 
           {errorMessage ? (
             <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -1447,10 +1401,19 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
                     </div>
                   </div>
                 )}
+                {(hasConflicts || hasDuplicates) && (
+                  <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                    {hasConflicts && hasDuplicates
+                      ? "Há itens já existentes e outros que precisam da sua revisão antes de importar."
+                      : hasConflicts
+                        ? "Há itens que precisam da sua decisão antes de entrar no painel."
+                        : "Alguns itens já existem no histórico e ficaram visíveis aqui só para conferência."}
+                  </div>
+                )}
                 <div className="max-h-80 overflow-auto rounded border border-cf-border">
                   {filteredPreviewRows.length === 0 ? (
                     <div className="px-3 py-4 text-sm text-cf-text-secondary">
-                      Nenhuma linha encontrada para os filtros atuais.
+                      Nenhum item combina com esta busca. Ajuste os filtros para continuar a revisão.
                     </div>
                   ) : (
                     <>
@@ -1635,6 +1598,67 @@ const ImportCsvModal = ({ isOpen, onClose, onImported = undefined, onOpenHistory
             )}
             </div>
           ) : null}
+          </div>
+
+          <div
+            className="flex flex-wrap items-center justify-end gap-2 border-t border-cf-border px-4 py-4 sm:px-6"
+            data-testid="import-csv-modal-footer"
+          >
+            {lastCommitResult ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCloseAfterCommit}
+                  disabled={isUndoing}
+                  className="rounded border border-green-400 bg-green-100 px-3 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-60 dark:border-green-700 dark:bg-green-900/40 dark:text-green-300"
+                >
+                  Fechar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenHistoryAfterCommit}
+                  disabled={isUndoing}
+                  className="rounded border border-cf-border bg-white px-3 py-1.5 text-sm font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Ver histórico
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowUndoConfirm(true)}
+                  disabled={isUndoing}
+                  className="rounded border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-700 dark:bg-red-950/40 dark:text-red-400"
+                >
+                  {isUndoing ? "Desfazendo..." : "Desfazer importação"}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleDryRun}
+                  disabled={isDryRunning || isCommitting}
+                  className="rounded border border-brand-1 bg-brand-1 px-3 py-1.5 text-sm font-semibold text-white hover:bg-brand-2 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isDryRunning ? "Processando..." : "Pré-visualizar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCommit}
+                  disabled={!hasValidRows || isDryRunning || isCommitting}
+                  className="rounded border border-cf-border bg-cf-surface px-3 py-1.5 text-sm font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isCommitting ? "Importando..." : "Importar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-1.5 text-sm font-semibold text-cf-text-secondary"
+                >
+                  Fechar
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
