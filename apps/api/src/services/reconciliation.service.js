@@ -204,18 +204,28 @@ export const confirmBillMatch = async (rawUserId, rawBillId, input) => {
       }
     : { billAmount: Number(bill.amount), txAmount: Number(tx.value), divergencePercent };
 
-  const { rows: updated } = await dbQuery(
-    `UPDATE bills
-        SET linked_transaction_id = $1,
-            match_status          = 'matched',
-            matched_at            = NOW(),
-            match_confidence      = $2,
-            match_metadata        = $3,
-            updated_at            = NOW()
-      WHERE id = $4 AND user_id = $5
-      RETURNING id, match_status, linked_transaction_id, matched_at, match_confidence`,
-    [txId, scoreResult?.score ?? null, JSON.stringify(metadata), bill.id, userId]
-  );
+  let updated;
+  try {
+    const result = await dbQuery(
+      `UPDATE bills
+          SET linked_transaction_id = $1,
+              match_status          = 'matched',
+              matched_at            = NOW(),
+              match_confidence      = $2,
+              match_metadata        = $3,
+              updated_at            = NOW()
+        WHERE id = $4 AND user_id = $5
+        RETURNING id, match_status, linked_transaction_id, matched_at, match_confidence`,
+      [txId, scoreResult?.score ?? null, JSON.stringify(metadata), bill.id, userId]
+    );
+    updated = result.rows;
+  } catch (err) {
+    // Unique index violation: another concurrent request linked the same transaction first
+    if (err.code === "23505") {
+      throw createError(409, "Esta transacao ja esta vinculada a outra conta.");
+    }
+    throw err;
+  }
 
   const row = updated[0];
   return {

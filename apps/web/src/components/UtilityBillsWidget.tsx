@@ -275,6 +275,7 @@ const UtilityBillsWidget = (): JSX.Element => {
   const [hasError, setHasError] = useState(false);
   const [insight, setInsight] = useState<UtilityInsight | null>(null);
   const [reconcile, setReconcile] = useState<ReconcileState | null>(null);
+  const [unmatchError, setUnmatchError] = useState<string | null>(null);
   const money = useMaskedCurrency();
 
   const load = useCallback(() => {
@@ -341,11 +342,12 @@ const UtilityBillsWidget = (): JSX.Element => {
   };
 
   const handleUnmatch = async (bill: Bill) => {
+    setUnmatchError(null);
     try {
       await billsService.unmatch(bill.id);
       load();
     } catch {
-      // silent — non-blocking, reload will still show current state
+      setUnmatchError("Não foi possível desfazer a conciliação. Tente novamente.");
     }
   };
 
@@ -413,6 +415,11 @@ const UtilityBillsWidget = (): JSX.Element => {
         </div>
       ) : (
         <>
+          {/* Unmatch error */}
+          {unmatchError ? (
+            <p className="mb-2 text-xs text-red-600">{unmatchError}</p>
+          ) : null}
+
           {/* AI insight banner */}
           {insight ? (
             <div
