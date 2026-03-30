@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import request from "supertest";
 import app from "./app.js";
 import { clearDbClientForTests, dbQuery } from "./db/index.js";
-import { setupTestDb, registerAndLogin, expectErrorResponseWithRequestId } from "./test-helpers.js";
+import { setupTestDb, registerAndLogin } from "./test-helpers.js";
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import { resetImportRateLimiterState, resetWriteRateLimiterState } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
@@ -32,6 +32,15 @@ const ITAU_TEXT_NO_PERIOD = `
 BANCO ITAÚ S.A.
 VENCIMENTO  15/03/2026
 TOTAL DA FATURA    R$ 850,00
+`.trim();
+
+const VALID_ITAU_TEXT_APRIL = `
+BANCO ITAÚ S.A.
+**** 1234
+PERÍODO DE 08/03/2026 A 07/04/2026
+VENCIMENTO  15/04/2026
+TOTAL DA FATURA    R$ 980,00
+PAGAMENTO MÍNIMO R$ 98,00
 `.trim();
 
 const INVALID_TEXT = `Este texto nao tem nenhum dado de fatura.`;
@@ -196,13 +205,16 @@ describe("credit-card-invoices", () => {
 
   it("GET /invoices retorna lista de faturas do cartao", async () => {
     const token = await registerAndLogin("inv-list@test.dev");
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
 
     const cardRes = await createCard(token);
     const cardId = cardRes.body.id;
 
+    // Upload two invoices with different due_date+total_amount (unique constraint)
+    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
     await uploadInvoice(token, cardId);
-    await uploadInvoice(token, cardId); // second upload same text (fine for test)
+
+    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT_APRIL);
+    await uploadInvoice(token, cardId);
 
     const res = await request(app)
       .get(`/credit-cards/${cardId}/invoices`)

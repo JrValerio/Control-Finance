@@ -19,16 +19,17 @@ import {
   linkBillToInvoiceForUser,
 } from "../services/credit-card-invoices.service.js";
 
-const INVOICE_PDF_MAX_BYTES = Number(process.env.INVOICE_PDF_MAX_SIZE_BYTES || 10 * 1024 * 1024);
+const INVOICE_PDF_MAX_BYTES =
+  Number.isInteger(Number(process.env.INVOICE_PDF_MAX_SIZE_BYTES)) &&
+  Number(process.env.INVOICE_PDF_MAX_SIZE_BYTES) > 0
+    ? Number(process.env.INVOICE_PDF_MAX_SIZE_BYTES)
+    : 10 * 1024 * 1024;
+
+const INVOICE_PDF_MAX_MB = Math.round(INVOICE_PDF_MAX_BYTES / (1024 * 1024));
 
 const invoiceUpload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    fileSize:
-      Number.isInteger(INVOICE_PDF_MAX_BYTES) && INVOICE_PDF_MAX_BYTES > 0
-        ? INVOICE_PDF_MAX_BYTES
-        : 10 * 1024 * 1024,
-  },
+  limits: { fileSize: INVOICE_PDF_MAX_BYTES },
 });
 
 const ensureInvoicePdfFile = (file) => {
@@ -132,7 +133,7 @@ router.post("/:id/invoices/parse-pdf", creditCardsWriteRateLimiter, (req, res, n
   invoiceUpload.single("file")(req, res, async (uploadError) => {
     if (uploadError) {
       if (uploadError instanceof multer.MulterError && uploadError.code === "LIMIT_FILE_SIZE") {
-        const err = new Error("Arquivo muito grande. Limite: 10 MB.");
+        const err = new Error(`Arquivo muito grande. Limite: ${INVOICE_PDF_MAX_MB} MB.`);
         err.status = 413;
         return next(err);
       }

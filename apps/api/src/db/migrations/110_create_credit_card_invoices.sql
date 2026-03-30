@@ -15,7 +15,8 @@ CREATE TABLE IF NOT EXISTS credit_card_invoices (
   parse_metadata    JSONB          NOT NULL DEFAULT '{}'::jsonb,
   linked_bill_id    INTEGER        REFERENCES bills(id) ON DELETE SET NULL,
   created_at        TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ    NOT NULL DEFAULT NOW()
+  updated_at        TIMESTAMPTZ    NOT NULL DEFAULT NOW(),
+  CONSTRAINT credit_card_invoices_unique_invoice UNIQUE (credit_card_id, due_date, total_amount)
 );
 
 CREATE INDEX IF NOT EXISTS idx_credit_card_invoices_user_card
