@@ -11,6 +11,11 @@ import {
   deleteBillForUser,
   markBillAsPaidForUser,
 } from "../services/bills.service.js";
+import {
+  getMatchCandidatesForBill,
+  confirmBillMatch,
+  unmatchBill,
+} from "../services/reconciliation.service.js";
 
 const router = Router();
 
@@ -88,6 +93,42 @@ router.delete("/:id", billsWriteRateLimiter, async (req, res, next) => {
   try {
     await deleteBillForUser(req.user.id, req.params.id);
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ─── Reconciliation ───────────────────────────────────────────────────────────
+
+router.get("/:id/match-candidates", async (req, res, next) => {
+  try {
+    const result = await getMatchCandidatesForBill(req.user.id, req.params.id);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:id/confirm-match", billsWriteRateLimiter, async (req, res, next) => {
+  try {
+    const result = await confirmBillMatch(req.user.id, req.params.id, req.body || {});
+    res.status(200).json(result);
+  } catch (error) {
+    if (error.publicCode === "DIVERGENCE_CONFIRMATION_REQUIRED") {
+      return res.status(422).json({
+        message: error.message,
+        code: error.publicCode,
+        divergencePercent: error.divergencePercent,
+      });
+    }
+    next(error);
+  }
+});
+
+router.delete("/:id/match", billsWriteRateLimiter, async (req, res, next) => {
+  try {
+    const result = await unmatchBill(req.user.id, req.params.id);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

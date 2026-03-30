@@ -43,6 +43,8 @@ const buildBill = (overrides: Partial<Bill> = {}): Bill => ({
   referenceMonth: null,
   billType: null,
   sourceImportSessionId: null,
+  matchStatus: "unmatched",
+  linkedTransactionId: null,
   createdAt: "2026-02-01T12:00:00.000Z",
   updatedAt: "2026-02-01T12:00:00.000Z",
   ...overrides,
