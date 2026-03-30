@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getLatestForecast } from "./forecast.service.js";
 import { getGoalsSummaryForAI } from "./goals.service.js";
+import { listBankAccountsByUser } from "./bank-accounts.service.js";
+import { getUtilityBillsPanelForUser } from "./bills.service.js";
 import { dbQuery } from "../db/index.js";
 import { logInfo, logWarn, logError } from "../observability/logger.js";
 
@@ -145,5 +147,169 @@ export const generateFinancialInsight = async (userId, { now = new Date(), anthr
     title: "Dica do Especialista",
     message: insightText,
     action_label: "Ver detalhes",
+  };
+};
+
+// ─── Bank Account Insight ───────────────────────────────────────────────────
+
+const BANK_RISK_LABELS = { critical: "no limite", warning: "pressionada", success: "saudável" };
+
+const BANK_INSIGHT_SYSTEM =
+  "Você é o Especialista Financeiro do app Control Finance. Analise a situação da conta corrente e retorne UMA frase de no máximo 160 caracteres explicando o que o usuário deve saber agora. Seja direto e prático, sem jargão. Retorne APENAS o texto, sem formatação, sem aspas, sem JSON.";
+
+const classifyBankRisk = (summary, accounts) => {
+  if (accounts.some((a) => a.limitTotal > 0 && a.limitUsed >= a.limitTotal)) return "critical";
+  if (summary.totalLimitUsed > 0 || summary.totalBalance < 0) return "warning";
+  return "success";
+};
+
+/**
+ * Generates a Claude Haiku insight for the user's bank account situation.
+ * Returns null when there are no accounts or the LLM call fails.
+ *
+ * @param {number} userId
+ * @param {{ anthropicClient?: Anthropic }} options
+ */
+export const generateBankAccountInsight = async (userId, { anthropicClient } = {}) => {
+  const { accounts, summary } = await listBankAccountsByUser(userId);
+  if (!accounts.length) return null;
+
+  const riskLevel = classifyBankRisk(summary, accounts);
+
+  const context = {
+    accounts_count: summary.accountsCount,
+    risk_level: riskLevel,
+    total_balance_positive: summary.totalBalance >= 0,
+    using_limit: summary.totalLimitUsed > 0,
+    limit_pressure_pct:
+      summary.totalLimitTotal > 0
+        ? Math.round((summary.totalLimitUsed / summary.totalLimitTotal) * 100)
+        : 0,
+    any_account_at_limit: accounts.some((a) => a.limitTotal > 0 && a.limitUsed >= a.limitTotal),
+  };
+
+  const client = anthropicClient ?? new Anthropic();
+  let message;
+  const callStart = Date.now();
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      system: BANK_INSIGHT_SYSTEM,
+      messages: [{ role: "user", content: JSON.stringify(context) }],
+    });
+    message = response.content[0]?.text?.trim() || null;
+  } catch (error) {
+    logError({
+      event: "ai.bank_insight.llm_error",
+      userId,
+      errorMessage: error?.message || "unknown",
+      latencyMs: Date.now() - callStart,
+    });
+    return null;
+  }
+
+  if (!message) {
+    logWarn({ event: "ai.bank_insight.empty_response", userId, latencyMs: Date.now() - callStart });
+    return null;
+  }
+
+  logInfo({
+    event: "ai.bank_insight.generated",
+    userId,
+    riskLevel,
+    charCount: message.length,
+    latencyMs: Date.now() - callStart,
+  });
+
+  return {
+    riskLabel: BANK_RISK_LABELS[riskLevel],
+    type: riskLevel,
+    message,
+  };
+};
+
+// ─── Utility Bills Insight ──────────────────────────────────────────────────
+
+const UTILITY_INSIGHT_SYSTEM =
+  "Você é o Especialista Financeiro do app Control Finance. Analise o painel de contas de consumo (água, energia, internet, telefone, gás) e retorne UMA frase de no máximo 160 caracteres dizendo o que o usuário deve fazer agora. Priorize o que está vencido. Seja direto. Retorne APENAS o texto, sem formatação, sem aspas, sem JSON.";
+
+const classifyUtilityRisk = (summary) => {
+  if (summary.overdueCount > 0) return "critical";
+  if (summary.dueSoonCount > 0) return "warning";
+  return "success";
+};
+
+const UTILITY_RISK_LABELS = {
+  critical: "contas vencidas",
+  warning: "vence em breve",
+  success: "em dia",
+};
+
+/**
+ * Generates a Claude Haiku insight for the user's utility bills.
+ * Returns null when there are no pending utility bills or the LLM call fails.
+ *
+ * @param {number} userId
+ * @param {{ anthropicClient?: Anthropic }} options
+ */
+export const generateUtilityInsight = async (userId, { anthropicClient } = {}) => {
+  const panel = await getUtilityBillsPanelForUser(userId);
+  if (panel.summary.totalPending === 0) return null;
+
+  const riskLevel = classifyUtilityRisk(panel.summary);
+
+  const context = {
+    total_pending: panel.summary.totalPending,
+    overdue_count: panel.summary.overdueCount,
+    due_soon_count: panel.summary.dueSoonCount,
+    upcoming_count: panel.upcoming.length,
+    has_overdue: panel.summary.overdueCount > 0,
+    has_due_soon: panel.summary.dueSoonCount > 0,
+    types_present: [...new Set(
+      [...panel.overdue, ...panel.dueSoon, ...panel.upcoming].map((b) => b.billType).filter(Boolean)
+    )],
+  };
+
+  const client = anthropicClient ?? new Anthropic();
+  let message;
+  const callStart = Date.now();
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      system: UTILITY_INSIGHT_SYSTEM,
+      messages: [{ role: "user", content: JSON.stringify(context) }],
+    });
+    message = response.content[0]?.text?.trim() || null;
+  } catch (error) {
+    logError({
+      event: "ai.utility_insight.llm_error",
+      userId,
+      errorMessage: error?.message || "unknown",
+      latencyMs: Date.now() - callStart,
+    });
+    return null;
+  }
+
+  if (!message) {
+    logWarn({ event: "ai.utility_insight.empty_response", userId, latencyMs: Date.now() - callStart });
+    return null;
+  }
+
+  logInfo({
+    event: "ai.utility_insight.generated",
+    userId,
+    riskLevel,
+    charCount: message.length,
+    latencyMs: Date.now() - callStart,
+  });
+
+  return {
+    riskLabel: UTILITY_RISK_LABELS[riskLevel],
+    type: riskLevel,
+    message,
   };
 };
