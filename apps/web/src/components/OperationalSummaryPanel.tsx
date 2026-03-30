@@ -159,7 +159,7 @@ const OperationalSummaryPanel = (): JSX.Element | null => {
   const consignadoAccent: TileProps["accent"] =
     consignado.comprometimentoPct != null && consignado.comprometimentoPct > 35
       ? "danger"
-      : consignado.comprometimentoPct != null && consignado.comprometimentoPct > 30
+      : consignado.comprometimentoPct != null && consignado.comprometimentoPct > 25
         ? "warning"
         : consignado.monthlyTotal > 0
           ? "default"

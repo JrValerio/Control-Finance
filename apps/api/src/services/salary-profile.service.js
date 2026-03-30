@@ -358,8 +358,8 @@ export const addConsignacaoForUser = async (userId, body = {}) => {
 
 // ─── Consignado overview ──────────────────────────────────────────────────────
 
-const MARGIN_SAFE_THRESHOLD    = 30; // up to 30%: safe
-const MARGIN_WARNING_THRESHOLD = 35; // 30–35%: approaching legal limit
+const MARGIN_SAFE_THRESHOLD    = 25; // up to 25%: safe
+const MARGIN_WARNING_THRESHOLD = 35; // 25–35%: approaching legal limit
 // > 35%: exceeded
 
 const marginStatus = (pct) => {

@@ -107,7 +107,7 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
           </div>
           <div className="mt-0.5 flex justify-between">
             <span className="text-[10px] text-cf-text-secondary">0%</span>
-            <span className="text-[10px] text-amber-500">30%</span>
+            <span className="text-[10px] text-amber-500">25%</span>
             <span className="text-[10px] text-red-500">35%</span>
             <span className="text-[10px] text-cf-text-secondary">100%</span>
           </div>
