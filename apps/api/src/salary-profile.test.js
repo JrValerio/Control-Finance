@@ -810,4 +810,181 @@ describe("salary-profile", () => {
 
     expect(res.status).toBe(404);
   });
+
+  // ─── Consignações — end_date ──────────────────────────────────────────────
+
+  it("POST /salary/consignacoes aceita end_date opcional e retorna no shape", async () => {
+    const token = await registerAndLogin("sal-consig-enddate@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "BMG 48x", amount: 300, consignacao_type: "loan", end_date: "2028-12-01" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.endDate).toBe("2028-12-01");
+  });
+
+  it("POST /salary/consignacoes sem end_date retorna endDate null", async () => {
+    const token = await registerAndLogin("sal-consig-enddate-null@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 4000, profile_type: "inss_beneficiary" });
+
+    const res = await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "BMG 24x", amount: 200, consignacao_type: "loan" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.endDate).toBeNull();
+  });
+
+  // ─── GET /salary/consignado-overview ─────────────────────────────────────
+
+  it("GET /salary/consignado-overview bloqueia sem token", async () => {
+    const res = await request(app).get("/salary/consignado-overview");
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /salary/consignado-overview retorna overview vazio quando usuario nao tem perfil", async () => {
+    const token = await registerAndLogin("sal-ov-noprofile@test.dev");
+    const res = await request(app)
+      .get("/salary/consignado-overview")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      contracts:          [],
+      monthlyTotal:       0,
+      comprometimentoPct: null,
+      netAfterConsignado: null,
+      marginStatus:       null,
+    });
+  });
+
+  it("GET /salary/consignado-overview retorna contracts e null para perfil CLT sem consignacoes", async () => {
+    const token = await registerAndLogin("sal-ov-clt@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 5000, profile_type: "clt" });
+
+    const res = await request(app)
+      .get("/salary/consignado-overview")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.contracts).toHaveLength(0);
+    expect(res.body.comprometimentoPct).toBeNull();
+    expect(res.body.marginStatus).toBeNull();
+  });
+
+  it("GET /salary/consignado-overview retorna margem safe para INSS beneficiario dentro do limite", async () => {
+    const token = await registerAndLogin("sal-ov-safe@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 5000, profile_type: "inss_beneficiary", birth_year: 1960 });
+
+    // 500 / 5000 = 10% → safe
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Empréstimo BMG", amount: 500, consignacao_type: "loan" });
+
+    const res = await request(app)
+      .get("/salary/consignado-overview")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.marginStatus).toBe("safe");
+    expect(res.body.comprometimentoPct).toBe(10);
+    expect(typeof res.body.netAfterConsignado).toBe("number");
+    expect(res.body.netAfterConsignado).toBeGreaterThan(0);
+    expect(res.body.contracts).toHaveLength(1);
+    expect(res.body.contracts[0]).toMatchObject({
+      description:     "Empréstimo BMG",
+      amount:          500,
+      consignacaoType: "loan",
+      endDate:         null,
+    });
+  });
+
+  it("GET /salary/consignado-overview retorna margem warning quando comprometimento entre 30 e 35%", async () => {
+    const token = await registerAndLogin("sal-ov-warning@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 5000, profile_type: "inss_beneficiary", birth_year: 1960 });
+
+    // 1600 / 5000 = 32% → warning
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Empréstimo A", amount: 1000, consignacao_type: "loan" });
+
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Cartão B", amount: 600, consignacao_type: "card" });
+
+    const res = await request(app)
+      .get("/salary/consignado-overview")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.marginStatus).toBe("warning");
+    expect(res.body.comprometimentoPct).toBe(32);
+  });
+
+  it("GET /salary/consignado-overview retorna margem exceeded quando comprometimento acima de 35%", async () => {
+    const token = await registerAndLogin("sal-ov-exceeded@test.dev");
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ gross_salary: 5000, profile_type: "inss_beneficiary", birth_year: 1960 });
+
+    // 2000 / 5000 = 40% → exceeded
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ description: "Empréstimo alto", amount: 2000, consignacao_type: "loan" });
+
+    const res = await request(app)
+      .get("/salary/consignado-overview")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.marginStatus).toBe("exceeded");
+    expect(res.body.comprometimentoPct).toBe(40);
+  });
+
+  it("GET /salary/consignado-overview isolado por usuario", async () => {
+    const tokenA = await registerAndLogin("sal-ov-owner-a@test.dev");
+    const tokenB = await registerAndLogin("sal-ov-owner-b@test.dev");
+
+    await request(app)
+      .put("/salary/profile")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .send({ gross_salary: 5000, profile_type: "inss_beneficiary" });
+
+    await request(app)
+      .post("/salary/consignacoes")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .send({ description: "Empréstimo A", amount: 300, consignacao_type: "loan" });
+
+    const resB = await request(app)
+      .get("/salary/consignado-overview")
+      .set("Authorization", `Bearer ${tokenB}`);
+
+    expect(resB.status).toBe(200);
+    expect(resB.body.contracts).toHaveLength(0);
+    expect(resB.body.monthlyTotal).toBe(0);
+  });
 });

@@ -25,6 +25,8 @@ export interface DashboardForecast {
 
 export interface DashboardConsignado {
   monthlyTotal: number;
+  contractsCount: number;
+  comprometimentoPct: number | null;
 }
 
 export interface DashboardSnapshot {
@@ -63,7 +65,9 @@ const normalizeForecast = (raw: Record<string, unknown> | null): DashboardForeca
 };
 
 const normalizeConsignado = (raw: Record<string, unknown>): DashboardConsignado => ({
-  monthlyTotal: Number(raw.monthlyTotal) || 0,
+  monthlyTotal:       Number(raw.monthlyTotal) || 0,
+  contractsCount:     Number(raw.contractsCount) || 0,
+  comprometimentoPct: raw.comprometimentoPct != null ? Number(raw.comprometimentoPct) : null,
 });
 
 const normalizeSnapshot = (raw: Record<string, unknown>): DashboardSnapshot => ({

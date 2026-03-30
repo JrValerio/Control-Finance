@@ -433,8 +433,8 @@ describe("SalaryWidget — perfil beneficiário INSS", () => {
 describe("SalaryWidget — beneficiário com consignações", () => {
   const profileWithConsig = buildBenefitProfile({
     consignacoes: [
-      { id: 1, salaryProfileId: 2, description: "BMG Empréstimo", amount: 456.78, consignacaoType: "loan", createdAt: "2026-01-01T00:00:00Z" },
-      { id: 2, salaryProfileId: 2, description: "Cartão Banco X",  amount: 100.00, consignacaoType: "card", createdAt: "2026-01-02T00:00:00Z" },
+      { id: 1, salaryProfileId: 2, description: "BMG Empréstimo", amount: 456.78, consignacaoType: "loan", endDate: null, createdAt: "2026-01-01T00:00:00Z" },
+      { id: 2, salaryProfileId: 2, description: "Cartão Banco X",  amount: 100.00, consignacaoType: "card", endDate: null, createdAt: "2026-01-02T00:00:00Z" },
     ],
     calculation: {
       ...buildBenefitProfile().calculation,
@@ -480,6 +480,7 @@ describe("SalaryWidget — beneficiário com consignações", () => {
           description: "216 CONSIGNACAO EMPRESTIMO BANCARIO",
           amount: 156,
           consignacaoType: "loan",
+          endDate: null,
           createdAt: "2026-04-07T00:00:00Z",
         },
         {
@@ -488,6 +489,7 @@ describe("SalaryWidget — beneficiário com consignações", () => {
           description: "217 EMPRESTIMO SOBRE A RMC",
           amount: 238,
           consignacaoType: "loan",
+          endDate: null,
           createdAt: "2026-04-07T00:00:00Z",
         },
       ],
@@ -586,12 +588,12 @@ describe("SalaryWidget — adicionar consignação", () => {
   it("salva consignação e atualiza perfil", async () => {
     const updatedProfile = buildBenefitProfile({
       consignacoes: [
-        { id: 10, salaryProfileId: 2, description: "BMG", amount: 300, consignacaoType: "loan", createdAt: "2026-01-01T00:00:00Z" },
+        { id: 10, salaryProfileId: 2, description: "BMG", amount: 300, consignacaoType: "loan", endDate: null, createdAt: "2026-01-01T00:00:00Z" },
       ],
       calculation: { ...buildBenefitProfile().calculation, loanTotal: 300, consignacoesMonthly: 300 },
     });
     vi.mocked(salaryService.addConsignacao).mockResolvedValue({
-      id: 10, salaryProfileId: 2, description: "BMG", amount: 300, consignacaoType: "loan", createdAt: "2026-01-01T00:00:00Z",
+      id: 10, salaryProfileId: 2, description: "BMG", amount: 300, consignacaoType: "loan", endDate: null, createdAt: "2026-01-01T00:00:00Z",
     });
     vi.mocked(salaryService.getProfile).mockResolvedValueOnce(buildBenefitProfile()).mockResolvedValue(updatedProfile);
 

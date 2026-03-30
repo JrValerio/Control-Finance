@@ -171,6 +171,7 @@ const toConsignacao = (row) => ({
   description:      row.description,
   amount:           toMoney(row.amount),
   consignacaoType:  row.consignacao_type,
+  endDate:          row.end_date != null ? toISODateOnly(row.end_date) : null,
   createdAt:        row.created_at,
 });
 
@@ -215,7 +216,7 @@ const FIND_SQL = `
 `;
 
 const FIND_CONSIGNACOES_SQL = `
-  SELECT id, salary_profile_id, description, amount, consignacao_type, created_at
+  SELECT id, salary_profile_id, description, amount, consignacao_type, end_date, created_at
   FROM   salary_consignacoes
   WHERE  salary_profile_id = $1
   ORDER  BY created_at ASC
@@ -249,9 +250,9 @@ const UPDATE_SQL = `
 
 const INSERT_CONSIGNACAO_SQL = `
   INSERT INTO salary_consignacoes
-    (salary_profile_id, description, amount, consignacao_type)
-  VALUES ($1, $2, $3, $4)
-  RETURNING id, salary_profile_id, description, amount, consignacao_type, created_at
+    (salary_profile_id, description, amount, consignacao_type, end_date)
+  VALUES ($1, $2, $3, $4, $5)
+  RETURNING id, salary_profile_id, description, amount, consignacao_type, end_date, created_at
 `;
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -328,6 +329,7 @@ export const addConsignacaoForUser = async (userId, body = {}) => {
     description,
     amount,
     consignacao_type: consignacaoType,
+    end_date: endDateRaw = null,
   } = body;
 
   validateConsignacaoInput({ description, amount, consignacaoType });
@@ -341,14 +343,81 @@ export const addConsignacaoForUser = async (userId, body = {}) => {
   assertBeneficiaryProfile(profile);
   const profileId = profile.id;
 
+  const endDate = endDateRaw != null ? toISODateOnly(endDateRaw) : null;
+
   const result = await dbQuery(INSERT_CONSIGNACAO_SQL, [
     profileId,
     String(description).trim(),
     Number(amount),
     consignacaoType,
+    endDate,
   ]);
 
   return toConsignacao(result.rows[0]);
+};
+
+// ─── Consignado overview ──────────────────────────────────────────────────────
+
+const MARGIN_SAFE_THRESHOLD    = 25; // up to 25%: safe
+const MARGIN_WARNING_THRESHOLD = 35; // 25–35%: approaching legal limit
+// > 35%: exceeded
+
+const marginStatus = (pct) => {
+  if (pct <= MARGIN_SAFE_THRESHOLD) return "safe";
+  if (pct <= MARGIN_WARNING_THRESHOLD) return "warning";
+  return "exceeded";
+};
+
+export const getConsignadoOverviewForUser = async (userId) => {
+  const profileResult = await dbQuery(FIND_SQL, [userId]);
+
+  if (!profileResult.rows[0]) {
+    return {
+      contracts: [],
+      monthlyTotal: 0,
+      comprometimentoPct: null,
+      netAfterConsignado: null,
+      marginStatus: null,
+    };
+  }
+
+  const profile = toProfile(profileResult.rows[0]);
+  const consigRows = await dbQuery(FIND_CONSIGNACOES_SQL, [profile.id]);
+  const contracts = consigRows.rows.map(toConsignacao);
+
+  const monthlyTotal = Number(
+    contracts.reduce((sum, c) => sum + c.amount, 0).toFixed(2),
+  );
+
+  if (profile.profileType !== "inss_beneficiary" || contracts.length === 0) {
+    return {
+      contracts,
+      monthlyTotal,
+      comprometimentoPct: contracts.length > 0 ? null : null,
+      netAfterConsignado: null,
+      marginStatus: null,
+    };
+  }
+
+  // For INSS beneficiaries, compute margin against gross benefit
+  const calculation = calculateNetBenefit({
+    grossBenefit: profile.grossSalary,
+    birthYear:    profile.birthYear,
+    dependents:   profile.dependents,
+    consignacoes: contracts,
+  });
+
+  const pct = Number(
+    ((monthlyTotal / profile.grossSalary) * 100).toFixed(1),
+  );
+
+  return {
+    contracts,
+    monthlyTotal,
+    comprometimentoPct: pct,
+    netAfterConsignado: calculation.netMonthly,
+    marginStatus: marginStatus(pct),
+  };
 };
 
 export const syncImportedBenefitProfileForUser = async (userId, body = {}) =>
@@ -423,6 +492,7 @@ export const syncImportedBenefitProfileForUser = async (userId, body = {}) =>
         consignacao.description,
         consignacao.amount,
         consignacao.consignacaoType,
+        null, // end_date not available from imported benefit data
       ]);
       insertedConsignacoes.push(toConsignacao(result.rows[0]));
     }

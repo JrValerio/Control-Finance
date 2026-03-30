@@ -13,6 +13,7 @@ import BillsSummaryWidget from "../components/BillsSummaryWidget";
 import UtilityBillsWidget from "../components/UtilityBillsWidget";
 import CreditCardsSummaryWidget from "../components/CreditCardsSummaryWidget";
 import SalaryWidget from "../components/SalaryWidget";
+import ConsignadoOverviewWidget from "../components/ConsignadoOverviewWidget";
 import OperationalSummaryPanel from "../components/OperationalSummaryPanel";
 import TransactionList from "../components/TransactionList";
 import {
@@ -2464,6 +2465,8 @@ const App = ({
           <UtilityBillsWidget />
 
           <SalaryWidget />
+
+          <ConsignadoOverviewWidget />
 
           <Suspense fallback={null}>
             <HealthOverview />

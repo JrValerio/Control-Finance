@@ -4,6 +4,7 @@ import { attachEntitlements } from "../middlewares/entitlement.middleware.js";
 import {
   addConsignacaoForUser,
   deleteConsignacaoForUser,
+  getConsignadoOverviewForUser,
   getSalaryProfileForUser,
   syncImportedBenefitProfileForUser,
   upsertSalaryProfileForUser,
@@ -52,6 +53,15 @@ router.put("/profile/imported-benefit", attachEntitlements, async (req, res, nex
     const profile = await syncImportedBenefitProfileForUser(req.user.id, req.body || {});
     const hasAnnual = req.entitlements?.salary_annual !== false;
     res.status(200).json(applyAnnualGate(profile, hasAnnual));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/consignado-overview", async (req, res, next) => {
+  try {
+    const overview = await getConsignadoOverviewForUser(req.user.id);
+    res.status(200).json(overview);
   } catch (error) {
     next(error);
   }
