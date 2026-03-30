@@ -22,6 +22,7 @@ import opsRoutes from "./routes/ops.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
 import goalsRoutes from "./routes/goals.routes.js";
 import bankAccountsRoutes from "./routes/bank-accounts.routes.js";
+import dashboardRoutes from "./routes/dashboard.routes.js";
 import { notFoundHandler, errorHandler } from "./middlewares/error.middleware.js";
 import { requestIdMiddleware } from "./middlewares/request-id.middleware.js";
 import { requestLoggingMiddleware } from "./middlewares/request-logging.middleware.js";
@@ -114,6 +115,7 @@ app.use("/ops", opsRoutes);
 app.use("/ai", aiRoutes);
 app.use("/goals", goalsRoutes);
 app.use("/bank-accounts", bankAccountsRoutes);
+app.use("/dashboard", dashboardRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

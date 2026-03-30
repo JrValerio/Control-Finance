@@ -13,6 +13,7 @@ import BillsSummaryWidget from "../components/BillsSummaryWidget";
 import UtilityBillsWidget from "../components/UtilityBillsWidget";
 import CreditCardsSummaryWidget from "../components/CreditCardsSummaryWidget";
 import SalaryWidget from "../components/SalaryWidget";
+import OperationalSummaryPanel from "../components/OperationalSummaryPanel";
 import TransactionList from "../components/TransactionList";
 import {
   transactionsService,
@@ -2448,6 +2449,8 @@ const App = ({
                 O que pede ação agora: projeção, pendências, cartões, renda principal e sinais de risco.
               </p>
             </div>
+
+            <OperationalSummaryPanel />
 
             <div className="grid gap-4 xl:grid-cols-3">
               <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
