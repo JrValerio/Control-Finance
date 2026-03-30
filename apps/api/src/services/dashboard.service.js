@@ -38,15 +38,15 @@ export const getDashboardSnapshot = async (userId) => {
       [uid],
     ),
 
-    // 2. Bills: overdue + due in the next 7 days
+    // 2. Bills: overdue + due in the next 7 days (status filter in WHERE to leverage index)
     dbQuery(
       `SELECT
-         COUNT(CASE WHEN status = 'pending' AND due_date < $2 THEN 1 END) AS overdue_count,
-         COALESCE(SUM(CASE WHEN status = 'pending' AND due_date < $2 THEN amount ELSE 0 END), 0) AS overdue_total,
-         COUNT(CASE WHEN status = 'pending' AND due_date >= $2 AND due_date < $3 THEN 1 END) AS due_soon_count,
-         COALESCE(SUM(CASE WHEN status = 'pending' AND due_date >= $2 AND due_date < $3 THEN amount ELSE 0 END), 0) AS due_soon_total
+         COUNT(CASE WHEN due_date < $2 THEN 1 END) AS overdue_count,
+         COALESCE(SUM(CASE WHEN due_date < $2 THEN amount ELSE 0 END), 0) AS overdue_total,
+         COUNT(CASE WHEN due_date >= $2 AND due_date < $3 THEN 1 END) AS due_soon_count,
+         COALESCE(SUM(CASE WHEN due_date >= $2 AND due_date < $3 THEN amount ELSE 0 END), 0) AS due_soon_total
        FROM bills
-       WHERE user_id = $1`,
+       WHERE user_id = $1 AND status = 'pending'`,
       [uid, today, in7Days],
     ),
 
