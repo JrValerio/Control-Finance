@@ -785,4 +785,90 @@ describe("TaxPage", () => {
 
     confirmSpy.mockRestore();
   });
+
+  // ─── Auto-sync ────────────────────────────────────────────────────────────
+
+  it("auto-sync dispara quando nao ha fatos nem documentos ao carregar", async () => {
+    vi.mocked(taxService.listDocuments).mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 6,
+      total: 0,
+    });
+    vi.mocked(taxService.listFacts).mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 25,
+      total: 0,
+    });
+    vi.mocked(taxService.syncAppData).mockResolvedValue({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      sourceOrigin: "app",
+      processedStatements: 2,
+      processedTransactions: 0,
+      totalFactsGenerated: 2,
+      preservedReviewedFactsCount: 0,
+      summariesRebuilt: 1,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(taxService.syncAppData).toHaveBeenCalledWith(2026);
+    });
+
+    // loadPageData re-executado após sync bem-sucedido com fatos gerados
+    await waitFor(() => {
+      expect(taxService.getSummary).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("auto-sync nao dispara quando ja existem fatos", async () => {
+    // beforeEach já configura listFacts com total: 1 e listDocuments com total: 1
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Central do Leão" })).toBeInTheDocument();
+    });
+
+    expect(taxService.syncAppData).not.toHaveBeenCalled();
+  });
+
+  it("auto-sync nao dispara mais de uma vez no mesmo mount", async () => {
+    vi.mocked(taxService.listDocuments).mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 6,
+      total: 0,
+    });
+    vi.mocked(taxService.listFacts).mockResolvedValue({
+      items: [],
+      page: 1,
+      pageSize: 25,
+      total: 0,
+    });
+    vi.mocked(taxService.syncAppData).mockResolvedValue({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      sourceOrigin: "app",
+      processedStatements: 0,
+      processedTransactions: 0,
+      totalFactsGenerated: 0,
+      preservedReviewedFactsCount: 0,
+      summariesRebuilt: 0,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(taxService.syncAppData).toHaveBeenCalledTimes(1);
+    });
+
+    // Aguarda estabilização — não deve ter chamadas adicionais
+    await new Promise((r) => setTimeout(r, 100));
+    expect(taxService.syncAppData).toHaveBeenCalledTimes(1);
+  });
 });
