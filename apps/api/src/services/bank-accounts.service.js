@@ -102,7 +102,7 @@ export const listBankAccountsByUser = async (rawUserId) => {
   const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
   const totalLimitTotal = accounts.reduce((sum, a) => sum + a.limitTotal, 0);
   const totalLimitUsed = accounts.reduce((sum, a) => sum + a.limitUsed, 0);
-  const totalLimitAvailable = accounts.reduce((sum, a) => sum + a.limitAvailable, 0);
+  const totalLimitAvailable = totalLimitTotal - totalLimitUsed;
 
   return {
     accounts,

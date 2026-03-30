@@ -47,6 +47,7 @@ const BankAccountsWidget = (): JSX.Element => {
   const [isSaving, setIsSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [insight, setInsight] = useState<BankAccountInsight | null>(null);
   const money = useMaskedCurrency();
 
@@ -143,9 +144,10 @@ const BankAccountsWidget = (): JSX.Element => {
     try {
       await bankAccountsService.delete(id);
       setConfirmDeleteId(null);
+      setDeleteError(null);
       load();
     } catch {
-      /* ignore */
+      setDeleteError("Não foi possível excluir a conta. Tente novamente.");
     }
   };
 
@@ -270,6 +272,11 @@ const BankAccountsWidget = (): JSX.Element => {
                 </span>
                 <span className="text-xs leading-relaxed">{insight.message}</span>
               </div>
+            ) : null}
+
+            {/* Delete error */}
+            {deleteError ? (
+              <p className="mb-2 text-xs text-red-600">{deleteError}</p>
             ) : null}
 
             {/* Account list */}
