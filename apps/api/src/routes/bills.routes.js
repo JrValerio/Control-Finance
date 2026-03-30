@@ -6,6 +6,7 @@ import {
   createBillsBatchForUser,
   listBillsByUser,
   getBillsSummaryForUser,
+  getUtilityBillsPanelForUser,
   updateBillForUser,
   deleteBillForUser,
   markBillAsPaidForUser,
@@ -19,6 +20,15 @@ router.get("/summary", async (req, res, next) => {
   try {
     const summary = await getBillsSummaryForUser(req.user.id);
     res.status(200).json(summary);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/utility-panel", async (req, res, next) => {
+  try {
+    const panel = await getUtilityBillsPanelForUser(req.user.id);
+    res.status(200).json(panel);
   } catch (error) {
     next(error);
   }

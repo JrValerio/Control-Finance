@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { requireActiveTrialOrPaidPlan } from "../middlewares/entitlement.middleware.js";
 import { aiRateLimiter } from "../middlewares/rate-limit.middleware.js";
-import { generateFinancialInsight, generateBankAccountInsight, generateUtilityInsight } from "../services/ai.service.js";
+import { generateFinancialInsight, generateUtilityInsight } from "../services/ai.service.js";
 
 const router = Router();
 
@@ -11,17 +11,6 @@ const router = Router();
 router.get("/insight", authMiddleware, requireActiveTrialOrPaidPlan, aiRateLimiter, async (req, res, next) => {
   try {
     const insight = await generateFinancialInsight(req.user.id);
-    res.status(200).json(insight);
-  } catch (error) {
-    next(error);
-  }
-});
-
-// GET /ai/bank-account-insight — risk label + contextual message for bank accounts.
-// Returns null when user has no accounts or AI call fails.
-router.get("/bank-account-insight", authMiddleware, requireActiveTrialOrPaidPlan, aiRateLimiter, async (req, res, next) => {
-  try {
-    const insight = await generateBankAccountInsight(req.user.id);
     res.status(200).json(insight);
   } catch (error) {
     next(error);

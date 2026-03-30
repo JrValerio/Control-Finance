@@ -54,6 +54,22 @@ export interface BillsBatchResult {
   bills: unknown[];
 }
 
+export interface UtilityPanelSummary {
+  totalPending: number;
+  totalAmount: number;
+  overdueCount: number;
+  overdueAmount: number;
+  dueSoonCount: number;
+  dueSoonAmount: number;
+}
+
+export interface UtilityPanel {
+  overdue: Bill[];
+  dueSoon: Bill[];
+  upcoming: Bill[];
+  summary: UtilityPanelSummary;
+}
+
 export interface MarkPaidResult {
   bill: Bill;
   transaction: {
@@ -199,6 +215,28 @@ export const billsService = {
   createBatch: async (bills: CreateBillPayload[]): Promise<Bill[]> => {
     const { data } = await api.post<BillsBatchResult>("/bills/batch", { bills });
     return (data.bills as BillApiPayload[]).map(normalizeBill);
+  },
+
+  getUtilityPanel: async (): Promise<UtilityPanel> => {
+    const { data } = await api.get<{
+      overdue: BillApiPayload[];
+      dueSoon: BillApiPayload[];
+      upcoming: BillApiPayload[];
+      summary: UtilityPanelSummary;
+    }>("/bills/utility-panel");
+    return {
+      overdue: (data.overdue ?? []).map(normalizeBill).filter(isValidBill),
+      dueSoon: (data.dueSoon ?? []).map(normalizeBill).filter(isValidBill),
+      upcoming: (data.upcoming ?? []).map(normalizeBill).filter(isValidBill),
+      summary: {
+        totalPending: Number(data.summary?.totalPending) || 0,
+        totalAmount: Number(data.summary?.totalAmount) || 0,
+        overdueCount: Number(data.summary?.overdueCount) || 0,
+        overdueAmount: Number(data.summary?.overdueAmount) || 0,
+        dueSoonCount: Number(data.summary?.dueSoonCount) || 0,
+        dueSoonAmount: Number(data.summary?.dueSoonAmount) || 0,
+      },
+    };
   },
 
   markPaid: async (id: number, opts: { paidAt?: string } = {}): Promise<MarkPaidResult> => {

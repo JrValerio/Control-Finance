@@ -8,12 +8,6 @@ export interface AiInsight {
   action_label: string;
 }
 
-export interface BankAccountInsight {
-  riskLabel: "saudável" | "pressionada" | "no limite";
-  type: "success" | "warning" | "critical";
-  message: string;
-}
-
 export interface UtilityInsight {
   riskLabel: "contas vencidas" | "vence em breve" | "em dia";
   type: "success" | "warning" | "critical";
@@ -23,11 +17,6 @@ export interface UtilityInsight {
 export const aiService = {
   getInsight: async (): Promise<AiInsight | null> => {
     const { data } = await api.get<AiInsight | null>("/ai/insight");
-    return data;
-  },
-
-  getBankAccountInsight: async (): Promise<BankAccountInsight | null> => {
-    const { data } = await api.get<BankAccountInsight | null>("/ai/bank-account-insight");
     return data;
   },
 

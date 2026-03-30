@@ -248,3 +248,334 @@ describe("GET /ai/insight", () => {
     expect(userContent.top_categories[0].expense).toBe(400);
   });
 });
+
+// ─── GET /ai/bank-account-insight ────────────────────────────────────────────
+
+const localDate = (offsetDays) => {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+
+const resetAiState = async () => {
+  resetLoginProtectionState();
+  resetImportRateLimiterState();
+  resetWriteRateLimiterState();
+  resetHttpMetricsForTests();
+  mockCreate.mockReset();
+  await dbQuery("DELETE FROM bills");
+  await dbQuery("DELETE FROM bank_accounts");
+  await dbQuery("DELETE FROM user_profiles");
+  await dbQuery("DELETE FROM user_forecasts");
+  await dbQuery("DELETE FROM transactions");
+  await dbQuery("DELETE FROM categories");
+  await dbQuery("DELETE FROM user_identities");
+  await dbQuery("DELETE FROM users");
+};
+
+describe("GET /ai/bank-account-insight", () => {
+  beforeAll(async () => { await setupTestDb(); });
+  afterAll(async () => { await clearDbClientForTests(); });
+  beforeEach(resetAiState);
+
+  it("retorna 401 sem token", async () => {
+    const res = await request(app).get("/ai/bank-account-insight");
+    expect(res.status).toBe(401);
+  });
+
+  it("retorna null quando usuario nao tem contas bancarias", async () => {
+    const token = await registerAndLogin("bank-insight-empty@test.dev");
+
+    const res = await request(app)
+      .get("/ai/bank-account-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBeNull();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("retorna type success e chama LLM quando conta saudavel", async () => {
+    const token = await registerAndLogin("bank-insight-healthy@test.dev");
+
+    await request(app)
+      .post("/bank-accounts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Conta Corrente", balance: 1500, limitTotal: 1000 });
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Sua conta está positiva e com limite disponível. Bom momento para reservar.")
+    );
+
+    const res = await request(app)
+      .get("/ai/bank-account-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("success");
+    expect(res.body.riskLabel).toBe("saudável");
+    expect(typeof res.body.message).toBe("string");
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  it("retorna type warning e riskLabel pressionada quando conta usa limite", async () => {
+    const token = await registerAndLogin("bank-insight-warning@test.dev");
+
+    // balance negative means limitUsed > 0
+    await request(app)
+      .post("/bank-accounts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Conta", balance: -300, limitTotal: 1000 });
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Você está usando parte do cheque especial. Evite novos gastos essa semana.")
+    );
+
+    const res = await request(app)
+      .get("/ai/bank-account-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("warning");
+    expect(res.body.riskLabel).toBe("pressionada");
+  });
+
+  it("retorna type critical e riskLabel no limite quando limite esgotado", async () => {
+    const token = await registerAndLogin("bank-insight-critical@test.dev");
+
+    // balance = -1000, limitTotal = 1000 → limitUsed = limitTotal
+    await request(app)
+      .post("/bank-accounts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Conta", balance: -1000, limitTotal: 1000 });
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Limite esgotado. Priorize quitar o saldo negativo antes de qualquer gasto.")
+    );
+
+    const res = await request(app)
+      .get("/ai/bank-account-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("critical");
+    expect(res.body.riskLabel).toBe("no limite");
+  });
+
+  it("retorna null silenciosamente quando LLM falha", async () => {
+    const token = await registerAndLogin("bank-insight-llm-fail@test.dev");
+
+    await request(app)
+      .post("/bank-accounts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Conta", balance: 500, limitTotal: 0 });
+
+    mockCreate.mockRejectedValueOnce(new Error("timeout"));
+
+    const res = await request(app)
+      .get("/ai/bank-account-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBeNull();
+  });
+
+  it("nao envia valores monetarios crus ao LLM", async () => {
+    const token = await registerAndLogin("bank-insight-no-raw-values@test.dev");
+
+    await request(app)
+      .post("/bank-accounts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Conta", balance: 2500.75, limitTotal: 5000 });
+
+    mockCreate.mockResolvedValueOnce(buildMockAnthropicResponse("OK"));
+
+    await request(app)
+      .get("/ai/bank-account-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    const callArg = mockCreate.mock.calls[0][0];
+    const context = JSON.parse(callArg.messages[0].content);
+
+    // Should have booleans/ratios — not raw currency amounts
+    expect(typeof context.total_balance_positive).toBe("boolean");
+    expect(typeof context.using_limit).toBe("boolean");
+    expect(typeof context.limit_pressure_pct).toBe("number");
+    // Should NOT expose raw balance or limitTotal
+    expect(context.total_balance).toBeUndefined();
+    expect(context.limit_total).toBeUndefined();
+  });
+});
+
+// ─── GET /ai/utility-insight ─────────────────────────────────────────────────
+
+describe("GET /ai/utility-insight", () => {
+  beforeAll(async () => { await setupTestDb(); });
+  afterAll(async () => { await clearDbClientForTests(); });
+  beforeEach(resetAiState);
+
+  it("retorna 401 sem token", async () => {
+    const res = await request(app).get("/ai/utility-insight");
+    expect(res.status).toBe(401);
+  });
+
+  it("retorna null quando nao ha contas de consumo pendentes", async () => {
+    const token = await registerAndLogin("util-insight-empty@test.dev");
+
+    const res = await request(app)
+      .get("/ai/utility-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBeNull();
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it("retorna type critical quando ha contas vencidas", async () => {
+    const token = await registerAndLogin("util-insight-critical@test.dev");
+    const PAST = localDate(-5);
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Energia vencida", amount: 180, dueDate: PAST, billType: "energy" });
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Há conta de energia vencida há 5 dias. Regularize para evitar corte.")
+    );
+
+    const res = await request(app)
+      .get("/ai/utility-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("critical");
+    expect(res.body.riskLabel).toBe("contas vencidas");
+    expect(typeof res.body.message).toBe("string");
+    expect(mockCreate).toHaveBeenCalledOnce();
+  });
+
+  it("retorna type warning quando nao ha vencidas mas ha contas a vencer em 7 dias", async () => {
+    const token = await registerAndLogin("util-insight-warning@test.dev");
+    const SOON = localDate(3);
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Água próxima", amount: 95, dueDate: SOON, billType: "water" });
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Conta de água vence em breve. Reserve o valor agora.")
+    );
+
+    const res = await request(app)
+      .get("/ai/utility-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("warning");
+    expect(res.body.riskLabel).toBe("vence em breve");
+  });
+
+  it("retorna type success quando todas as contas sao futuras (> 7 dias)", async () => {
+    const token = await registerAndLogin("util-insight-success@test.dev");
+    const FUTURE = localDate(20);
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Internet futura", amount: 120, dueDate: FUTURE, billType: "internet" });
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Todas as contas de consumo estão em dia. Nenhuma urgência no momento.")
+    );
+
+    const res = await request(app)
+      .get("/ai/utility-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("success");
+    expect(res.body.riskLabel).toBe("em dia");
+  });
+
+  it("retorna null silenciosamente quando LLM falha", async () => {
+    const token = await registerAndLogin("util-insight-llm-fail@test.dev");
+    const PAST = localDate(-1);
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Gás vencido", amount: 60, dueDate: PAST, billType: "gas" });
+
+    mockCreate.mockRejectedValueOnce(new Error("LLM unavailable"));
+
+    const res = await request(app)
+      .get("/ai/utility-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toBeNull();
+  });
+
+  it("critical tem prioridade sobre warning quando ha mistura de buckets", async () => {
+    const token = await registerAndLogin("util-insight-priority@test.dev");
+    const PAST = localDate(-2);
+    const SOON = localDate(2);
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Energia vencida", amount: 150, dueDate: PAST, billType: "energy" });
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Água próxima", amount: 90, dueDate: SOON, billType: "water" });
+
+    mockCreate.mockResolvedValueOnce(buildMockAnthropicResponse("Duas pendências urgentes."));
+
+    const res = await request(app)
+      .get("/ai/utility-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("critical");
+  });
+
+  it("ignora contas de consumo pagas no calculo do insight", async () => {
+    const token = await registerAndLogin("util-insight-paid@test.dev");
+    const PAST = localDate(-3);
+    const FUTURE = localDate(30);
+
+    // Create and pay an overdue bill
+    const created = await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Energia paga", amount: 200, dueDate: PAST, billType: "energy" });
+
+    await request(app)
+      .patch(`/bills/${created.body.id}/mark-paid`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({});
+
+    // Only a future pending bill remains
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Internet futura", amount: 100, dueDate: FUTURE, billType: "internet" });
+
+    mockCreate.mockResolvedValueOnce(buildMockAnthropicResponse("Tudo em dia."));
+
+    const res = await request(app)
+      .get("/ai/utility-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    // Should be success, not critical — paid overdue bill must not influence risk
+    expect(res.body.type).toBe("success");
+  });
+});

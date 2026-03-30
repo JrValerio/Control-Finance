@@ -479,6 +479,53 @@ export const createBillsBatchForUser = async (userId, payloads) => {
   });
 };
 
+const UTILITY_BILL_TYPES = ["energy", "water", "internet", "phone", "gas"];
+const UTILITY_TYPES_PLACEHOLDER = UTILITY_BILL_TYPES.map((_, i) => `$${i + 2}`).join(", ");
+
+/**
+ * Returns utility bills (energy/water/internet/phone/gas) grouped by urgency.
+ * Buckets: overdue (past due), dueSoon (within 7 days), upcoming (beyond 7 days).
+ * Paid bills are excluded.
+ *
+ * @param {number} userId
+ */
+export const getUtilityBillsPanelForUser = async (userId) => {
+  const uid = normalizeUserId(userId);
+  const today = new Date().toISOString().slice(0, 10);
+  const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const { rows } = await dbQuery(
+    `SELECT * FROM bills
+     WHERE user_id = $1
+       AND bill_type IN (${UTILITY_TYPES_PLACEHOLDER})
+       AND status = 'pending'
+     ORDER BY due_date ASC`,
+    [uid, ...UTILITY_BILL_TYPES],
+  );
+
+  const bills = rows.map(mapBillRow);
+
+  const overdue = bills.filter((b) => b.dueDate < today);
+  const dueSoon = bills.filter((b) => b.dueDate >= today && b.dueDate <= in7Days);
+  const upcoming = bills.filter((b) => b.dueDate > in7Days);
+
+  const toMoney2 = (arr) => Number(arr.reduce((s, b) => s + b.amount, 0).toFixed(2));
+
+  return {
+    overdue,
+    dueSoon,
+    upcoming,
+    summary: {
+      totalPending: bills.length,
+      totalAmount: toMoney2(bills),
+      overdueCount: overdue.length,
+      overdueAmount: toMoney2(overdue),
+      dueSoonCount: dueSoon.length,
+      dueSoonAmount: toMoney2(dueSoon),
+    },
+  };
+};
+
 /**
  * Returns the sum and count of pending bills whose due_date <= endDate.
  * Used by the forecast engine to compute the adjusted projected balance.
