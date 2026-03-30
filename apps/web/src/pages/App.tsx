@@ -10,6 +10,7 @@ import ForecastCard from "../components/ForecastCard";
 import FinancialAlertBanner from "../components/FinancialAlertBanner";
 import BankAccountsWidget from "../components/BankAccountsWidget";
 import BillsSummaryWidget from "../components/BillsSummaryWidget";
+import UtilityBillsWidget from "../components/UtilityBillsWidget";
 import CreditCardsSummaryWidget from "../components/CreditCardsSummaryWidget";
 import SalaryWidget from "../components/SalaryWidget";
 import TransactionList from "../components/TransactionList";
@@ -2456,6 +2457,8 @@ const App = ({
 
             <BankAccountsWidget />
           </section>
+
+          <UtilityBillsWidget />
 
           <SalaryWidget />
 

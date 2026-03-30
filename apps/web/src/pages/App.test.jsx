@@ -8,6 +8,8 @@ import { analyticsService } from "../services/analytics.service";
 import { forecastService } from "../services/forecast.service";
 import { profileService } from "../services/profile.service";
 import { billsService } from "../services/bills.service";
+import { bankAccountsService } from "../services/bank-accounts.service";
+import { aiService } from "../services/ai.service";
 import { creditCardsService } from "../services/credit-cards.service";
 import { salaryService } from "../services/salary.service";
 
@@ -83,6 +85,21 @@ vi.mock("../services/profile.service", () => ({
 vi.mock("../services/bills.service", () => ({
   billsService: {
     getSummary: vi.fn(),
+    getUtilityPanel: vi.fn(),
+  },
+}));
+
+vi.mock("../services/bank-accounts.service", () => ({
+  bankAccountsService: {
+    list: vi.fn(),
+  },
+}));
+
+vi.mock("../services/ai.service", () => ({
+  aiService: {
+    getInsight: vi.fn(),
+    getBankAccountInsight: vi.fn(),
+    getUtilityInsight: vi.fn(),
   },
 }));
 
@@ -338,6 +355,19 @@ describe("App", () => {
       overdueCount: 0,
       overdueTotal: 0,
     });
+    billsService.getUtilityPanel.mockResolvedValue({
+      overdue: [],
+      dueSoon: [],
+      upcoming: [],
+      summary: { totalPending: 0, totalAmount: 0, overdueCount: 0, overdueAmount: 0, dueSoonCount: 0, dueSoonAmount: 0 },
+    });
+    bankAccountsService.list.mockResolvedValue({
+      accounts: [],
+      summary: { totalBalance: 0, totalLimitTotal: 0, totalLimitUsed: 0, totalLimitAvailable: 0, accountsCount: 0 },
+    });
+    aiService.getInsight.mockResolvedValue(null);
+    aiService.getBankAccountInsight.mockResolvedValue(null);
+    aiService.getUtilityInsight.mockResolvedValue(null);
     creditCardsService.list.mockResolvedValue({
       items: [],
     });
