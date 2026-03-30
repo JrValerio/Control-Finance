@@ -97,6 +97,27 @@ export interface ReopenInvoiceResult {
   success: boolean;
 }
 
+export type InvoiceParseConfidence = "high" | "low";
+
+export interface CreditCardInvoicePdf {
+  id: number;
+  userId: number;
+  creditCardId: number;
+  issuer: string;
+  cardLast4: string | null;
+  periodStart: string;
+  periodEnd: string;
+  dueDate: string;
+  totalAmount: number;
+  minimumPayment: number | null;
+  financedBalance: number | null;
+  parseConfidence: InvoiceParseConfidence;
+  parseMetadata: Record<string, unknown>;
+  linkedBillId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 const normalizeString = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
 const normalizeStringOrNull = (value: unknown) => {
@@ -252,5 +273,31 @@ export const creditCardsService = {
       reopenedPurchasesCount: Number(raw.reopenedPurchasesCount) || 0,
       success: Boolean(raw.success),
     };
+  },
+
+  parseInvoicePdf: async (cardId: number, file: File): Promise<CreditCardInvoicePdf> => {
+    const form = new FormData();
+    form.append("file", file);
+    const { data } = await api.post(`/credit-cards/${cardId}/invoices/parse-pdf`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return data as CreditCardInvoicePdf;
+  },
+
+  listInvoicesPdf: async (cardId: number): Promise<CreditCardInvoicePdf[]> => {
+    const { data } = await api.get<CreditCardInvoicePdf[]>(`/credit-cards/${cardId}/invoices`);
+    return data;
+  },
+
+  linkBillToInvoicePdf: async (
+    cardId: number,
+    invoiceId: number,
+    billId: number
+  ): Promise<CreditCardInvoicePdf> => {
+    const { data } = await api.post<CreditCardInvoicePdf>(
+      `/credit-cards/${cardId}/invoices/${invoiceId}/link-bill`,
+      { billId }
+    );
+    return data;
   },
 };
