@@ -145,11 +145,11 @@ const buildDocumentDetail = (overrides: Partial<TaxDocumentDetail> = {}): TaxDoc
   ...overrides,
 });
 
-const renderPage = () =>
+const renderPage = (props: { onOpenProfileSettings?: () => void } = {}) =>
   render(
     <MemoryRouter initialEntries={["/app/tax/2026"]}>
       <Routes>
-        <Route path="/app/tax/:taxYear" element={<TaxPage onBack={vi.fn()} />} />
+        <Route path="/app/tax/:taxYear" element={<TaxPage onBack={vi.fn()} {...props} />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -870,5 +870,57 @@ describe("TaxPage", () => {
     // Aguarda estabilização — não deve ter chamadas adicionais
     await new Promise((r) => setTimeout(r, 100));
     expect(taxService.syncAppData).toHaveBeenCalledTimes(1);
+  });
+
+  it("exibe botão 'Configurar CPF' no alerta de CPF não configurado e chama onOpenProfileSettings ao clicar", async () => {
+    const user = userEvent.setup();
+    const onOpenProfileSettings = vi.fn();
+
+    vi.mocked(profileService.getMe).mockResolvedValue({
+      id: 1,
+      name: "Test",
+      email: "test@example.com",
+      profile: {
+        salaryMonthly: null,
+        bankLimitTotal: null,
+        payday: null,
+        displayName: null,
+        avatarUrl: null,
+        taxpayerCpf: null, // sem CPF → warning TAXPAYER_CPF_NOT_CONFIGURED
+      },
+    });
+
+    renderPage({ onOpenProfileSettings });
+
+    await waitFor(() => {
+      expect(screen.getByText("Configurar CPF")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Configurar CPF" }));
+    expect(onOpenProfileSettings).toHaveBeenCalledOnce();
+  });
+
+  it("nao exibe botão 'Configurar CPF' quando CPF já está configurado", async () => {
+    vi.mocked(profileService.getMe).mockResolvedValue({
+      id: 1,
+      name: "Test",
+      email: "test@example.com",
+      profile: {
+        salaryMonthly: null,
+        bankLimitTotal: null,
+        payday: null,
+        displayName: null,
+        avatarUrl: null,
+        taxpayerCpf: "123.456.789-09",
+      },
+    });
+
+    renderPage({ onOpenProfileSettings: vi.fn() });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Central do Leão" })).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole("button", { name: "Configurar CPF" })).not.toBeInTheDocument();
   });
 });

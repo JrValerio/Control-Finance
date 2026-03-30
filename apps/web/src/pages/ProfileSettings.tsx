@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import { profileService, type UserProfile } from "../services/profile.service";
 import { getApiErrorMessage } from "../utils/apiError";
 import { useDiscreetMode } from "../context/DiscreetModeContext";
@@ -74,6 +75,8 @@ const ProfileSettings = ({
   onOpenBilling = undefined,
 }: ProfileSettingsProps): JSX.Element => {
   const { isDiscreetMode, toggleDiscreetMode } = useDiscreetMode();
+  const [searchParams] = useSearchParams();
+  const cpfInputRef = useRef<HTMLInputElement>(null);
 
   // Account fields
   const [email, setEmail] = useState("");
@@ -146,6 +149,19 @@ const ProfileSettings = ({
       if (successTimerRef.current) clearTimeout(successTimerRef.current);
     };
   }, [loadProfile]);
+
+  useEffect(() => {
+    if (searchParams.get("focus") !== "taxpayer_cpf") return;
+    if (!cpfInputRef.current) return;
+    const el = cpfInputRef.current;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.focus();
+    el.classList.add("ring-2", "ring-amber-400");
+    const timer = setTimeout(() => {
+      el.classList.remove("ring-2", "ring-amber-400");
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [searchParams]);
 
   const handleAiPrefChange = useCallback(
     async (field: "ai_tone" | "ai_insight_frequency", value: string) => {
@@ -324,6 +340,7 @@ const ProfileSettings = ({
                     CPF do titular (IRPF)
                   </label>
                   <input
+                    ref={cpfInputRef}
                     id="taxpayer_cpf"
                     type="text"
                     inputMode="numeric"
