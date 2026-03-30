@@ -156,13 +156,28 @@ const OperationalSummaryPanel = (): JSX.Element | null => {
       };
 
   // ── Tile 6: Consignado ────────────────────────────────────────────────────
+  const consignadoAccent: TileProps["accent"] =
+    consignado.comprometimentoPct != null && consignado.comprometimentoPct > 35
+      ? "danger"
+      : consignado.comprometimentoPct != null && consignado.comprometimentoPct > 30
+        ? "warning"
+        : consignado.monthlyTotal > 0
+          ? "default"
+          : "muted";
   const consignadoTile: TileProps =
     consignado.monthlyTotal > 0
       ? {
           label: "Consignado",
           primary: money(consignado.monthlyTotal),
-          secondary: "Desconto mensal",
-          accent: "warning",
+          secondary:
+            consignado.contractsCount > 0
+              ? `${consignado.contractsCount} contrato${consignado.contractsCount > 1 ? "s" : ""}`
+              : "Desconto mensal",
+          tertiary:
+            consignado.comprometimentoPct != null
+              ? `${consignado.comprometimentoPct}% da margem`
+              : undefined,
+          accent: consignadoAccent,
         }
       : {
           label: "Consignado",

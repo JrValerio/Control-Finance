@@ -28,7 +28,18 @@ export interface Consignacao {
   description: string;
   amount: number;
   consignacaoType: ConsignacaoType;
+  endDate: string | null;
   createdAt: string;
+}
+
+export type MarginStatus = "safe" | "warning" | "exceeded";
+
+export interface ConsignadoOverview {
+  contracts: Consignacao[];
+  monthlyTotal: number;
+  comprometimentoPct: number | null;
+  netAfterConsignado: number | null;
+  marginStatus: MarginStatus | null;
 }
 
 export interface ActiveBenefitStatement {
@@ -98,6 +109,7 @@ const normalizeConsignacao = (raw: Record<string, unknown>): Consignacao => ({
   description:     typeof raw.description === "string" ? raw.description : "",
   amount:          Number(raw.amount)          || 0,
   consignacaoType: (raw.consignacaoType as ConsignacaoType) ?? "other",
+  endDate:         typeof raw.endDate === "string" ? raw.endDate : null,
   createdAt:       typeof raw.createdAt === "string" ? raw.createdAt : "",
 });
 
@@ -165,5 +177,19 @@ export const salaryService = {
 
   deleteConsignacao: async (id: number): Promise<void> => {
     await api.delete(`/salary/consignacoes/${id}`);
+  },
+
+  getConsignadoOverview: async (): Promise<ConsignadoOverview> => {
+    const { data } = await api.get("/salary/consignado-overview");
+    const raw = data as Record<string, unknown>;
+    return {
+      contracts: Array.isArray(raw.contracts)
+        ? (raw.contracts as Record<string, unknown>[]).map(normalizeConsignacao)
+        : [],
+      monthlyTotal:        Number(raw.monthlyTotal)        || 0,
+      comprometimentoPct:  raw.comprometimentoPct  != null ? Number(raw.comprometimentoPct)  : null,
+      netAfterConsignado:  raw.netAfterConsignado  != null ? Number(raw.netAfterConsignado)  : null,
+      marginStatus:        (raw.marginStatus as MarginStatus | null) ?? null,
+    };
   },
 };

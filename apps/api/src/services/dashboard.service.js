@@ -88,12 +88,16 @@ export const getDashboardSnapshot = async (userId) => {
       [uid],
     ),
 
-    // 6. Consignado: sum of all monthly consignação amounts for this user
+    // 6. Consignado: monthly total, contract count, gross salary for margin %
     dbQuery(
-      `SELECT COALESCE(SUM(sc.amount), 0) AS total
-       FROM salary_consignacoes sc
-       JOIN salary_profiles sp ON sp.id = sc.salary_profile_id
-       WHERE sp.user_id = $1`,
+      `SELECT
+         COALESCE(SUM(sc.amount), 0) AS monthly_total,
+         COUNT(sc.id) AS contracts_count,
+         sp.gross_salary
+       FROM salary_profiles sp
+       LEFT JOIN salary_consignacoes sc ON sc.salary_profile_id = sp.id
+       WHERE sp.user_id = $1
+       GROUP BY sp.gross_salary`,
       [uid],
     ),
   ]);
@@ -125,8 +129,16 @@ export const getDashboardSnapshot = async (userId) => {
           month: String(forecastRow.month),
         }
       : null,
-    consignado: {
-      monthlyTotal: toNum(consignadoRes.rows[0]?.total),
-    },
+    consignado: (() => {
+      const row = consignadoRes.rows[0];
+      const monthlyTotal = toNum(row?.monthly_total);
+      const contractsCount = toInt(row?.contracts_count);
+      const grossSalary = toNum(row?.gross_salary);
+      const comprometimentoPct =
+        grossSalary > 0 && monthlyTotal > 0
+          ? Number(((monthlyTotal / grossSalary) * 100).toFixed(1))
+          : null;
+      return { monthlyTotal, contractsCount, comprometimentoPct };
+    })(),
   };
 };

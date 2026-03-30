@@ -114,6 +114,7 @@ vi.mock("../services/salary.service", () => ({
     getProfile: vi.fn(),
     upsertProfile: vi.fn(),
     syncImportedBenefitProfile: vi.fn(),
+    getConsignadoOverview: vi.fn(),
   },
 }));
 
@@ -372,6 +373,7 @@ describe("App", () => {
       items: [],
     });
     salaryService.getProfile.mockResolvedValue(null);
+    salaryService.getConsignadoOverview.mockResolvedValue({ contracts: [], monthlyTotal: 0, comprometimentoPct: null, netAfterConsignado: null, marginStatus: null });
     transactionsService.exportCsv.mockResolvedValue({
       blob: new Blob(["id,type\n1,Entrada"], { type: "text/csv;charset=utf-8" }),
       fileName: "transacoes.csv",
