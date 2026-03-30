@@ -190,6 +190,8 @@ const mapBillRow = (row) => ({
   referenceMonth: row.reference_month || null,
   billType: row.bill_type || null,
   sourceImportSessionId: row.source_import_session_id || null,
+  matchStatus: row.match_status ?? "unmatched",
+  linkedTransactionId: row.linked_transaction_id ? Number(row.linked_transaction_id) : null,
   createdAt: toISODateTime(row.created_at),
   updatedAt: toISODateTime(row.updated_at),
 });
