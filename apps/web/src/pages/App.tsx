@@ -8,6 +8,7 @@ import ImportHistoryModal from "../components/ImportHistoryModal";
 import UpgradeModal from "../components/UpgradeModal";
 import ForecastCard from "../components/ForecastCard";
 import FinancialAlertBanner from "../components/FinancialAlertBanner";
+import BankAccountsWidget from "../components/BankAccountsWidget";
 import BillsSummaryWidget from "../components/BillsSummaryWidget";
 import CreditCardsSummaryWidget from "../components/CreditCardsSummaryWidget";
 import SalaryWidget from "../components/SalaryWidget";
@@ -2452,6 +2453,8 @@ const App = ({
               <BillsSummaryWidget onOpenBills={handleOpenBills} />
               <CreditCardsSummaryWidget onOpenCreditCards={handleOpenCreditCards} />
             </div>
+
+            <BankAccountsWidget />
           </section>
 
           <SalaryWidget />
