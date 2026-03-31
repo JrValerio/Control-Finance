@@ -2,7 +2,28 @@
 
 > Documento operacional para executar a Sprint 8 com foco em tornar o dominio de cartao totalmente confiavel no ciclo de fatura, no caixa e na conciliacao com pendencias.
 
-Status: iniciada em 31/03/2026.
+Status: concluida em 31/03/2026.
+
+---
+
+## 0. Entregas executadas
+
+### PRs da Sprint 8
+
+1. PR #369 - kickoff documental da sprint
+2. PR #370 - S8.1 (fechamento de ciclo deterministico em meses curtos)
+3. PR #371 - S8.2 (leitura operacional no frontend de cartao)
+4. PR #372 - S8.3 (guard rails de conciliacao invoice-bill)
+5. PR final S8.4 (este PR) - hardening e fechamento executivo
+
+### Evidencia de validacao final (S8.4)
+
+- Lint monorepo: `npm run lint`
+- Typecheck web: `npm -w apps/web run typecheck`
+- API testes direcionados: `npm -w apps/api run test -- src/credit-cards.test.js src/credit-card-invoices.test.js`
+- Web testes direcionados: `npm -w apps/web run test:run -- src/pages/CreditCardsPage.test.tsx src/components/CreditCardsSummaryWidget.test.tsx`
+
+Todos os comandos acima concluiram com sucesso.
 
 ---
 
