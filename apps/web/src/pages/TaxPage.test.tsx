@@ -880,6 +880,8 @@ describe("TaxPage", () => {
       id: 1,
       name: "Test",
       email: "test@example.com",
+      trialEndsAt: null,
+      trialExpired: false,
       profile: {
         salaryMonthly: null,
         bankLimitTotal: null,
@@ -905,6 +907,8 @@ describe("TaxPage", () => {
       id: 1,
       name: "Test",
       email: "test@example.com",
+      trialEndsAt: null,
+      trialExpired: false,
       profile: {
         salaryMonthly: null,
         bankLimitTotal: null,
