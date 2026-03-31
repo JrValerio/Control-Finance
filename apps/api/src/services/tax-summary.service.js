@@ -180,6 +180,7 @@ const getLatestStoredSummaryRow = async (userId, taxYear) => {
 export const getTaxSummaryByYear = async (userId, taxYearValue) => {
   const normalizedUserId = normalizeTaxUserId(userId);
   const taxYear = normalizeTaxYear(taxYearValue);
+  const activeRuleConfig = await requireActiveTaxRuleConfigByYear(taxYear);
   const sourceCounts = await getSourceCountsByUserAndYear(normalizedUserId, taxYear);
   const latestSummary = await getLatestStoredSummaryRow(normalizedUserId, taxYear);
   const summaryPayload = {
@@ -189,8 +190,8 @@ export const getTaxSummaryByYear = async (userId, taxYearValue) => {
 
   return {
     taxYear,
-    exerciseYear: taxYear,
-    calendarYear: taxYear - 1,
+    exerciseYear: activeRuleConfig.exerciseYear,
+    calendarYear: activeRuleConfig.calendarYear,
     status: latestSummary ? "generated" : "not_generated",
     snapshotVersion: latestSummary ? Number(latestSummary.snapshot_version) : null,
     ...summaryPayload,

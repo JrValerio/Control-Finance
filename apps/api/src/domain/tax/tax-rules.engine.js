@@ -117,6 +117,12 @@ export const getTaxRuleSeedDefinitionsForYear = (taxYear) => {
   }));
 };
 
+export const listTaxRuleSeedYears = () =>
+  Object.keys(TAX_RULE_SEED_BY_YEAR)
+    .map((yearValue) => Number(yearValue))
+    .filter((yearValue) => Number.isInteger(yearValue))
+    .sort((leftYear, rightYear) => leftYear - rightYear);
+
 export const calculateSimplifiedDiscount = ({
   annualTaxableIncome,
   comparisonRules = {},

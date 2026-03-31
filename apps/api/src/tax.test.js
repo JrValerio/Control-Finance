@@ -467,6 +467,8 @@ describe("Tax API foundation", () => {
     expect(response.body.documentTypes).toContain("income_report_bank");
     expect(Array.isArray(response.body.ruleFamilies)).toBe(true);
     expect(response.body.ruleFamilies).toContain("obligation");
+    expect(Array.isArray(response.body.supportedTaxYears)).toBe(true);
+    expect(response.body.supportedTaxYears).toContain(2026);
     expect(typeof response.body.apiVersion).toBe("string");
     expect(response.body.apiVersion.length).toBeGreaterThan(0);
   });
@@ -1920,6 +1922,19 @@ describe("Tax API foundation", () => {
       },
       generatedAt: null,
     });
+  });
+
+  it("GET /tax/summary/:taxYear retorna 404 quando nao ha regras fiscais ativas para o exercicio", async () => {
+    const token = await registerAndLogin("tax-summary-rules-missing@test.dev");
+    const response = await request(app)
+      .get("/tax/summary/2030")
+      .set("Authorization", `Bearer ${token}`);
+
+    expectErrorResponseWithRequestId(
+      response,
+      404,
+      "Regras fiscais ativas indisponiveis para o exercicio informado.",
+    );
   });
 
   it("POST /tax/summary/:taxYear/rebuild gera snapshot versionado com fatos revisados", async () => {
