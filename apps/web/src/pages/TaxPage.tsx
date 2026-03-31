@@ -373,6 +373,8 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
   const [uploadErrorMessage, setUploadErrorMessage] = useState("");
   const [manualFactErrorMessage, setManualFactErrorMessage] = useState("");
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Guard: fire auto-sync at most once per mount (StrictMode + dep-change safety)
+  const hasAutoSyncedRef = useRef(false);
 
   const showSuccess = useCallback((message: string) => {
     if (successTimerRef.current) {
@@ -454,6 +456,37 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       }
     };
   }, [loadPageData]);
+
+  // Auto-sync: when the page finishes loading with zero facts and zero documents,
+  // silently pull income_statements + transactions into tax_facts for this year.
+  // The ref prevents re-triggering on subsequent renders or StrictMode double-mounts.
+  useEffect(() => {
+    if (
+      isLoadingPage ||
+      hasAutoSyncedRef.current ||
+      factsPage.total > 0 ||
+      documentsPage.total > 0
+    ) {
+      return;
+    }
+
+    hasAutoSyncedRef.current = true;
+    setIsSyncingAppData(true);
+
+    void taxService
+      .syncAppData(taxYear)
+      .then((result) => {
+        if (result.totalFactsGenerated > 0) {
+          void loadPageData();
+        }
+      })
+      .catch(() => {
+        // Silent — auto-sync failure is non-blocking; user can still sync manually.
+      })
+      .finally(() => {
+        setIsSyncingAppData(false);
+      });
+  }, [isLoadingPage, factsPage.total, documentsPage.total, taxYear, loadPageData]);
 
   const refreshAfterDocumentLifecycle = useCallback(async () => {
     let rebuildErrorMessage = "";
