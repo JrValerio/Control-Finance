@@ -1933,6 +1933,7 @@ describe("App", () => {
             createdAt: "2026-04-01T10:00:00.000Z",
             expiresAt: "2026-04-01T10:30:00.000Z",
             committedAt: "2026-04-01T10:10:00.000Z",
+            state: "imported",
             summary: {
               totalRows: 2,
               validRows: 2,
@@ -1992,6 +1993,7 @@ describe("App", () => {
       createdAt: "2026-04-01T10:00:00.000Z",
       expiresAt: "2026-04-01T10:30:00.000Z",
       committedAt: null,
+      state: "pending_confirmation",
       summary: {
         totalRows: 1,
         validRows: 1,
@@ -2020,6 +2022,7 @@ describe("App", () => {
               createdAt: "2026-04-01T11:00:00.000Z",
               expiresAt: "2026-04-01T11:30:00.000Z",
               committedAt: null,
+              state: "pending_confirmation",
               summary: {
                 totalRows: 1,
                 validRows: 1,

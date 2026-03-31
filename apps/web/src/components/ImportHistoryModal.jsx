@@ -22,29 +22,44 @@ const formatDateTime = (value) => {
 };
 
 const resolveImportStatus = (item) => {
-  if (item.committedAt) {
-    return {
-      label: item.summary.imported > 0 ? "Importada" : "Desfeita",
-      className:
-        item.summary.imported > 0
-          ? "bg-green-100 text-green-700"
-          : "bg-slate-100 text-slate-700",
-    };
+  switch (item.state) {
+    case "imported":
+      return {
+        label: "Importada",
+        className: "bg-green-100 text-green-700",
+        hint: "Sessao confirmada com efeitos ativos.",
+      };
+    case "reverted":
+      return {
+        label: "Revertida",
+        className: "bg-slate-100 text-slate-700",
+        hint: "Sessao desfeita com sucesso.",
+      };
+    case "partial":
+      return {
+        label: "Parcial",
+        className: "bg-amber-100 text-amber-700",
+        hint: `${item.summary.imported} de ${item.summary.validRows} linhas prontas seguem ativas.`,
+      };
+    case "conflict":
+      return {
+        label: "Com conflito",
+        className: "bg-orange-100 text-orange-700",
+        hint: `${item.summary.conflictRows} ${item.summary.conflictRows === 1 ? "linha ficou" : "linhas ficaram"} com conflito na revisao inicial.`,
+      };
+    case "expired":
+      return {
+        label: "Expirada",
+        className: "bg-red-100 text-red-700",
+        hint: "Sessao nao foi confirmada dentro do prazo.",
+      };
+    default:
+      return {
+        label: "Aguardando confirmacao",
+        className: "bg-yellow-100 text-yellow-700",
+        hint: "Sessao ainda sem confirmacao final.",
+      };
   }
-
-  const expiresAtTimestamp = Date.parse(item.expiresAt || "");
-
-  if (Number.isFinite(expiresAtTimestamp) && Date.now() > expiresAtTimestamp) {
-    return {
-      label: "Expirada",
-      className: "bg-red-100 text-red-700",
-    };
-  }
-
-  return {
-    label: "Aguardando confirmação",
-    className: "bg-yellow-100 text-yellow-700",
-  };
 };
 
 const humanizeUndoBlockedReason = (value) => {
@@ -322,6 +337,11 @@ const ImportHistoryModal = ({ isOpen, onClose, onImportSessionReverted = undefin
                             <span className={`rounded px-2 py-0.5 font-semibold ${item.status.className}`}>
                               {item.status.label}
                             </span>
+                            {item.status.hint ? (
+                              <p className="mt-1 max-w-52 text-[11px] text-cf-text-secondary">
+                                {item.status.hint}
+                              </p>
+                            ) : null}
                           </td>
                           <td className="border-b border-cf-border px-2 py-2 text-cf-text-primary">
                             <div className="space-y-1 text-[11px]">

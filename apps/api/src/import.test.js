@@ -273,6 +273,7 @@ describe("transaction imports", () => {
       committedAt: "2026-04-01T10:10:00.000Z",
       fileName: "newer.ofx",
       documentType: "bank_statement",
+      state: "imported",
       canUndo: true,
       undoBlockedReason: null,
       summary: {
@@ -293,6 +294,7 @@ describe("transaction imports", () => {
       committedAt: null,
       fileName: "older.csv",
       documentType: "bank_statement",
+      state: "pending_confirmation",
       canUndo: false,
       undoBlockedReason: null,
       summary: {
@@ -319,6 +321,101 @@ describe("transaction imports", () => {
     expect(pagedResponse.body.items).toHaveLength(1);
     expect(pagedResponse.body.items[0].id).toBe(olderImportId);
     expect(pagedResponse.body.items.map((item) => item.id)).not.toContain(otherUserImportId);
+  });
+
+  it("GET /transactions/imports retorna estados partial e conflict quando aplicavel", async () => {
+    const email = "imports-history-state@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    const userId = await getUserIdByEmail(email);
+
+    const partialImportId = "44444444-4444-4444-8444-444444444444";
+    const conflictImportId = "55555555-5555-4555-8555-555555555555";
+
+    await dbQuery(
+      `
+        INSERT INTO transaction_import_sessions (
+          id,
+          user_id,
+          payload_json,
+          created_at,
+          expires_at,
+          committed_at
+        )
+        VALUES
+          ($1, $2, $3::jsonb, $4, $5, $6),
+          ($7, $8, $9::jsonb, $10, $11, $12)
+      `,
+      [
+        partialImportId,
+        userId,
+        JSON.stringify({
+          fileName: "partial.csv",
+          documentType: "bank_statement",
+          summary: {
+            totalRows: 3,
+            validRows: 3,
+            duplicateRows: 0,
+            conflictRows: 0,
+            invalidRows: 0,
+            income: 300,
+            expense: 0,
+          },
+        }),
+        "2026-04-02T09:00:00.000Z",
+        "2026-04-02T09:30:00.000Z",
+        "2026-04-02T09:05:00.000Z",
+        conflictImportId,
+        userId,
+        JSON.stringify({
+          fileName: "conflict.csv",
+          documentType: "bank_statement",
+          summary: {
+            totalRows: 4,
+            validRows: 1,
+            duplicateRows: 0,
+            conflictRows: 2,
+            invalidRows: 1,
+            income: 100,
+            expense: 0,
+          },
+        }),
+        "2026-04-02T10:00:00.000Z",
+        "2026-04-02T10:30:00.000Z",
+        "2026-04-02T10:05:00.000Z",
+      ],
+    );
+
+    await dbQuery(
+      `
+        INSERT INTO transactions (
+          user_id,
+          type,
+          value,
+          date,
+          description,
+          import_session_id,
+          imported_at
+        )
+        VALUES
+          ($1, 'Entrada', 100, '2026-04-02', 'Parcial ativa', $2, NOW()),
+          ($1, 'Entrada', 100, '2026-04-02', 'Conflito ativo', $3, NOW())
+      `,
+      [userId, partialImportId, conflictImportId],
+    );
+
+    const response = await request(app)
+      .get("/transactions/imports")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+
+    const partialItem = response.body.items.find((item) => item.id === partialImportId);
+    const conflictItem = response.body.items.find((item) => item.id === conflictImportId);
+
+    expect(partialItem).toBeTruthy();
+    expect(conflictItem).toBeTruthy();
+    expect(partialItem.state).toBe("partial");
+    expect(conflictItem.state).toBe("conflict");
   });
 
   it("POST /transactions/import/dry-run bloqueia sem token", async () => {
@@ -1430,6 +1527,7 @@ describe("transaction imports", () => {
 
     const undoResponse = await request(app)
       .delete(`/transactions/imports/${sessionId}`)
+      .send({ confirm: true })
       .set("Authorization", `Bearer ${token}`);
 
     expect(undoResponse.status).toBe(200);
@@ -1444,6 +1542,7 @@ describe("transaction imports", () => {
     expect(historyResponse.status).toBe(200);
     expect(historyResponse.body.items[0]).toMatchObject({
       id: sessionId,
+      state: "reverted",
       canUndo: false,
       summary: {
         imported: 0,
@@ -1504,6 +1603,7 @@ describe("transaction imports", () => {
     expect(historyResponse.status).toBe(200);
     expect(historyResponse.body.items[0]).toMatchObject({
       id: sessionId,
+      state: "imported",
       canUndo: true,
       undoBlockedReason: null,
     });
@@ -1568,6 +1668,7 @@ describe("transaction imports", () => {
     expect(historyResponse.status).toBe(200);
     expect(historyResponse.body.items[0]).toMatchObject({
       id: sessionId,
+      state: "imported",
       canUndo: false,
       undoBlockedReason:
         "Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: 1 lancamento no historico de renda.",
@@ -1607,6 +1708,7 @@ describe("transaction imports", () => {
 
     const undoResponse = await request(app)
       .delete(`/transactions/imports/${sessionId}`)
+      .send({ confirm: true })
       .set("Authorization", `Bearer ${token}`);
 
     expect(undoResponse.status).toBe(200);
@@ -1683,6 +1785,7 @@ describe("transaction imports", () => {
 
     const undoResponse = await request(app)
       .delete(`/transactions/imports/${sessionId}`)
+      .send({ confirm: true })
       .set("Authorization", `Bearer ${token}`);
 
     expect(undoResponse.status).toBe(200);
@@ -1765,6 +1868,7 @@ describe("transaction imports", () => {
 
     const undoResponse = await request(app)
       .delete(`/transactions/imports/${sessionId}`)
+      .send({ confirm: true })
       .set("Authorization", `Bearer ${token}`);
 
     expectErrorResponseWithRequestId(
@@ -1821,6 +1925,7 @@ describe("transaction imports", () => {
 
     const undoResponse = await request(app)
       .delete(`/transactions/imports/${sessionId}`)
+      .send({ confirm: true })
       .set("Authorization", `Bearer ${token}`);
 
     expectErrorResponseWithRequestId(
@@ -1858,6 +1963,7 @@ describe("transaction imports", () => {
 
     const undoResponse = await request(app)
       .delete(`/transactions/imports/${sessionId}`)
+      .send({ confirm: true })
       .set("Authorization", `Bearer ${tokenB}`);
 
     expectErrorResponseWithRequestId(undoResponse, 404, "Sessao de importacao nao encontrada.");
@@ -1869,6 +1975,35 @@ describe("transaction imports", () => {
     );
 
     expect(response.status).toBe(401);
+  });
+
+  it("DELETE /transactions/imports/:sessionId exige confirmacao explicita", async () => {
+    const token = await registerAndLogin("import-undo-confirm-required@controlfinance.dev");
+    await makeProUser("import-undo-confirm-required@controlfinance.dev");
+
+    const csv = csvFile("date,type,value,description\n2026-03-01,Entrada,100,Teste");
+
+    const dryRunResponse = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryRunResponse.body.importId });
+
+    const sessionId = commitResponse.body.importSessionId;
+
+    const undoResponse = await request(app)
+      .delete(`/transactions/imports/${sessionId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expectErrorResponseWithRequestId(
+      undoResponse,
+      400,
+      "Confirmacao explicita obrigatoria para esta acao destrutiva.",
+    );
   });
 
   it("POST /transactions/bulk-delete exclui transacoes selecionadas", async () => {
@@ -1894,7 +2029,7 @@ describe("transaction imports", () => {
     const bulkResponse = await request(app)
       .post("/transactions/bulk-delete")
       .set("Authorization", `Bearer ${token}`)
-      .send({ transactionIds: [t1.body.id, t2.body.id] });
+      .send({ transactionIds: [t1.body.id, t2.body.id], confirm: true });
 
     expect(bulkResponse.status).toBe(200);
     expect(bulkResponse.body.deletedCount).toBe(2);
@@ -1923,7 +2058,7 @@ describe("transaction imports", () => {
     const bulkResponse = await request(app)
       .post("/transactions/bulk-delete")
       .set("Authorization", `Bearer ${tokenB}`)
-      .send({ transactionIds: [tx.body.id] });
+      .send({ transactionIds: [tx.body.id], confirm: true });
 
     expect(bulkResponse.status).toBe(200);
     expect(bulkResponse.body.deletedCount).toBe(0);
@@ -1941,11 +2076,26 @@ describe("transaction imports", () => {
     const response = await request(app)
       .post("/transactions/bulk-delete")
       .set("Authorization", `Bearer ${token}`)
-      .send({ transactionIds: [] });
+      .send({ transactionIds: [], confirm: true });
 
     expect(response.status).toBe(200);
     expect(response.body.deletedCount).toBe(0);
     expect(response.body.success).toBe(true);
+  });
+
+  it("POST /transactions/bulk-delete exige confirmacao explicita", async () => {
+    const token = await registerAndLogin("bulk-delete-confirm-required@controlfinance.dev");
+
+    const response = await request(app)
+      .post("/transactions/bulk-delete")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionIds: [1] });
+
+    expectErrorResponseWithRequestId(
+      response,
+      400,
+      "Confirmacao explicita obrigatoria para esta acao destrutiva.",
+    );
   });
 
   it("POST /transactions/bulk-delete bloqueia sem token", async () => {

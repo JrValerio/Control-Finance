@@ -256,6 +256,14 @@ export interface ImportHistorySummary {
   imported: number;
 }
 
+export type ImportSessionState =
+  | "imported"
+  | "reverted"
+  | "partial"
+  | "conflict"
+  | "pending_confirmation"
+  | "expired";
+
 export interface ImportHistoryItem {
   id: string;
   createdAt: string;
@@ -263,6 +271,7 @@ export interface ImportHistoryItem {
   committedAt: string | null;
   fileName: string | null;
   documentType: string | null;
+  state: ImportSessionState;
   canUndo: boolean;
   undoBlockedReason: string | null;
   summary: ImportHistorySummary;
@@ -449,6 +458,7 @@ interface ImportHistoryApiResponse {
     committedAt?: unknown;
     fileName?: unknown;
     documentType?: unknown;
+    state?: unknown;
     canUndo?: unknown;
     undoBlockedReason?: unknown;
     summary?: {
@@ -467,6 +477,53 @@ interface ImportHistoryApiResponse {
     offset?: unknown;
   };
 }
+
+const normalizeImportSessionState = (value: unknown): ImportSessionState | null => {
+  const normalized = typeof value === "string" ? value.trim() : "";
+
+  if (
+    normalized === "imported" ||
+    normalized === "reverted" ||
+    normalized === "partial" ||
+    normalized === "conflict" ||
+    normalized === "pending_confirmation" ||
+    normalized === "expired"
+  ) {
+    return normalized;
+  }
+
+  return null;
+};
+
+const deriveLegacyImportSessionState = (
+  committedAt: string | null,
+  expiresAt: string,
+  summary: ImportHistorySummary,
+): ImportSessionState => {
+  if (committedAt) {
+    if (summary.imported <= 0) {
+      return "reverted";
+    }
+
+    if (summary.validRows > 0 && summary.imported < summary.validRows) {
+      return "partial";
+    }
+
+    if (summary.conflictRows > 0) {
+      return "conflict";
+    }
+
+    return "imported";
+  }
+
+  const expiresAtTimestamp = Date.parse(expiresAt);
+
+  if (Number.isFinite(expiresAtTimestamp) && Date.now() > expiresAtTimestamp) {
+    return "expired";
+  }
+
+  return "pending_confirmation";
+};
 
 const normalizeImportDryRunProfileDeduction = (
   raw: unknown,
@@ -1092,11 +1149,16 @@ export const transactionsService = {
     };
   },
   deleteImportSession: async (sessionId: string): Promise<{ importSessionId: string; deletedCount: number; success: boolean }> => {
-    const { data } = await api.delete(`/transactions/imports/${sessionId}`);
+    const { data } = await api.delete(`/transactions/imports/${sessionId}`, {
+      data: { confirm: true },
+    });
     return data as { importSessionId: string; deletedCount: number; success: boolean };
   },
   bulkDeleteTransactions: async (transactionIds: number[]): Promise<{ deletedCount: number; success: boolean }> => {
-    const { data } = await api.post("/transactions/bulk-delete", { transactionIds });
+    const { data } = await api.post("/transactions/bulk-delete", {
+      transactionIds,
+      confirm: true,
+    });
     return data as { deletedCount: number; success: boolean };
   },
   getImportHistory: async (options: ImportHistoryOptions = {}): Promise<ImportHistoryResponse> => {
@@ -1114,28 +1176,13 @@ export const transactionsService = {
     });
     const responseBody = data as ImportHistoryApiResponse;
     const items = Array.isArray(responseBody.items)
-      ? responseBody.items.map((item) => ({
-          id: String(item?.id || ""),
-          createdAt: String(item?.createdAt || ""),
-          expiresAt: String(item?.expiresAt || ""),
-          committedAt:
+      ? responseBody.items.map((item) => {
+          const committedAt =
             typeof item?.committedAt === "string" && item.committedAt.trim()
               ? item.committedAt
-              : null,
-          fileName:
-            typeof item?.fileName === "string" && item.fileName.trim()
-              ? item.fileName.trim()
-              : null,
-          documentType:
-            typeof item?.documentType === "string" && item.documentType.trim()
-              ? item.documentType.trim()
-              : null,
-          canUndo: Boolean(item?.canUndo),
-          undoBlockedReason:
-            typeof item?.undoBlockedReason === "string" && item.undoBlockedReason.trim()
-              ? item.undoBlockedReason.trim()
-              : null,
-          summary: {
+              : null;
+          const expiresAt = String(item?.expiresAt || "");
+          const summary: ImportHistorySummary = {
             totalRows: Number(item?.summary?.totalRows) || 0,
             validRows: Number(item?.summary?.validRows) || 0,
             duplicateRows: Number(item?.summary?.duplicateRows) || 0,
@@ -1144,8 +1191,32 @@ export const transactionsService = {
             income: Number(item?.summary?.income) || 0,
             expense: Number(item?.summary?.expense) || 0,
             imported: Number(item?.summary?.imported) || 0,
-          },
-        }))
+          };
+
+          return {
+            id: String(item?.id || ""),
+            createdAt: String(item?.createdAt || ""),
+            expiresAt,
+            committedAt,
+            fileName:
+              typeof item?.fileName === "string" && item.fileName.trim()
+                ? item.fileName.trim()
+                : null,
+            documentType:
+              typeof item?.documentType === "string" && item.documentType.trim()
+                ? item.documentType.trim()
+                : null,
+            state:
+              normalizeImportSessionState(item?.state) ||
+              deriveLegacyImportSessionState(committedAt, expiresAt, summary),
+            canUndo: Boolean(item?.canUndo),
+            undoBlockedReason:
+              typeof item?.undoBlockedReason === "string" && item.undoBlockedReason.trim()
+                ? item.undoBlockedReason.trim()
+                : null,
+            summary,
+          };
+        })
       : [];
     const responseLimit = Number(responseBody.pagination?.limit);
     const responseOffset = Number(responseBody.pagination?.offset);

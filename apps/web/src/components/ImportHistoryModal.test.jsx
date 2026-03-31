@@ -36,6 +36,7 @@ describe("ImportHistoryModal", () => {
             committedAt: "2026-04-01T10:10:00.000Z",
             fileName: "itau-90-dias.ofx",
             documentType: "bank_statement",
+            state: "reverted",
             canUndo: false,
             undoBlockedReason:
               "Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: 1 conta derivada.",
@@ -56,7 +57,7 @@ describe("ImportHistoryModal", () => {
 
     render(<ImportHistoryModal isOpen onClose={vi.fn()} />);
 
-    expect(await screen.findByText("Desfeita")).toBeInTheDocument();
+    expect(await screen.findByText("Revertida")).toBeInTheDocument();
     expect(screen.getByText("itau-90-dias.ofx")).toBeInTheDocument();
     expect(screen.getByText("Extrato bancário")).toBeInTheDocument();
     expect(screen.getByText("Já existentes: 1")).toBeInTheDocument();
@@ -83,6 +84,7 @@ describe("ImportHistoryModal", () => {
               committedAt: "2026-04-01T10:10:00.000Z",
               fileName: "inss.pdf",
               documentType: "income_statement_inss",
+              state: "imported",
               canUndo: true,
               undoBlockedReason: null,
               summary: {
@@ -109,6 +111,7 @@ describe("ImportHistoryModal", () => {
               committedAt: "2026-04-01T10:10:00.000Z",
               fileName: "inss.pdf",
               documentType: "income_statement_inss",
+              state: "reverted",
               canUndo: false,
               undoBlockedReason: null,
               summary: {
@@ -154,6 +157,6 @@ describe("ImportHistoryModal", () => {
     });
 
     expect(await screen.findByText("Importação desfeita com sucesso.")).toBeInTheDocument();
-    expect(screen.getByText("Desfeita")).toBeInTheDocument();
+    expect(screen.getByText("Revertida")).toBeInTheDocument();
   });
 });

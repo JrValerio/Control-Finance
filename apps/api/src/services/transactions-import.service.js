@@ -284,6 +284,40 @@ const normalizeSummaryInteger = (value, fallbackValue = 0) => {
   return parsedValue;
 };
 
+const resolveImportSessionState = ({
+  committedAt,
+  expiresAt,
+  imported,
+  summary,
+}) => {
+  if (committedAt) {
+    if (imported <= 0) {
+      return "reverted";
+    }
+
+    const validRows = normalizeSummaryInteger(summary?.validRows, 0);
+    const conflictRows = normalizeSummaryInteger(summary?.conflictRows, 0);
+
+    if (validRows > 0 && imported < validRows) {
+      return "partial";
+    }
+
+    if (conflictRows > 0) {
+      return "conflict";
+    }
+
+    return "imported";
+  }
+
+  const expiresAtTimestamp = Date.parse(String(expiresAt || ""));
+
+  if (Number.isFinite(expiresAtTimestamp) && expiresAtTimestamp <= Date.now()) {
+    return "expired";
+  }
+
+  return "pending_confirmation";
+};
+
 const toIsoDateString = (value) => {
   if (!value) {
     return null;
@@ -1098,6 +1132,8 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
     const summary = payload.summary || {};
     const imported = normalizeSummaryInteger(row.active_imported_count, 0);
     const committedAt = toIsoDateString(row.committed_at);
+    const createdAt = toIsoDateString(row.created_at);
+    const expiresAt = toIsoDateString(row.expires_at);
     const derivedIncomeStatements = normalizeSummaryInteger(
       row.active_income_statements_count,
       0,
@@ -1116,10 +1152,28 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
           )
         : { undoBlockedReason: null };
 
+    const normalizedSummary = {
+      totalRows: normalizeSummaryInteger(summary.totalRows, 0),
+      validRows: normalizeSummaryInteger(summary.validRows, 0),
+      duplicateRows: normalizeSummaryInteger(summary.duplicateRows, 0),
+      conflictRows: normalizeSummaryInteger(summary.conflictRows, 0),
+      invalidRows: normalizeSummaryInteger(summary.invalidRows, 0),
+      income: normalizeSummaryNumber(summary.income, 0),
+      expense: normalizeSummaryNumber(summary.expense, 0),
+      imported,
+    };
+
+    const state = resolveImportSessionState({
+      committedAt,
+      expiresAt,
+      imported,
+      summary: normalizedSummary,
+    });
+
     return {
       id: String(row.id),
-      createdAt: toIsoDateString(row.created_at),
-      expiresAt: toIsoDateString(row.expires_at),
+      createdAt,
+      expiresAt,
       committedAt,
       fileName:
         typeof payload.fileName === "string" && payload.fileName.trim()
@@ -1129,18 +1183,10 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
         typeof payload.documentType === "string" && payload.documentType.trim()
           ? payload.documentType.trim()
           : null,
+      state,
       canUndo: Boolean(committedAt) && imported > 0 && !undoPlan.undoBlockedReason,
       undoBlockedReason: undoPlan.undoBlockedReason,
-      summary: {
-        totalRows: normalizeSummaryInteger(summary.totalRows, 0),
-        validRows: normalizeSummaryInteger(summary.validRows, 0),
-        duplicateRows: normalizeSummaryInteger(summary.duplicateRows, 0),
-        conflictRows: normalizeSummaryInteger(summary.conflictRows, 0),
-        invalidRows: normalizeSummaryInteger(summary.invalidRows, 0),
-        income: normalizeSummaryNumber(summary.income, 0),
-        expense: normalizeSummaryNumber(summary.expense, 0),
-        imported,
-      },
+      summary: normalizedSummary,
     };
   }));
 
