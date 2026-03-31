@@ -220,7 +220,9 @@ export default function GoalsSection() {
     try {
       const [goalsData, forecast] = await Promise.all([
         goalsService.list(),
-        forecastService.getCurrent().catch(() => null),
+        forecastService
+          .getCurrent({ feature: "forecast", widget: "goals-section", operation: "load" })
+          .catch(() => null),
       ]);
       setGoals(goalsData);
       setProjectedBalance(forecast?.adjustedProjectedBalance ?? null);

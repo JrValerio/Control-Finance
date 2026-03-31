@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { requireActiveTrialOrPaidPlan } from "../middlewares/entitlement.middleware.js";
+import { logWarn } from "../observability/logger.js";
 import {
   maybeSendFlipNotification,
   maybeSendPaydayReminder,
@@ -11,9 +12,10 @@ const router = Router();
 
 router.use(authMiddleware, requireActiveTrialOrPaidPlan);
 
-const logNotificationError = (userId, notificationType, error) => {
-  console.error({
+const logNotificationError = (requestId, userId, notificationType, error) => {
+  logWarn({
     event: "forecast.notification.failed",
+    requestId: requestId || null,
     userId,
     notificationType,
     error: error?.message || "Unknown error",
@@ -34,14 +36,15 @@ router.get("/current", async (req, res, next) => {
 router.post("/recompute", async (req, res, next) => {
   try {
     const userId = req.user.id;
+    const requestId = req.requestId || null;
     const forecast = await computeForecast(userId);
 
     // Notifications are best-effort and must not break recompute responses.
     void maybeSendFlipNotification(userId, forecast).catch((error) => {
-      logNotificationError(userId, "flip_neg", error);
+      logNotificationError(requestId, userId, "flip_neg", error);
     });
     void maybeSendPaydayReminder(userId, forecast).catch((error) => {
-      logNotificationError(userId, "payday_reminder", error);
+      logNotificationError(requestId, userId, "payday_reminder", error);
     });
 
     res.status(200).json(forecast);

@@ -121,7 +121,11 @@ const ForecastCard = ({
         return;
       }
 
-      const current = await forecastService.getCurrent();
+      const current = await forecastService.getCurrent({
+        feature: "forecast",
+        widget: "forecast-card",
+        operation: "load",
+      });
 
       if (current !== null) {
         setForecast(current);
@@ -131,7 +135,11 @@ const ForecastCard = ({
       }
 
       // No forecast yet - trigger initial compute
-      const computed = await forecastService.recompute();
+      const computed = await forecastService.recompute({
+        feature: "forecast",
+        widget: "forecast-card",
+        operation: "initial-recompute",
+      });
       setForecast(computed);
       persistForecast(computed);
       setCardState("active");
@@ -150,7 +158,11 @@ const ForecastCard = ({
     setIsRecomputing(true);
     setError("");
     try {
-      const updated = await forecastService.recompute();
+      const updated = await forecastService.recompute({
+        feature: "forecast",
+        widget: "forecast-card",
+        operation: "manual-recompute",
+      });
       setForecast(updated);
       persistForecast(updated);
     } catch {

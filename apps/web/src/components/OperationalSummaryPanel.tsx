@@ -54,7 +54,7 @@ const OperationalSummaryPanel = (): JSX.Element | null => {
 
   useEffect(() => {
     dashboardService
-      .getSnapshot()
+      .getSnapshot({ feature: "dashboard", widget: "operational-summary-panel", operation: "load" })
       .then(setSnapshot)
       .catch(() => {/* non-blocking — panel just won't render */})
       .finally(() => setIsLoading(false));

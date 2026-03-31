@@ -16,7 +16,7 @@ const FinancialAlertBanner = (): JSX.Element | null => {
   });
 
   useEffect(() => {
-    void forecastService.getCurrent().then((forecast) => {
+    void forecastService.getCurrent({ feature: "forecast", widget: "financial-alert-banner", operation: "load" }).then((forecast) => {
       if (forecast !== null) {
         setProjectedBalance(forecast.adjustedProjectedBalance);
         setMonth(forecast.month);

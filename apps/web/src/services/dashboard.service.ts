@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, withApiRequestContext, type ApiRequestContext } from "./api";
 
 export interface DashboardBills {
   overdueCount: number;
@@ -82,8 +82,8 @@ const normalizeSnapshot = (raw: Record<string, unknown>): DashboardSnapshot => (
 });
 
 export const dashboardService = {
-  getSnapshot: async (): Promise<DashboardSnapshot> => {
-    const { data } = await api.get("/dashboard/snapshot");
+  getSnapshot: async (context?: ApiRequestContext): Promise<DashboardSnapshot> => {
+    const { data } = await api.get("/dashboard/snapshot", withApiRequestContext(context));
     return normalizeSnapshot(data as Record<string, unknown>);
   },
 };
