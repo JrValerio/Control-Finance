@@ -214,8 +214,15 @@ describe("TaxPage", () => {
       }),
     );
     vi.mocked(taxService.rebuildSummary).mockResolvedValue(buildSummary({ snapshotVersion: 2 }));
-    vi.mocked(taxService.bulkApproveFacts).mockResolvedValue({ updatedCount: 1 });
-    vi.mocked(taxService.reviewFact).mockResolvedValue(buildFact({ reviewStatus: "approved" }));
+    vi.mocked(taxService.bulkApproveFacts).mockResolvedValue({
+      updatedCount: 1,
+      taxYear: 2026,
+      preview: null,
+    });
+    vi.mocked(taxService.reviewFact).mockResolvedValue({
+      fact: buildFact({ reviewStatus: "approved" }),
+      preview: null,
+    });
     vi.mocked(profileService.getMe).mockResolvedValue({
       id: 1,
       name: "Jr",
@@ -245,6 +252,63 @@ describe("TaxPage", () => {
     expect(screen.getByText("Documentos do exercício")).toBeInTheDocument();
     expect(screen.getByText("empregador.pdf")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Aprovar todos pendentes" })).toBeInTheDocument();
+  });
+
+  it("exibe resumo da declaração e painel operacional de pendências", async () => {
+    vi.mocked(taxService.getSummary).mockResolvedValue(
+      buildSummary({
+        sourceCounts: {
+          documents: 1,
+          factsPending: 3,
+          factsApproved: 2,
+        },
+      }),
+    );
+    vi.mocked(taxService.getObligation).mockResolvedValue(
+      buildObligation({
+        approvedFactsCount: 2,
+      }),
+    );
+    vi.mocked(taxService.listFacts).mockResolvedValue({
+      items: [
+        buildFact({
+          id: 901,
+          sourceDocumentId: null,
+          sourceDocument: null,
+          factType: "debt_balance",
+          amount: 1500,
+        }),
+        buildFact({
+          id: 902,
+          conflictCode: "TAX_FACT_DUPLICATE",
+          conflictMessage: "Fato potencialmente duplicado.",
+          metadata: {
+            beneficiaryDocument: "11111111111",
+          },
+        }),
+        buildFact({
+          id: 903,
+          metadata: {
+            beneficiaryDocument: "52998224725",
+          },
+        }),
+      ],
+      page: 1,
+      pageSize: 25,
+      total: 3,
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Resumo da declaração em tela")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Painel de pendências de conferência")).toBeInTheDocument();
+    expect(screen.getByText("CPF titular: 529.982.247-25")).toBeInTheDocument();
+    expect(screen.getByText("3 pendência(s) em revisão humana")).toBeInTheDocument();
+    expect(screen.getByText("Entradas sem arquivo fiscal de origem")).toBeInTheDocument();
+    expect(screen.getByText("Fatos sinalizados como potencialmente duplicados")).toBeInTheDocument();
   });
 
   it("traduz avisos, subcategoria, periodo e conflito para linguagem mais humana", async () => {
@@ -278,7 +342,7 @@ describe("TaxPage", () => {
       expect(screen.getByText("Fatos pendentes fora do cálculo")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Possível duplicidade")).toBeInTheDocument();
+    expect(screen.getAllByText("Possível duplicidade").length).toBeGreaterThan(0);
     expect(
       screen.getByText("Subcategoria fiscal: Aposentadoria do INSS isenta para maiores de 65 anos"),
     ).toBeInTheDocument();
@@ -320,9 +384,9 @@ describe("TaxPage", () => {
     });
 
     expect(screen.getByText(/você está sem obrigatoriedade objetiva/i)).toBeInTheDocument();
-    expect(screen.getByText("Rendimentos Isentos")).toBeInTheDocument();
-    expect(screen.getByText((content) => content.includes("24.751,74"))).toBeInTheDocument();
-    expect(screen.getByText((content) => content.includes("13,36"))).toBeInTheDocument();
+    expect(screen.getAllByText("Rendimentos Isentos").length).toBeGreaterThan(0);
+    expect(screen.getAllByText((content) => content.includes("24.751,74")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText((content) => content.includes("13,36")).length).toBeGreaterThan(0);
   });
 
   it("sinaliza fato pendente com CPF divergente do titular cadastrado", async () => {
@@ -371,6 +435,50 @@ describe("TaxPage", () => {
     });
   });
 
+  it("consome preview do bulk-review sem recarregar summary snapshotado", async () => {
+    const user = userEvent.setup();
+
+    vi.mocked(taxService.bulkApproveFacts).mockResolvedValueOnce({
+      updatedCount: 1,
+      taxYear: 2026,
+      preview: {
+        taxYear: 2026,
+        exerciseYear: 2026,
+        calendarYear: 2025,
+        summary: buildSummary({
+          status: "preview",
+          snapshotVersion: null,
+          generatedAt: null,
+          bestMethod: "legal_deductions",
+          sourceCounts: {
+            documents: 1,
+            factsPending: 0,
+            factsApproved: 4,
+          },
+        }),
+        obligation: buildObligation({
+          approvedFactsCount: 4,
+        }),
+      },
+    });
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("ACME LTDA")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Aprovar todos pendentes" }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Prévia").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Deduções legais").length).toBeGreaterThan(0);
+    });
+
+    expect(taxService.getSummary).toHaveBeenCalledTimes(1);
+    expect(taxService.getObligation).toHaveBeenCalledTimes(1);
+  });
+
   it("gerar resumo chama rebuildSummary e recarrega o espelho fiscal completo", async () => {
     const user = userEvent.setup();
     renderPage();
@@ -416,6 +524,39 @@ describe("TaxPage", () => {
     await waitFor(() => {
       expect(taxService.downloadExport).toHaveBeenCalledWith(2026, "csv");
     });
+  });
+
+  it("abre visualização de impressão para conferência em PDF", async () => {
+    const user = userEvent.setup();
+    const originalPrint = window.print;
+    const printMock = vi.fn();
+
+    Object.defineProperty(window, "print", {
+      configurable: true,
+      value: printMock,
+    });
+
+    try {
+      renderPage();
+
+      await waitFor(() => {
+        expect(screen.getByRole("button", { name: "Imprimir / PDF" })).toBeInTheDocument();
+      });
+
+      await user.click(screen.getByRole("button", { name: "Imprimir / PDF" }));
+
+      expect(printMock).toHaveBeenCalledTimes(1);
+      expect(
+        await screen.findByText(
+          "Modo imprimível aberto. Para gerar PDF, use 'Salvar como PDF' na janela de impressão.",
+        ),
+      ).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(window, "print", {
+        configurable: true,
+        value: originalPrint,
+      });
+    }
   });
 
   it("envia documento, reprocessa e atualiza o dashboard fiscal", async () => {
