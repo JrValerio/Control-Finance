@@ -357,6 +357,57 @@ Essa frente deve fechar antes de qualquer reposicionamento forte de preço ou de
 
 ---
 
+## 10.2 Fechamento operacional por fases e sprints (status executivo)
+
+Data de atualização: 31/03/2026.
+
+Legenda de status:
+
+- ✅ realizado
+- 🟡 em andamento
+- ⚪ próximo
+- 🔵 futuro estratégico
+
+### Fase 0 - Fundação e estabilização
+
+| Sprint | Foco | Evidências | Status |
+|---|---|---|---|
+| Sprint 1 | Contenção da home e redução de fan-out | PR #347 | ✅ |
+| Sprint 2 | Isolamento de falha por widget + contrato semântico + visão do mês realizado-only | PR #348, PR #349, PR #350 | ✅ |
+| Sprint 3 | Estabilização de auth Google OAuth + integridade da main | PR #351, PR #352, PR #353 | ✅ |
+
+### Fase 1 - Precisão financeira core
+
+| Sprint | Foco | Escopo de fechamento | Status |
+|---|---|---|---|
+| Sprint 4 | Forecast semantics (projeção confiável) | saldo real como base, obrigações futuras sem abatimento duplo, trilha de home/auth estabilizada e CI verde em main | ✅ |
+| Sprint 5 | Renda confirmada ponta a ponta (pensão/INSS) | documento -> entidade -> agregado mensal -> projeção sem sumir/duplicar | 🟡 |
+
+### Fase 2 - Operação financeira real
+
+| Sprint | Foco | Status |
+|---|---|---|
+| Sprint 6 | Guard rails operacionais + parsers prioritários de documentos | ⚪ |
+| Sprint 7 | Conta corrente operacional (saldo/limite/risco) | ⚪ |
+| Sprint 8 | Cartão, ciclo de fatura e conciliação | ⚪ |
+
+### Fase 3 - Expansão estratégica
+
+| Sprint | Foco | Status |
+|---|---|---|
+| Sprint 9 | Central do Leão (IRPF MVP) | 🔵 |
+| Sprint 10 | IA operacional por camadas | 🔵 |
+| Sprint 11 | Copiloto contextual ampliado | 🔵 |
+
+### Decisão executiva atual
+
+- Sprint 4 fechada.
+- Sprint 5 iniciada.
+- Documento operacional da Sprint 5: `docs/roadmaps/sprint-5-renda-confirmada.md`.
+- Pendências manuais continuam rastreadas fora de CI (prova visual do PR #348 e validação E2E real do OAuth).
+
+---
+
 ## 11. Frase-guia para não perder o trilho
 
 > **O Control Finance já pensa como copiloto.**
