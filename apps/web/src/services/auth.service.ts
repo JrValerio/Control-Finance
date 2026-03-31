@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, withApiRequestContext } from "./api";
 
 export interface AuthUser {
   id: number | string;
