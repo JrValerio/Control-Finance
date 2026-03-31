@@ -6,6 +6,23 @@ Status: iniciada em 31/03/2026.
 
 ---
 
+## 0. Entregas executadas ate agora
+
+### PRs ja executados na Sprint 9
+
+1. PR #374 - kickoff documental da sprint
+2. PR #375 - S9.1 (contrato fiscal anual e bootstrap)
+
+### Resultado consolidado da S9.1
+
+- Contrato anual fiscal unificado entre bootstrap e summary.
+- Bootstrap fiscal expondo `supportedTaxYears` a partir dos anos seedados.
+- Summary fiscal alinhando `exerciseYear` e `calendarYear` via configuracao ativa de regras.
+- Regressao de API para retorno `404` quando nao ha regras fiscais ativas para o exercicio.
+- Validacao local: `npm -w apps/api run test -- src/tax.test.js` (54 testes verdes) e `npm -w apps/api run lint`.
+
+---
+
 ## 1. Objetivo
 
 Concluir o ciclo MVP da Central do Leao na Fase 3 com foco operacional:
@@ -25,6 +42,10 @@ Concluir o ciclo MVP da Central do Leao na Fase 3 com foco operacional:
 - Refinar guard rails de review e rebuild de resumo anual.
 - Melhorar leitura operacional no frontend de `/app/tax` para pendencias e decisao.
 - Cobrir cenarios criticos com testes direcionados de API e Web.
+- Subfrente explicita: UX fiscal + espelhamento frontend do dominio fiscal.
+- Preview fiscal estruturado antes de confirmacoes finais.
+- Resumo da declaracao em tela com leitura conferivel por bloco fiscal.
+- Modo imprimivel e PDF de conferencia para revisao e arquivo pessoal.
 
 ### Fora de escopo
 
@@ -44,6 +65,7 @@ A Sprint 9 so fecha quando:
 3. Rebuild e export oficial permanecem deterministas e sem efeitos ocultos.
 4. UI fiscal deixa pendencias e proximos passos explicitos para o usuario.
 5. API e UI mantem semantica fiscal unica para tax year e exercise year.
+6. Resumo do IRPF funciona como superficie real de conferencia antes da decisao final.
 
 ---
 
@@ -77,24 +99,33 @@ A Sprint 9 so fecha quando:
 - Revisar consistencia entre regra anual, obrigatoriedade e bootstrap.
 - Endurecer cenarios de ano/exercicio e ownership fiscal.
 - Resultado esperado: contrato anual fiscal deterministico.
+- Status: concluida (PR #375).
 
-### Slice S9.2 - Guard rails de revisao e resumo
+### Slice S9.2 - Guard rails de revisao + preview fiscal estruturado
 
 - Reforcar trilha de revisao e impacto no resumo anual.
-- Cobrir bordas de pending/approved/corrected e warnings operacionais.
-- Resultado esperado: resumo fiscal confiavel e auditavel.
+- Cobrir bordas de pending/approved/corrected, conflitos e warnings operacionais.
+- Tornar preview fiscal estruturado antes da confirmacao final.
+- Resultado esperado: revisao guiada e previsivel para conferencia.
 
-### Slice S9.3 - Export e lifecycle documental
+### Slice S9.3 - Resumo da declaracao em tela
 
-- Fortalecer consistencia de export (JSON/CSV) e lifecycle de documentos.
-- Cobrir bordas de reprocess/delete sem quebrar rastreabilidade.
-- Resultado esperado: dossie oficial estavel ponta a ponta.
+- Consolidar blocos fiscais principais em leitura conferivel e acionavel.
+- Tornar comparacao de regimes explicita (deducoes legais x simplificado).
+- Resultado esperado: resumo anual confiavel e compreensivel para decisao.
 
-### Slice S9.4 - Hardening, smoke e fechamento executivo
+### Slice S9.4 - Modo imprimivel/PDF + fechamento executivo
 
+- Fortalecer consistencia de export (JSON/CSV) e modo de conferencia imprimivel.
+- Entregar PDF de conferencia com rastreabilidade clara.
 - Rodar lint, typecheck e suites direcionadas.
 - Atualizar roadmap para status de conclusao quando criterios forem cumpridos.
 - Resultado esperado: PR final da Sprint 9 pronto para merge com CI verde.
+
+### Trilha transversal da sprint
+
+- Copy semantica correta por tipo documental no modulo fiscal.
+- Ajustes de layout para modulos fiscais/operacionais densos.
 
 ---
 
@@ -107,6 +138,18 @@ A Sprint 9 so fecha quando:
 ---
 
 ## 7. Definition of Done da Sprint 9
+
+### DoD especifico do resumo do IRPF
+
+O resumo deve apresentar minimamente:
+
+- Cabecalho: exercicio, ano-calendario, CPF do titular, status da revisao e ultima atualizacao.
+- Blocos principais: rendimentos tributaveis, isentos/nao tributaveis, tributacao exclusiva, IR retido, bens relevantes, dividas relevantes, deducoes e pendencias.
+- Comparacao de regimes: deducoes legais x simplificado com indicacao explicita de melhor cenario para conferencia (sem decisao invisivel).
+- Painel de pendencias: itens sem documento, com conflito, duplicados e aguardando revisao humana.
+- Saidas: visualizacao em tela, versao imprimivel, export "dados para declarar" e PDF de conferencia.
+
+### DoD geral da Sprint 9
 
 - Criterios funcionais da secao 3 cumpridos.
 - CI dos PRs da Sprint 9 fechado em verde.
