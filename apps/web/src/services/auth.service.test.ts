@@ -7,7 +7,7 @@ vi.mock("./api", () => ({
     post: vi.fn(),
     delete: vi.fn(),
   },
-  withApiRequestContext: vi.fn((context) => ({ headers: {} })),
+  withApiRequestContext: vi.fn(() => ({ headers: {} })),
 }));
 
 const postMock = vi.mocked(api.post);
