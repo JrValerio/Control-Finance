@@ -474,7 +474,7 @@ describe("TaxPage", () => {
     await user.click(screen.getByRole("button", { name: "Enviar documento" }));
     await user.upload(screen.getByLabelText("Arquivo fiscal"), uploadedFile);
     await user.type(screen.getByLabelText("Fonte ou instituição"), "Banco Inter");
-    await user.type(screen.getByLabelText("Observação"), "Informe 2025");
+    await user.type(screen.getByLabelText(/Observação/), "Informe 2025");
     await user.click(screen.getByRole("button", { name: "Enviar e processar" }));
 
     await waitFor(() => {
@@ -492,10 +492,15 @@ describe("TaxPage", () => {
       expect(taxService.rebuildSummary).toHaveBeenCalledWith(2026);
     });
 
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Confirmar" })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole("button", { name: "Confirmar" }));
+
     expect(
       (
         await screen.findAllByText(
-          "Documento enviado e processado. Se houver fatos extraídos, eles já aparecem na fila de revisão.",
+          "Documento enviado e processado. Fatos disponíveis na fila de revisão.",
         )
       ).length,
     ).toBeGreaterThan(0);
