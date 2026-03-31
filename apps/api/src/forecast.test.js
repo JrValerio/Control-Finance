@@ -342,6 +342,35 @@ describe("computeForecast — flip detection (deterministic)", () => {
     expect(result.bankLimit.alertTriggered).toBe(true);
   });
 
+  it("prioriza limite de bank_accounts sobre bank_limit_total legado quando ha contas ativas", async () => {
+    await registerAndLogin("fc-bank-limit-priority@test.dev");
+    const userId = await getUserIdByEmail("fc-bank-limit-priority@test.dev");
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, bank_limit_total)
+       VALUES ($1, 5000)`,
+      [userId],
+    );
+
+    await dbQuery(
+      `INSERT INTO bank_accounts (user_id, name, balance, limit_total)
+       VALUES ($1, 'Conta principal', 0, 1000)`,
+      [userId],
+    );
+
+    await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date)
+       VALUES ($1, 'Saida', 500, $2)`,
+      [userId, FIXED_MONTH_START],
+    );
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.bankLimit).toMatchObject({
+      total: 1000,
+    });
+  });
+
   it("getLatestForecast retorna null antes do primeiro compute", async () => {
     await registerAndLogin("fc-get-null-svc@test.dev");
     const userId = await getUserIdByEmail("fc-get-null-svc@test.dev");
@@ -360,6 +389,31 @@ describe("computeForecast — flip detection (deterministic)", () => {
     expect(result).not.toBeNull();
     expect(result.month).toBe(FIXED_MONTH);
     expect(typeof result.projectedBalance).toBe("number");
+  });
+
+  it("getLatestForecast prioriza limite de contas ativas sobre valor legado do perfil", async () => {
+    await registerAndLogin("fc-get-bank-limit-priority@test.dev");
+    const userId = await getUserIdByEmail("fc-get-bank-limit-priority@test.dev");
+
+    await dbQuery(
+      `INSERT INTO user_profiles (user_id, bank_limit_total)
+       VALUES ($1, 900)`,
+      [userId],
+    );
+
+    await dbQuery(
+      `INSERT INTO bank_accounts (user_id, name, balance, limit_total)
+       VALUES ($1, 'Conta operacional', 100, 250)`,
+      [userId],
+    );
+
+    await computeForecast(userId, { now: FIXED_NOW });
+
+    const result = await getLatestForecast(userId, { now: FIXED_NOW });
+
+    expect(result.bankLimit).toMatchObject({
+      total: 250,
+    });
   });
 });
 

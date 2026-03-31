@@ -116,7 +116,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
   const salaryMonthly =
     profile?.salary_monthly != null ? Number(profile.salary_monthly) : null;
   const payday = profile?.payday != null ? Number(profile.payday) : null;
-  const bankLimitTotal =
+  const profileBankLimitTotal =
     profile?.bank_limit_total != null ? Number(profile.bank_limit_total) : null;
 
   // 2. Realized month totals (up to today only)
@@ -139,6 +139,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
   const bankBalanceResult = await dbQuery(
     `SELECT
        COALESCE(SUM(balance), 0)::numeric AS total_balance,
+       COALESCE(SUM(limit_total), 0)::numeric AS total_limit_total,
        COUNT(*)::int AS active_accounts_count
      FROM bank_accounts
      WHERE user_id = $1
@@ -146,7 +147,10 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
     [uid],
   );
   const totalBankBalance = Number(bankBalanceResult.rows[0]?.total_balance || 0);
+  const totalBankLimitTotal = Number(bankBalanceResult.rows[0]?.total_limit_total || 0);
   const activeAccountsCount = Number(bankBalanceResult.rows[0]?.active_accounts_count || 0);
+  const effectiveBankLimitTotal =
+    activeAccountsCount > 0 ? totalBankLimitTotal : profileBankLimitTotal;
 
   // 3. Daily average spending over last 60 realized days (up to today)
   const sixtyDaysAgo = daysAgoStr(now, 60);
@@ -267,7 +271,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
     billsPendingTotal: Number(billsTotal.toFixed(2)),
     billsPendingCount: billsCount,
     adjustedProjectedBalance,
-    bankLimit: buildBankLimitProjection(bankLimitTotal, adjustedProjectedBalance),
+    bankLimit: buildBankLimitProjection(effectiveBankLimitTotal, adjustedProjectedBalance),
   };
 };
 
@@ -295,12 +299,27 @@ export const getLatestForecast = async (userId, { now = new Date() } = {}) => {
     `SELECT bank_limit_total FROM user_profiles WHERE user_id = $1 LIMIT 1`,
     [uid],
   );
-  const bankLimitTotal =
+  const profileBankLimitTotal =
     profileResult.rows[0]?.bank_limit_total != null
       ? Number(profileResult.rows[0].bank_limit_total)
       : null;
+
+  const bankLimitResult = await dbQuery(
+    `SELECT
+       COALESCE(SUM(limit_total), 0)::numeric AS total_limit_total,
+       COUNT(*)::int AS active_accounts_count
+     FROM bank_accounts
+     WHERE user_id = $1
+       AND is_active = true`,
+    [uid],
+  );
+  const totalBankLimitTotal = Number(bankLimitResult.rows[0]?.total_limit_total || 0);
+  const activeAccountsCount = Number(bankLimitResult.rows[0]?.active_accounts_count || 0);
+  const effectiveBankLimitTotal =
+    activeAccountsCount > 0 ? totalBankLimitTotal : profileBankLimitTotal;
+
   forecast.bankLimit = buildBankLimitProjection(
-    bankLimitTotal,
+    effectiveBankLimitTotal,
     forecast.adjustedProjectedBalance,
   );
   return forecast;
