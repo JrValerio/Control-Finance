@@ -2,7 +2,28 @@
 
 > Documento operacional para executar a Sprint 7 com foco em tornar conta corrente um modulo confiavel de operacao diaria, com leitura clara de saldo, uso de limite e risco real.
 
-Status: iniciada em 31/03/2026.
+Status: concluida em 31/03/2026.
+
+---
+
+## 0. Entregas executadas
+
+### PRs da Sprint 7
+
+1. PR #364 - kickoff documental da sprint
+2. PR #365 - S7.1 (fonte de verdade operacional para limite no forecast)
+3. PR #366 - S7.2 (leitura operacional de risco no frontend)
+4. PR #367 - S7.3 (guard rails de risco no insight de conta)
+5. PR final S7.4 (este PR) - hardening e fechamento executivo
+
+### Evidencia de validacao final (S7.4)
+
+- Lint monorepo: `npm run lint`
+- Typecheck web: `npm run typecheck`
+- API testes direcionados: `npm -w apps/api run test -- src/forecast.test.js src/ai.test.js`
+- Web testes direcionados: `npm -w apps/web run test:run -- src/components/BankAccountsWidget.test.tsx src/components/ForecastCard.test.tsx`
+
+Todos os comandos acima concluiram com sucesso.
 
 ---
 
