@@ -163,6 +163,25 @@ const buildCalculatedSummaryPayload = ({
   };
 };
 
+const buildCalculatedSummaryStateByYear = async (normalizedUserId, taxYear) => {
+  const activeRuleConfig = await requireActiveTaxRuleConfigByYear(taxYear);
+  const sourceCounts = await getSourceCountsByUserAndYear(normalizedUserId, taxYear);
+  const factSelection = await getReviewedTaxFactsSelectionByUserAndYear(normalizedUserId, taxYear);
+  const summaryPayload = buildCalculatedSummaryPayload({
+    reviewedFacts: factSelection.includedFacts,
+    excludedFactsCount: factSelection.excludedFacts.length,
+    sourceCounts,
+    activeRuleConfig,
+  });
+
+  return {
+    activeRuleConfig,
+    sourceCounts,
+    factSelection,
+    summaryPayload,
+  };
+};
+
 const getLatestStoredSummaryRow = async (userId, taxYear) => {
   const result = await dbQuery(
     `SELECT snapshot_version, summary_json, source_counts_json, facts_json, generated_at
@@ -200,21 +219,35 @@ export const getTaxSummaryByYear = async (userId, taxYearValue) => {
   };
 };
 
+export const previewTaxSummaryByYear = async (userId, taxYearValue) => {
+  const normalizedUserId = normalizeTaxUserId(userId);
+  const taxYear = normalizeTaxYear(taxYearValue);
+  const { activeRuleConfig, sourceCounts, summaryPayload } = await buildCalculatedSummaryStateByYear(
+    normalizedUserId,
+    taxYear,
+  );
+
+  return {
+    taxYear,
+    exerciseYear: activeRuleConfig.exerciseYear,
+    calendarYear: activeRuleConfig.calendarYear,
+    status: "preview",
+    snapshotVersion: null,
+    ...buildDefaultSummaryPayload(),
+    ...summaryPayload,
+    sourceCounts,
+    generatedAt: null,
+  };
+};
+
 export const rebuildTaxSummaryByYear = async (userId, taxYearValue) => {
   const normalizedUserId = normalizeTaxUserId(userId);
   const taxYear = normalizeTaxYear(taxYearValue);
-  const activeRuleConfig = await requireActiveTaxRuleConfigByYear(taxYear);
-  const sourceCounts = await getSourceCountsByUserAndYear(normalizedUserId, taxYear);
-  const factSelection = await getReviewedTaxFactsSelectionByUserAndYear(normalizedUserId, taxYear);
+  const { activeRuleConfig, sourceCounts, factSelection, summaryPayload } =
+    await buildCalculatedSummaryStateByYear(normalizedUserId, taxYear);
   const persistedFactsSnapshot = [...factSelection.includedFacts]
     .sort((leftFact, rightFact) => Number(leftFact.id) - Number(rightFact.id))
     .map(mapStoredTaxFactToSnapshotPayload);
-  const summaryPayload = buildCalculatedSummaryPayload({
-    reviewedFacts: factSelection.includedFacts,
-    excludedFactsCount: factSelection.excludedFacts.length,
-    sourceCounts,
-    activeRuleConfig,
-  });
 
   const persistedSummary = await withDbTransaction(async (client) => {
     const currentVersionResult = await client.query(

@@ -16,7 +16,11 @@ import { createManualTaxFactByUser, listTaxFactsByUser } from "../services/tax-f
 import { getTaxObligationByYear } from "../services/tax-obligation.service.js";
 import { bulkApproveTaxFactsByUser, reviewTaxFactByUser } from "../services/tax-reviews.service.js";
 import { getTaxRuleSetsByYear } from "../services/tax-rules.service.js";
-import { getTaxSummaryByYear, rebuildTaxSummaryByYear } from "../services/tax-summary.service.js";
+import {
+  getTaxSummaryByYear,
+  previewTaxSummaryByYear,
+  rebuildTaxSummaryByYear,
+} from "../services/tax-summary.service.js";
 
 const router = Router();
 const TAX_DOCUMENT_MAX_FILE_SIZE_BYTES = Number(
@@ -38,6 +42,19 @@ const createError = (status, message) => {
   const error = new Error(message);
   error.status = status;
   return error;
+};
+
+const buildTaxReviewPreviewByYear = async (userId, taxYear) => {
+  const summary = await previewTaxSummaryByYear(userId, taxYear);
+  const obligation = await getTaxObligationByYear(userId, taxYear);
+
+  return {
+    taxYear: summary.taxYear,
+    exerciseYear: summary.exerciseYear,
+    calendarYear: summary.calendarYear,
+    summary,
+    obligation,
+  };
 };
 
 const ensureValidTaxDocumentFile = (file) => {
@@ -174,7 +191,11 @@ router.post("/app-sync/:taxYear", async (req, res, next) => {
 router.post("/facts/bulk-review", async (req, res, next) => {
   try {
     const result = await bulkApproveTaxFactsByUser(req.user.id, req.body ?? {});
-    res.status(200).json(result);
+    const preview = await buildTaxReviewPreviewByYear(req.user.id, result.taxYear);
+    res.status(200).json({
+      ...result,
+      preview,
+    });
   } catch (error) {
     next(error);
   }
@@ -183,7 +204,11 @@ router.post("/facts/bulk-review", async (req, res, next) => {
 router.patch("/facts/:id/review", async (req, res, next) => {
   try {
     const result = await reviewTaxFactByUser(req.user.id, req.params.id, req.body ?? {});
-    res.status(200).json(result);
+    const preview = await buildTaxReviewPreviewByYear(req.user.id, result.fact.taxYear);
+    res.status(200).json({
+      ...result,
+      preview,
+    });
   } catch (error) {
     next(error);
   }
