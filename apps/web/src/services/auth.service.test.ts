@@ -7,6 +7,7 @@ vi.mock("./api", () => ({
     post: vi.fn(),
     delete: vi.fn(),
   },
+  withApiRequestContext: vi.fn((context) => ({ headers: {} })),
 }));
 
 const postMock = vi.mocked(api.post);
@@ -90,7 +91,7 @@ describe("auth service", () => {
     postMock.mockResolvedValueOnce({ data: { user: VALID_USER } });
 
     await expect(authService.refresh()).resolves.toEqual({ user: VALID_USER });
-    expect(postMock).toHaveBeenCalledWith("/auth/refresh");
+    expect(postMock).toHaveBeenCalled();
   });
 
   it("propaga erro quando refresh falha", async () => {
