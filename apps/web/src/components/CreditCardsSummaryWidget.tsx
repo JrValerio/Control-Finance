@@ -12,29 +12,78 @@ interface CreditCardsSummaryWidgetProps {
 
 interface CreditCardsAggregate {
   cardsCount: number;
+  limitTotal: number;
+  limitUsed: number;
   availableTotal: number;
   openPurchasesTotal: number;
   pendingInvoicesTotal: number;
   pendingInvoicesCount: number;
+  usagePct: number;
+  usageStatus: "unused" | "using" | "exceeded";
 }
 
+const resolveAggregateUsageStatus = (
+  limitTotal: number,
+  limitUsed: number,
+): "unused" | "using" | "exceeded" => {
+  if (limitUsed > limitTotal && limitTotal > 0) return "exceeded";
+  if (limitUsed > 0) return "using";
+  return "unused";
+};
+
 const buildAggregate = (items: CreditCardItem[]): CreditCardsAggregate =>
-  items.reduce<CreditCardsAggregate>(
+  {
+    const aggregate = items.reduce<CreditCardsAggregate>(
     (aggregate, card) => ({
       cardsCount: aggregate.cardsCount + 1,
+      limitTotal: aggregate.limitTotal + card.usage.total,
+      limitUsed: aggregate.limitUsed + card.usage.used,
       availableTotal: aggregate.availableTotal + card.usage.available,
       openPurchasesTotal: aggregate.openPurchasesTotal + card.openPurchasesTotal,
       pendingInvoicesTotal: aggregate.pendingInvoicesTotal + card.pendingInvoicesTotal,
       pendingInvoicesCount: aggregate.pendingInvoicesCount + card.pendingInvoicesCount,
+      usagePct: 0,
+      usageStatus: "unused",
     }),
     {
       cardsCount: 0,
+      limitTotal: 0,
+      limitUsed: 0,
       availableTotal: 0,
       openPurchasesTotal: 0,
       pendingInvoicesTotal: 0,
       pendingInvoicesCount: 0,
+      usagePct: 0,
+      usageStatus: "unused",
     },
   );
+
+    const usagePct =
+      aggregate.limitTotal > 0 ? Number(((aggregate.limitUsed / aggregate.limitTotal) * 100).toFixed(2)) : 0;
+    return {
+      ...aggregate,
+      usagePct,
+      usageStatus: resolveAggregateUsageStatus(aggregate.limitTotal, aggregate.limitUsed),
+    };
+  };
+
+const USAGE_STATUS_LABELS = {
+  unused: "Sem uso",
+  using: "Em uso",
+  exceeded: "Excedido",
+} as const;
+
+const USAGE_STATUS_CLASSNAMES = {
+  unused: "border-cf-border bg-cf-bg-subtle text-cf-text-secondary",
+  using: "border-amber-200 bg-amber-50 text-amber-700",
+  exceeded: "border-red-200 bg-red-50 text-red-700",
+} as const;
+
+const USAGE_PROGRESS_CLASSNAMES = {
+  unused: "bg-cf-border",
+  using: "bg-amber-500",
+  exceeded: "bg-red-500",
+} as const;
 
 const formatDMY = (iso: string): string => {
   const [year, month, day] = iso.split("-");
@@ -208,6 +257,10 @@ const CreditCardsSummaryWidget = ({
   }, []);
 
   const aggregate = useMemo(() => buildAggregate(cards), [cards]);
+  const usageStatusLabel = USAGE_STATUS_LABELS[aggregate.usageStatus];
+  const usageStatusClassName = USAGE_STATUS_CLASSNAMES[aggregate.usageStatus];
+  const usageProgressClassName = USAGE_PROGRESS_CLASSNAMES[aggregate.usageStatus];
+  const usageProgressWidthPct = Math.min(100, aggregate.usagePct);
 
   if (isLoading) {
     return (
@@ -269,7 +322,28 @@ const CreditCardsSummaryWidget = ({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium uppercase text-cf-text-secondary">Limite em uso</p>
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${usageStatusClassName}`}
+                >
+                  {usageStatusLabel}
+                </span>
+              </div>
+              <p className="mt-1 text-sm font-semibold text-cf-text-primary">
+                {money(aggregate.limitUsed)}
+              </p>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-cf-border/60">
+                <div
+                  className={`h-full rounded-full ${usageProgressClassName}`}
+                  style={{ width: `${usageProgressWidthPct}%` }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-cf-text-secondary">{aggregate.usagePct.toFixed(2)}% do limite total</p>
+            </div>
+
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
               <p className="text-xs font-medium uppercase text-cf-text-secondary">Disponível</p>
               <p className="text-sm font-semibold text-cf-text-primary">
