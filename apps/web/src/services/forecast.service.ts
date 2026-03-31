@@ -26,14 +26,43 @@ export interface Forecast {
   bankLimit?: ForecastBankLimit | null;
 }
 
+let getCurrentInFlightRequest: Promise<Forecast | null> | null = null;
+let recomputeInFlightRequest: Promise<Forecast> | null = null;
+
 export const forecastService = {
   getCurrent: async (context?: ApiRequestContext): Promise<Forecast | null> => {
-    const { data } = await api.get<Forecast | null>("/forecasts/current", withApiRequestContext(context));
-    return data;
+    if (getCurrentInFlightRequest) {
+      return getCurrentInFlightRequest;
+    }
+
+    const requestPromise = api
+      .get<Forecast | null>("/forecasts/current", withApiRequestContext(context))
+      .then(({ data }) => data)
+      .finally(() => {
+        if (getCurrentInFlightRequest === requestPromise) {
+          getCurrentInFlightRequest = null;
+        }
+      });
+
+    getCurrentInFlightRequest = requestPromise;
+    return requestPromise;
   },
 
   recompute: async (context?: ApiRequestContext): Promise<Forecast> => {
-    const { data } = await api.post<Forecast>("/forecasts/recompute", undefined, withApiRequestContext(context));
-    return data;
+    if (recomputeInFlightRequest) {
+      return recomputeInFlightRequest;
+    }
+
+    const requestPromise = api
+      .post<Forecast>("/forecasts/recompute", undefined, withApiRequestContext(context))
+      .then(({ data }) => data)
+      .finally(() => {
+        if (recomputeInFlightRequest === requestPromise) {
+          recomputeInFlightRequest = null;
+        }
+      });
+
+    recomputeInFlightRequest = requestPromise;
+    return requestPromise;
   },
 };
