@@ -93,6 +93,45 @@ describe("transaction summary", () => {
     });
   });
 
+  it("GET /transactions/summary ignora pendencias de contas e considera apenas transacoes realizadas", async () => {
+    const token = await registerAndLogin("summary-realizado-only@controlfinance.dev");
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Conta de Internet",
+        amount: 180,
+        dueDate: "2026-02-12",
+      });
+
+    await request(app)
+      .post("/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        type: "Entrada",
+        value: 1200,
+        date: "2026-02-05",
+        description: "Receita liquidada",
+      });
+
+    const response = await request(app)
+      .get("/transactions/summary")
+      .query({
+        month: "2026-02",
+      })
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      month: "2026-02",
+      income: 1200,
+      expense: 0,
+      balance: 1200,
+      byCategory: [],
+    });
+  });
+
   it("GET /transactions/summary retorna totais do mes e breakdown por categoria", async () => {
     const token = await registerAndLogin("summary-mix@controlfinance.dev");
 

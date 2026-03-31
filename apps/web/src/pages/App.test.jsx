@@ -500,6 +500,16 @@ describe("App", () => {
     expect(transactionsService.getMonthlySummary).toHaveBeenCalledWith(expect.any(String));
   });
 
+  it("explicita que a visao do mes considera apenas movimentacoes realizadas", async () => {
+    render(<App />);
+
+    expect(
+      await screen.findByText(
+        "Saldo, entradas e saídas de movimentações realizadas (sem pendências ou projeções).",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("exibe comparativo mensal (MoM) com direcao, percentual e delta absoluto", async () => {
     transactionsService.getMonthlySummary.mockResolvedValueOnce(
       buildSummaryResponse({
