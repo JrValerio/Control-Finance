@@ -388,7 +388,7 @@ Legenda de status:
 | Sprint | Foco | Status |
 |---|---|---|
 | Sprint 6 | Guard rails operacionais + parsers prioritários de documentos | ✅ |
-| Sprint 7 | Conta corrente operacional (saldo/limite/risco) | 🟡 |
+| Sprint 7 | Conta corrente operacional (saldo/limite/risco) | ✅ |
 | Sprint 8 | Cartão, ciclo de fatura e conciliação | ⚪ |
 
 ### Fase 3 - Expansão estratégica
@@ -404,12 +404,14 @@ Legenda de status:
 - Sprint 4 fechada.
 - Sprint 5 concluida.
 - Sprint 6 concluida.
-- Sprint 7 iniciada.
+- Sprint 7 concluida.
+- Sprint 8 passa a ser o proximo alvo operacional.
 - Documento operacional da Sprint 6: `docs/roadmaps/sprint-6-guard-rails-documentais.md`.
 - Documento operacional da Sprint 7: `docs/roadmaps/sprint-7-conta-corrente-operacional.md`.
 - Documento operacional da Sprint 5: `docs/roadmaps/sprint-5-renda-confirmada.md`.
 - Evidencias da Sprint 5: PR #355, PR #356, PR #357, PR #358.
 - Evidencias da Sprint 6: PR #359, PR #360, PR #361, PR #362.
+- Evidencias da Sprint 7: PR #364, PR #365, PR #366, PR #367.
 - Pendências manuais continuam rastreadas fora de CI (prova visual do PR #348 e validação E2E real do OAuth).
 
 ---
