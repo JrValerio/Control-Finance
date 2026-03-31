@@ -61,6 +61,9 @@ export const errorHandler = (error, req, res, next) => {
     latencyMs,
     userId,
     message,
+    feature: req.feature || null,
+    widget: req.widget || null,
+    operation: req.operation || null,
   };
 
   if (code) {

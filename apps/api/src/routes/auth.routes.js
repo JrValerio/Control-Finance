@@ -83,6 +83,8 @@ const issueSessionCookies = async (res, user, req) => {
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
 router.post("/register", async (req, res, next) => {
+  req.feature = "auth";
+  req.operation = "email_password_register";
   try {
     const { user } = await registerUser(req.body || {});
     await issueSessionCookies(res, user, req);
@@ -93,6 +95,8 @@ router.post("/register", async (req, res, next) => {
 });
 
 router.post("/login", loginRateLimiter, bruteForceLoginGuard, async (req, res, next) => {
+  req.feature = "auth";
+  req.operation = "email_password_login";
   try {
     const { user } = await loginUser(req.body || {});
     clearLoginFailures(req);
@@ -107,6 +111,8 @@ router.post("/login", loginRateLimiter, bruteForceLoginGuard, async (req, res, n
 });
 
 router.post("/google", async (req, res, next) => {
+  req.feature = "auth";
+  req.operation = "google_signin_callback";
   try {
     const { user } = await loginOrRegisterWithGoogle(req.body || {});
     await issueSessionCookies(res, user, req);
@@ -117,6 +123,8 @@ router.post("/google", async (req, res, next) => {
 });
 
 router.post("/refresh", async (req, res, next) => {
+  req.feature = "auth";
+  req.operation = "refresh_token_rotate";
   const rawToken = req.cookies?.cf_refresh;
 
   if (!rawToken) {
@@ -140,6 +148,8 @@ router.post("/refresh", async (req, res, next) => {
 });
 
 router.delete("/logout", async (req, res) => {
+  req.feature = "auth";
+  req.operation = "logout";
   const rawToken = req.cookies?.cf_refresh;
 
   if (rawToken) {

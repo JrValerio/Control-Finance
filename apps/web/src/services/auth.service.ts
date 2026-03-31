@@ -80,12 +80,22 @@ export const authService = {
   },
 
   loginWithGoogle: async ({ idToken }: GoogleLoginPayload): Promise<AuthUserResponse> => {
-    const { data } = await api.post("/auth/google", { idToken });
+    const { data } = await api.post("/auth/google", { idToken }, {
+      headers: withApiRequestContext({
+        feature: "auth",
+        operation: "google_signin_callback_xhr",
+      }).headers,
+    });
     return parseUserResponse(data);
   },
 
   refresh: async (): Promise<AuthUserResponse> => {
-    const { data } = await api.post("/auth/refresh");
+    const { data } = await api.post("/auth/refresh", {}, {
+      headers: withApiRequestContext({
+        feature: "auth",
+        operation: "refresh_token_xhr",
+      }).headers,
+    });
     return parseUserResponse(data);
   },
 

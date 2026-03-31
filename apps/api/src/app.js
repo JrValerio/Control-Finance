@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import healthRoutes from "./routes/health.routes.js";
 import metricsRoutes from "./routes/metrics.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import { securityHeadersMiddleware } from "./middlewares/security-headers.middleware.js";
 import categoriesRoutes from "./routes/categories.routes.js";
 import budgetsRoutes from "./routes/budgets.routes.js";
 import analyticsRoutes from "./routes/analytics.routes.js";
@@ -60,6 +61,7 @@ app.set("trust proxy", resolveTrustProxyValue());
 app.use(requestIdMiddleware);
 app.use(httpMetricsMiddleware);
 app.use(requestLoggingMiddleware);
+app.use(securityHeadersMiddleware);
 
 const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:5173")
   .split(",")
