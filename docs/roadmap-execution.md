@@ -395,7 +395,7 @@ Legenda de status:
 
 | Sprint | Foco | Status |
 |---|---|---|
-| Sprint 9 | Central do Leão (IRPF MVP) | 🔵 |
+| Sprint 9 | Central do Leão (IRPF MVP) | 🟡 |
 | Sprint 10 | IA operacional por camadas | 🔵 |
 | Sprint 11 | Copiloto contextual ampliado | 🔵 |
 
@@ -406,10 +406,11 @@ Legenda de status:
 - Sprint 6 concluida.
 - Sprint 7 concluida.
 - Sprint 8 concluida.
-- Sprint 9 definido como proximo alvo executivo.
+- Sprint 9 iniciada.
 - Documento operacional da Sprint 6: `docs/roadmaps/sprint-6-guard-rails-documentais.md`.
 - Documento operacional da Sprint 7: `docs/roadmaps/sprint-7-conta-corrente-operacional.md`.
 - Documento operacional da Sprint 8: `docs/roadmaps/sprint-8-cartao-ciclo-conciliacao.md`.
+- Documento operacional da Sprint 9: `docs/roadmaps/sprint-9-central-do-leao-irpf-mvp.md`.
 - Documento operacional da Sprint 5: `docs/roadmaps/sprint-5-renda-confirmada.md`.
 - Evidencias da Sprint 5: PR #355, PR #356, PR #357, PR #358.
 - Evidencias da Sprint 6: PR #359, PR #360, PR #361, PR #362.
