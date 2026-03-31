@@ -1081,7 +1081,11 @@ export const linkStatementToTransaction = async (userId, statementId, transactio
 
   // Fetch transaction (ownership)
   const { rows: txRows } = await dbQuery(
-    `SELECT * FROM transactions WHERE id = $1 AND user_id = $2`,
+    `SELECT *
+       FROM transactions
+      WHERE id = $1
+        AND user_id = $2
+        AND deleted_at IS NULL`,
     [txid, uid],
   );
   if (!txRows[0]) throw createError(404, "Transacao nao encontrada.");

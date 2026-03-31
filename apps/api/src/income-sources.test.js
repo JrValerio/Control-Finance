@@ -1110,6 +1110,34 @@ describe("income-sources", () => {
     expect(res.status).toBe(404);
   });
 
+  it("POST .../link-transaction retorna 404 para transacao removida (soft delete)", async () => {
+    const { token, statementId, transactionId } = await setupStatementAndTransaction(
+      "inss-link-deleted-tx@test.dev",
+    );
+
+    await dbQuery(
+      `UPDATE transactions
+          SET deleted_at = NOW()
+        WHERE id = $1`,
+      [transactionId],
+    );
+
+    const res = await request(app)
+      .post(`/income-sources/statements/${statementId}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId });
+
+    expectErrorResponseWithRequestId(res, 404, "Transacao nao encontrada.");
+
+    const statementRes = await request(app)
+      .get(`/income-sources/statements/${statementId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(statementRes.status).toBe(200);
+    expect(statementRes.body.statement.status).toBe("draft");
+    expect(statementRes.body.statement.postedTransactionId).toBeNull();
+  });
+
   it("POST .../link-transaction retorna 422 para transacao tipo Saida", async () => {
     const { token, statementId } = await setupStatementAndTransaction(
       "inss-link-exit@test.dev",
