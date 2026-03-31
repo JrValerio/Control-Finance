@@ -2,7 +2,28 @@
 
 > Documento operacional para executar a Sprint 6 com foco em transformar importacao documental em dados financeiros operacionais, com trilha segura de revisao e rollback.
 
-Status: iniciada em 31/03/2026.
+Status: concluida em 31/03/2026.
+
+---
+
+## 0. Entregas executadas
+
+### PRs da Sprint 6
+
+1. PR #359 - kickoff documental da sprint
+2. PR #360 - S6.1 (guard rails de operacao documental)
+3. PR #361 - S6.2 (parser prioritario e normalizacao util)
+4. PR #362 - S6.3 (bills como entidade operacional)
+5. PR final S6.4 (este PR) - hardening e fechamento executivo
+
+### Evidencia de validacao final (S6.4)
+
+- Lint monorepo: `npm run lint`
+- Typecheck web: `npm run typecheck`
+- API testes direcionados: `npm -w apps/api run test -- src/import.test.js src/income-sources.test.js src/bills.test.js src/reconciliation.test.js src/utility-bills-panel.test.js`
+- Web testes direcionados: `npm -w apps/web run test:run -- src/pages/BillsPage.test.tsx src/pages/IncomeSourcesPage.test.tsx src/components/ImportCsvModal.test.jsx`
+
+Todos os comandos acima concluiram com sucesso.
 
 ---
 
