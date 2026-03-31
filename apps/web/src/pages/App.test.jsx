@@ -1023,8 +1023,10 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByText("Não foi possível carregar as metas mensais.")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    const budgetsErrorMessage = await screen.findByText("Não foi possível carregar as metas mensais.");
+    const budgetsErrorAlert = budgetsErrorMessage.closest("[role='alert']") ?? budgetsErrorMessage.parentElement;
+    expect(budgetsErrorAlert).toBeTruthy();
+    await user.click(within(budgetsErrorAlert).getByRole("button", { name: "Tentar novamente" }));
     expect(await screen.findByText("Transporte")).toBeInTheDocument();
     expect(screen.queryByText("Não foi possível carregar as metas mensais.")).not.toBeInTheDocument();
   });
@@ -1887,11 +1889,11 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(
-      await screen.findByText("Não foi possível carregar o resumo mensal."),
-    ).toBeInTheDocument();
+    const summaryErrorMessage = await screen.findByText("Não foi possível carregar o resumo mensal.");
+    const summaryErrorAlert = summaryErrorMessage.closest("[role='alert']") ?? summaryErrorMessage.parentElement;
+    expect(summaryErrorAlert).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    await user.click(within(summaryErrorAlert).getByRole("button", { name: "Tentar novamente" }));
 
     expect(await screen.findByTestId("mom-balance")).toBeInTheDocument();
     expect(screen.getByText("R$ 700,00")).toBeInTheDocument();
