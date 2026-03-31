@@ -2338,7 +2338,7 @@ const App = ({
               <div>
                 <h3 className="text-sm font-medium text-cf-text-primary">Visão do mês</h3>
                 <p className="mt-1 text-xs text-cf-text-secondary">
-                  Saldo, entradas e saídas consolidados antes das análises detalhadas.
+                  Saldo, entradas e saídas de movimentações realizadas (sem pendências ou projeções).
                 </p>
               </div>
               <input
