@@ -58,7 +58,7 @@ export interface TaxSummary {
   taxYear: number;
   exerciseYear: number;
   calendarYear: number;
-  status: "generated" | "not_generated";
+  status: "generated" | "not_generated" | "preview";
   snapshotVersion: number | null;
   mustDeclare: boolean | null;
   obligationReasons: string[];
@@ -121,6 +121,25 @@ export interface TaxObligation {
   approvedFactsCount: number;
   taxpayerCpfConfigured?: boolean;
   excludedFactsCount?: number;
+}
+
+export interface TaxReviewPreview {
+  taxYear: number;
+  exerciseYear: number;
+  calendarYear: number;
+  summary: TaxSummary;
+  obligation: TaxObligation;
+}
+
+export interface TaxFactReviewResult {
+  fact: TaxFact;
+  preview: TaxReviewPreview | null;
+}
+
+export interface TaxBulkApproveResult {
+  updatedCount: number;
+  taxYear: number | null;
+  preview: TaxReviewPreview | null;
 }
 
 export interface TaxFact {
@@ -355,12 +374,16 @@ const normalizeTaxFact = (value: unknown): TaxFact => {
 
 const normalizeSummary = (value: unknown): TaxSummary => {
   const raw = normalizeObject(value);
+  const summaryStatus = normalizeString(raw.status);
 
   return {
     taxYear: normalizeNumber(raw.taxYear),
     exerciseYear: normalizeNumber(raw.exerciseYear),
     calendarYear: normalizeNumber(raw.calendarYear),
-    status: raw.status === "generated" ? "generated" : "not_generated",
+    status:
+      summaryStatus === "generated" || summaryStatus === "preview"
+        ? summaryStatus
+        : "not_generated",
     snapshotVersion: normalizeNullableNumber(raw.snapshotVersion),
     mustDeclare:
       typeof raw.mustDeclare === "boolean"
@@ -448,6 +471,25 @@ const normalizeObligation = (value: unknown): TaxObligation => {
     approvedFactsCount: normalizeNumber(raw.approvedFactsCount),
     taxpayerCpfConfigured: Boolean(raw.taxpayerCpfConfigured),
     excludedFactsCount: normalizeNumber(raw.excludedFactsCount),
+  };
+};
+
+const normalizeReviewPreview = (value: unknown): TaxReviewPreview | null => {
+  const raw = normalizeObject(value);
+
+  if (Object.keys(raw).length === 0) {
+    return null;
+  }
+
+  const summary = normalizeSummary(raw.summary);
+  const obligation = normalizeObligation(raw.obligation);
+
+  return {
+    taxYear: normalizeNumber(raw.taxYear) || summary.taxYear || obligation.taxYear,
+    exerciseYear: normalizeNumber(raw.exerciseYear) || summary.exerciseYear || obligation.exerciseYear,
+    calendarYear: normalizeNumber(raw.calendarYear) || summary.calendarYear || obligation.calendarYear,
+    summary,
+    obligation,
   };
 };
 
@@ -726,20 +768,37 @@ export const taxService = {
             referencePeriod?: string;
           };
         },
-  ): Promise<TaxFact> => {
+  ): Promise<TaxFactReviewResult> => {
     const { data } = await api.patch(`/tax/facts/${factId}/review`, payload);
-    return normalizeTaxFact(normalizeObject(data).fact);
+    const raw = normalizeObject(data);
+
+    // Backward-compatible parser: older responses may return only the fact payload.
+    if (raw.fact) {
+      return {
+        fact: normalizeTaxFact(raw.fact),
+        preview: normalizeReviewPreview(raw.preview),
+      };
+    }
+
+    return {
+      fact: normalizeTaxFact(raw),
+      preview: null,
+    };
   },
 
-  bulkApproveFacts: async (factIds: number[], note?: string): Promise<{ updatedCount: number }> => {
+  bulkApproveFacts: async (factIds: number[], note?: string): Promise<TaxBulkApproveResult> => {
     const { data } = await api.post("/tax/facts/bulk-review", {
       factIds,
       action: "approve",
       note,
     });
 
+    const raw = normalizeObject(data);
+
     return {
-      updatedCount: normalizeNumber(normalizeObject(data).updatedCount),
+      updatedCount: normalizeNumber(raw.updatedCount),
+      taxYear: normalizeNullableNumber(raw.taxYear),
+      preview: normalizeReviewPreview(raw.preview),
     };
   },
 };

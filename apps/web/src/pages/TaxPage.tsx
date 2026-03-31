@@ -360,6 +360,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
   const [isRebuildingSummary, setIsRebuildingSummary] = useState(false);
   const [isSyncingAppData, setIsSyncingAppData] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<"json" | "csv" | null>(null);
+  const [isPrintingDossier, setIsPrintingDossier] = useState(false);
   const [processingFactId, setProcessingFactId] = useState<number | null>(null);
   const [processingDocumentId, setProcessingDocumentId] = useState<number | null>(null);
   const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null);
@@ -388,6 +389,18 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     setSuccessMessage(message);
     successTimerRef.current = setTimeout(() => setSuccessMessage(""), 4000);
   }, []);
+
+  const applyReviewPreview = useCallback(
+    (preview: { summary: TaxSummary; obligation: TaxObligation } | null) => {
+      if (!preview) {
+        return;
+      }
+
+      setSummary(preview.summary);
+      setObligation(preview.obligation);
+    },
+    [],
+  );
 
   const loadPageData = useCallback(async (): Promise<TaxFactsListResult> => {
     const EMPTY_FACTS: TaxFactsListResult = { items: [], page: 1, pageSize: DEFAULT_FACTS_PAGE_SIZE, total: 0 };
@@ -774,8 +787,19 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     setPageError("");
 
     try {
-      await taxService.reviewFact(factId, payload);
-      await loadPageData();
+      const result = await taxService.reviewFact(factId, payload);
+
+      applyReviewPreview(result.preview);
+      setFactsPage((currentPage) => ({
+        ...currentPage,
+        items: currentPage.items.filter((fact) => fact.id !== factId),
+        total: Math.max(currentPage.total - 1, 0),
+      }));
+
+      if (!result.preview) {
+        await loadPageData();
+      }
+
       showSuccess(successLabel);
     } catch (error) {
       setPageError(getApiErrorMessage(error, "Não foi possível revisar o fato fiscal."));
@@ -789,15 +813,25 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
       return;
     }
 
+    const factIds = factsPage.items.map((fact) => fact.id);
+
     setIsBulkApproving(true);
     setPageError("");
 
     try {
-      await taxService.bulkApproveFacts(
-        factsPage.items.map((fact) => fact.id),
-        "Aprovação em lote pela Central do Leão.",
-      );
-      await loadPageData();
+      const result = await taxService.bulkApproveFacts(factIds, "Aprovação em lote pela Central do Leão.");
+
+      applyReviewPreview(result.preview);
+      setFactsPage((currentPage) => ({
+        ...currentPage,
+        items: currentPage.items.filter((fact) => !factIds.includes(fact.id)),
+        total: Math.max(currentPage.total - factIds.length, 0),
+      }));
+
+      if (!result.preview) {
+        await loadPageData();
+      }
+
       showSuccess("Fatos pendentes aprovados em lote.");
     } catch (error) {
       setPageError(getApiErrorMessage(error, "Não foi possível aprovar os fatos em lote."));
@@ -860,9 +894,30 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     }
   };
 
+  const handlePrintDossier = () => {
+    setPageError("");
+    setIsPrintingDossier(true);
+
+    try {
+      if (typeof window === "undefined" || typeof window.print !== "function") {
+        throw new Error("PRINT_UNAVAILABLE");
+      }
+
+      window.print();
+      showSuccess(
+        "Modo imprimível aberto. Para gerar PDF, use 'Salvar como PDF' na janela de impressão.",
+      );
+    } catch {
+      setPageError("Não foi possível abrir a visualização de impressão/PDF de conferência.");
+    } finally {
+      setIsPrintingDossier(false);
+    }
+  };
+
   const headerCalendarYear = summary.calendarYear || obligation.calendarYear || taxYear - 1;
+  const hasGeneratedOrPreviewSummary = summary.status === "generated" || summary.status === "preview";
   const hasResolvedFiscalData =
-    summary.status === "generated" ||
+    hasGeneratedOrPreviewSummary ||
     summary.snapshotVersion !== null ||
     summary.generatedAt !== null ||
     obligation.approvedFactsCount > 0 ||
@@ -880,15 +935,47 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
   const liveWithheldTax = obligation.totals.annualWithheldTax;
   const liveLegalDeductions = obligation.totals.totalLegalDeductions;
   const displayAnnualTaxableIncome =
-    summary.status === "generated" ? summary.annualTaxableIncome : liveTaxableIncome;
+    hasGeneratedOrPreviewSummary ? summary.annualTaxableIncome : liveTaxableIncome;
   const displayAnnualExemptIncome =
-    summary.status === "generated" ? summary.annualExemptIncome : liveExemptIncome;
+    hasGeneratedOrPreviewSummary ? summary.annualExemptIncome : liveExemptIncome;
   const displayAnnualExclusiveIncome =
-    summary.status === "generated" ? summary.annualExclusiveIncome : liveExclusiveIncome;
+    hasGeneratedOrPreviewSummary ? summary.annualExclusiveIncome : liveExclusiveIncome;
   const displayAnnualWithheldTax =
-    summary.status === "generated" ? summary.annualWithheldTax : liveWithheldTax;
+    hasGeneratedOrPreviewSummary ? summary.annualWithheldTax : liveWithheldTax;
   const displayLegalDeductions =
-    summary.status === "generated" ? summary.totalLegalDeductions : liveLegalDeductions;
+    hasGeneratedOrPreviewSummary ? summary.totalLegalDeductions : liveLegalDeductions;
+  const legalDeductionsBase = Math.max(displayAnnualTaxableIncome - displayLegalDeductions, 0);
+  const simplifiedDiscountBase = Math.max(
+    displayAnnualTaxableIncome - summary.simplifiedDiscountUsed,
+    0,
+  );
+  const pendingNoDocumentCount = factsPage.items.filter((fact) => !fact.sourceDocumentId).length;
+  const pendingConflictCount = factsPage.items.filter((fact) => Boolean(fact.conflictCode)).length;
+  const pendingDuplicateCount = factsPage.items.filter(
+    (fact) => fact.conflictCode === "TAX_FACT_DUPLICATE",
+  ).length;
+  const pendingOwnershipMismatchCount = factsPage.items.filter((fact) => {
+    if (!taxpayerCpf) {
+      return false;
+    }
+
+    const ownerDocument = resolveFactOwnerDocument(fact);
+
+    return Boolean(ownerDocument) && normalizeDocumentNumber(taxpayerCpf) !== ownerDocument;
+  }).length;
+  const pendingAssetBalanceAmount = factsPage.items
+    .filter((fact) => fact.factType === "asset_balance")
+    .reduce((sum, fact) => sum + fact.amount, 0);
+  const pendingDebtBalanceAmount = factsPage.items
+    .filter((fact) => fact.factType === "debt_balance")
+    .reduce((sum, fact) => sum + fact.amount, 0);
+  const reviewStatusLabel = showLoadingPlaceholders
+    ? "Revisão fiscal em carregamento"
+    : summary.sourceCounts.factsPending > 0
+      ? `${summary.sourceCounts.factsPending} pendência(s) em revisão humana`
+      : obligation.approvedFactsCount > 0
+        ? "Revisão fiscal sem pendências abertas"
+        : "Sem fatos revisados até agora";
   const excludedApprovedFactsCount = Math.max(
     summary.sourceCounts.factsApproved - obligation.approvedFactsCount,
     0,
@@ -921,15 +1008,17 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     ? "Carregando dados..."
     : summary.status === "generated"
       ? "Gerado"
+      : summary.status === "preview"
+        ? "Prévia"
       : "Ainda não gerado";
   const documentsCountLabel = showLoadingPlaceholders
     ? "Carregando..."
     : `${documentsPage.total} documento(s)`;
 
   return (
-    <div className="min-h-screen bg-cf-bg-page px-4 py-6 sm:px-6">
+    <div className="min-h-screen bg-cf-bg-page px-4 py-6 sm:px-6 print:min-h-0 print:bg-white print:px-0 print:py-0">
       <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-col gap-4 rounded border border-cf-border bg-cf-surface p-5">
+        <div className="mb-6 flex flex-col gap-4 rounded border border-cf-border bg-cf-surface p-5 print:mb-3 print:rounded-none print:border-0 print:p-0">
           <div className="flex flex-col gap-4">
             <div>
               <div className="flex items-center gap-3">
@@ -937,7 +1026,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
                   <button
                     type="button"
                     onClick={onBack}
-                    className="text-sm font-semibold text-cf-text-secondary hover:text-cf-text-primary"
+                    className="text-sm font-semibold text-cf-text-secondary hover:text-cf-text-primary print:hidden"
                   >
                     ← Voltar
                   </button>
@@ -956,6 +1045,12 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
               <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 font-semibold">
                 {generatedStatusLabel}
               </span>
+              <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 font-medium">
+                {reviewStatusLabel}
+              </span>
+              <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 font-medium">
+                CPF titular: {taxpayerCpf ? formatCpf(taxpayerCpf) : "não configurado"}
+              </span>
               {summary.generatedAt && !showLoadingPlaceholders ? (
                 <span className="rounded-full border border-cf-border bg-cf-bg-subtle px-2.5 py-1 font-medium">
                   Atualizado em {formatDateTime(summary.generatedAt)}
@@ -968,7 +1063,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
               ) : null}
             </div>
 
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between print:hidden">
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -1026,6 +1121,14 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
                 >
                   {exportingFormat === "csv" ? "Baixando CSV..." : "Baixar CSV"}
                 </button>
+                <button
+                  type="button"
+                  onClick={handlePrintDossier}
+                  disabled={isPrintingDossier}
+                  className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm font-semibold text-cf-text-primary hover:bg-cf-surface disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isPrintingDossier ? "Abrindo impressão..." : "Imprimir / PDF"}
+                </button>
               </div>
             </div>
           </div>
@@ -1047,6 +1150,10 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
               {successMessage}
             </div>
           ) : null}
+
+          <p className="hidden text-xs text-cf-text-secondary print:block">
+            Conferência fiscal - Exercício {taxYear} (ano-calendário {headerCalendarYear}) - emitido em {formatDateTime(new Date().toISOString())}.
+          </p>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-4">
@@ -1087,6 +1194,8 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
             helper={
               summary.status === "generated"
                 ? `Resumo v${summary.snapshotVersion ?? 0}`
+                : summary.status === "preview"
+                  ? "Prévia dinâmica após revisão"
                 : "Gere o resumo para snapshotar o exercício"
             }
           />
@@ -1101,7 +1210,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
           </section>
         ) : null}
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr] print:mt-2">
           <section className="rounded border border-cf-border bg-cf-surface p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -1180,6 +1289,38 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
                 }
               />
             </div>
+
+            <div className="mt-4 rounded border border-cf-border bg-cf-bg-subtle p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-cf-text-secondary">
+                Comparação de regimes
+              </h3>
+              {showLoadingPlaceholders ? (
+                <p className="mt-2 text-sm text-cf-text-secondary">
+                  Carregando comparação entre deduções legais e simplificado...
+                </p>
+              ) : (
+                <>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <FactSummaryCard
+                      title="Deduções Legais"
+                      value={formatCurrency(legalDeductionsBase)}
+                      helper={`Base após deduções: ${formatCurrency(displayLegalDeductions)}`}
+                    />
+                    <FactSummaryCard
+                      title="Simplificado"
+                      value={formatCurrency(simplifiedDiscountBase)}
+                      helper={`Base após desconto: ${formatCurrency(summary.simplifiedDiscountUsed)}`}
+                    />
+                  </div>
+                  <p className="mt-3 text-sm text-cf-text-secondary">
+                    Melhor cenário para conferência: <span className="font-semibold text-cf-text-primary">{methodLabel}</span>
+                    {summary.estimatedAnnualTax != null
+                      ? ` (imposto estimado: ${formatCurrency(summary.estimatedAnnualTax)}).`
+                      : ". Gere o resumo para materializar o imposto estimado."}
+                  </p>
+                </>
+              )}
+            </div>
           </section>
 
           <section className="rounded border border-cf-border bg-cf-surface p-5">
@@ -1241,6 +1382,93 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
           </section>
         </div>
 
+        <section className="mt-4 rounded border border-cf-border bg-cf-surface p-5 print:break-inside-avoid">
+          <h2 className="text-lg font-bold text-cf-text-primary">Resumo da declaração em tela</h2>
+          <p className="mt-1 text-sm text-cf-text-secondary">
+            Blocos fiscais conferíveis para apoiar a decisão antes do snapshot e da exportação oficial.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <FactSummaryCard
+              title="Rendimentos Tributáveis"
+              value={showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayAnnualTaxableIncome)}
+            />
+            <FactSummaryCard
+              title="Rendimentos Isentos"
+              value={showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayAnnualExemptIncome)}
+            />
+            <FactSummaryCard
+              title="Exclusivos na Fonte"
+              value={showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayAnnualExclusiveIncome)}
+            />
+            <FactSummaryCard
+              title="IR Retido"
+              value={showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayAnnualWithheldTax)}
+            />
+            <FactSummaryCard
+              title="Bens Relevantes"
+              value={showLoadingPlaceholders ? "Carregando..." : formatCurrency(obligation.totals.totalAssetBalance)}
+              helper={
+                showLoadingPlaceholders
+                  ? ""
+                  : pendingAssetBalanceAmount > 0
+                    ? `${formatCurrency(pendingAssetBalanceAmount)} ainda em revisão pendente`
+                    : "Sem saldo pendente em revisão"
+              }
+            />
+            <FactSummaryCard
+              title="Dívidas Relevantes"
+              value={showLoadingPlaceholders ? "Carregando..." : formatCurrency(pendingDebtBalanceAmount)}
+              helper="Total atual de dívidas ainda pendentes de revisão"
+            />
+            <FactSummaryCard
+              title="Deduções"
+              value={showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayLegalDeductions)}
+              helper="Deduções legais atualmente consideradas"
+            />
+            <FactSummaryCard
+              title="Pendências"
+              value={showLoadingPlaceholders ? "Carregando..." : String(factsPage.total)}
+              helper="Itens aguardando revisão humana"
+            />
+          </div>
+        </section>
+
+        <section className="mt-4 rounded border border-cf-border bg-cf-surface p-5 print:break-inside-avoid">
+          <h2 className="text-lg font-bold text-cf-text-primary">Painel de pendências de conferência</h2>
+          <p className="mt-1 text-sm text-cf-text-secondary">
+            Itens operacionais para limpar a fila antes do fechamento fiscal do exercício.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <FactSummaryCard
+              title="Aguardando revisão"
+              value={showLoadingPlaceholders ? "Carregando..." : String(factsPage.total)}
+              helper="Fatos pendentes de decisão humana"
+            />
+            <FactSummaryCard
+              title="Sem documento"
+              value={showLoadingPlaceholders ? "Carregando..." : String(pendingNoDocumentCount)}
+              helper="Entradas sem arquivo fiscal de origem"
+            />
+            <FactSummaryCard
+              title="Com conflito"
+              value={showLoadingPlaceholders ? "Carregando..." : String(pendingConflictCount)}
+              helper="Pendências com alerta operacional"
+            />
+            <FactSummaryCard
+              title="Possível duplicidade"
+              value={showLoadingPlaceholders ? "Carregando..." : String(pendingDuplicateCount)}
+              helper="Fatos sinalizados como potencialmente duplicados"
+            />
+            <FactSummaryCard
+              title="CPF divergente"
+              value={showLoadingPlaceholders ? "Carregando..." : String(pendingOwnershipMismatchCount)}
+              helper="Titular do informe diferente do CPF cadastrado"
+            />
+          </div>
+        </section>
+
         {visibleFactWarnings.length > 0 ? (
           <section className="mt-4 rounded border border-amber-200 bg-amber-50 p-5">
             <h2 className="text-lg font-bold text-amber-900">Alertas e observações fiscais</h2>
@@ -1273,7 +1501,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
           </section>
         ) : null}
 
-        <section className="mt-4 rounded border border-cf-border bg-cf-surface p-5">
+        <section className="mt-4 rounded border border-cf-border bg-cf-surface p-5 print:hidden">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
             <div>
               <h2 className="text-lg font-bold text-cf-text-primary">Documentos do exercício</h2>
