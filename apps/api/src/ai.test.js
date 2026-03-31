@@ -321,6 +321,27 @@ describe("GET /ai/bank-account-insight", () => {
     expect(mockCreate).toHaveBeenCalledOnce();
   });
 
+  it("retorna type success quando conta esta positiva e sem limite configurado", async () => {
+    const token = await registerAndLogin("bank-insight-no-limit-positive@test.dev");
+
+    await request(app)
+      .post("/bank-accounts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Conta", balance: 300, limitTotal: 0 });
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Conta positiva e sem uso de limite. Cenário estável no momento.")
+    );
+
+    const res = await request(app)
+      .get("/ai/bank-account-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("success");
+    expect(res.body.riskLabel).toBe("saudável");
+  });
+
   it("retorna type warning e riskLabel pressionada quando conta usa limite", async () => {
     const token = await registerAndLogin("bank-insight-warning@test.dev");
 
@@ -354,6 +375,27 @@ describe("GET /ai/bank-account-insight", () => {
 
     mockCreate.mockResolvedValueOnce(
       buildMockAnthropicResponse("Limite esgotado. Priorize quitar o saldo negativo antes de qualquer gasto.")
+    );
+
+    const res = await request(app)
+      .get("/ai/bank-account-insight")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe("critical");
+    expect(res.body.riskLabel).toBe("no limite");
+  });
+
+  it("retorna type critical quando saldo fica negativo sem limite configurado", async () => {
+    const token = await registerAndLogin("bank-insight-no-limit-negative@test.dev");
+
+    await request(app)
+      .post("/bank-accounts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Conta", balance: -120, limitTotal: 0 });
+
+    mockCreate.mockResolvedValueOnce(
+      buildMockAnthropicResponse("Saldo negativo sem limite configurado. Priorize recompor caixa imediatamente.")
     );
 
     const res = await request(app)
