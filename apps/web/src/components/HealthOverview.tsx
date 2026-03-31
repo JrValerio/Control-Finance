@@ -11,6 +11,8 @@ import { forecastService, type Forecast } from "../services/forecast.service";
 import { aiService, type AiInsight } from "../services/ai.service";
 import AIInsightPanel from "./AIInsightPanel";
 import { formatCurrency } from "../utils/formatCurrency";
+import { getApiErrorMessage } from "../utils/apiError";
+import { logWidgetFallbackError } from "../utils/widgetFallbackTelemetry";
 
 interface TrajectoryPoint {
   day: string;
@@ -98,13 +100,35 @@ const TrajectoryTooltip = ({
 const HealthOverview = (): JSX.Element | null => {
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [insight, setInsight] = useState<AiInsight | null>(null);
+  const [isLoadingForecast, setIsLoadingForecast] = useState(true);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+  const [hasRetriedForecastLoad, setHasRetriedForecastLoad] = useState(false);
   const [isLoadingInsight, setIsLoadingInsight] = useState(true);
 
+  const loadForecast = async (retryAttempt = false) => {
+    setIsLoadingForecast(true);
+    setForecastError(null);
+
+    try {
+      const loadedForecast = await forecastService
+        .getCurrent({ feature: "forecast", widget: "health-overview", operation: retryAttempt ? "retry-load" : "load" });
+      setForecast(loadedForecast);
+    } catch (error) {
+      setForecast(null);
+      setForecastError(getApiErrorMessage(error, "Não foi possível carregar a saúde financeira do mês."));
+      logWidgetFallbackError({
+        widget: "health-overview",
+        operation: retryAttempt ? "retry-load" : "load",
+        error,
+        fallbackRendered: true,
+      });
+    } finally {
+      setIsLoadingForecast(false);
+    }
+  };
+
   useEffect(() => {
-    void forecastService
-      .getCurrent({ feature: "forecast", widget: "health-overview", operation: "load" })
-      .then(setForecast)
-      .catch(() => undefined);
+    void loadForecast();
   }, []);
 
   useEffect(() => {
@@ -116,7 +140,52 @@ const HealthOverview = (): JSX.Element | null => {
       .finally(() => setIsLoadingInsight(false));
   }, []);
 
-  if (forecast === null || forecast.daysRemaining <= 0) return null;
+  const handleRetryForecastLoad = () => {
+    if (hasRetriedForecastLoad) {
+      return;
+    }
+
+    setHasRetriedForecastLoad(true);
+    void loadForecast(true);
+  };
+
+  if (isLoadingForecast) {
+    return (
+      <div className="rounded border border-cf-border bg-cf-surface p-4">
+        <p className="text-xs text-cf-text-secondary">Carregando saúde financeira...</p>
+      </div>
+    );
+  }
+
+  if (forecastError) {
+    return (
+      <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+        <p>{forecastError}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRetryForecastLoad}
+            disabled={hasRetriedForecastLoad}
+            className="rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {hasRetriedForecastLoad ? "Nova tentativa indisponível" : "Tentar novamente"}
+          </button>
+          {hasRetriedForecastLoad ? (
+            <span className="text-xs text-red-600">Limite de 1 nova tentativa atingido.</span>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (forecast === null || forecast.daysRemaining <= 0) {
+    return (
+      <div className="rounded border border-cf-border bg-cf-surface p-4">
+        <h3 className="text-sm font-semibold text-cf-text-primary">Saúde Financeira do Mês</h3>
+        <p className="mt-2 text-xs text-cf-text-secondary">Sem dados suficientes para exibir este widget.</p>
+      </div>
+    );
+  }
 
   const trajectory = generateTrajectory(forecast);
   const { adjustedProjectedBalance, incomeExpected } = forecast;

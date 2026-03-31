@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { forecastService, type Forecast } from "../services/forecast.service";
 import { profileService } from "../services/profile.service";
 import { useMaskedCurrency } from "../context/DiscreetModeContext";
+import { logWidgetFallbackError } from "../utils/widgetFallbackTelemetry";
 
 interface ForecastCardProps {
   onOpenProfileSettings?: () => void;
@@ -98,10 +99,13 @@ const ForecastCard = ({
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [isRecomputing, setIsRecomputing] = useState(false);
   const [error, setError] = useState("");
+  const [hasLoadError, setHasLoadError] = useState(false);
+  const [hasRetriedLoad, setHasRetriedLoad] = useState(false);
 
-  const loadForecast = useCallback(async () => {
+  const loadForecast = useCallback(async (retryAttempt = false) => {
     try {
       setError("");
+      setHasLoadError(false);
       const me = await profileService.getMe();
 
       const hasProfile =
@@ -143,8 +147,14 @@ const ForecastCard = ({
       setForecast(computed);
       persistForecast(computed);
       setCardState("active");
-    } catch {
-      setError("Não foi possível carregar a projeção.");
+    } catch (loadError) {
+      setHasLoadError(true);
+      logWidgetFallbackError({
+        widget: "forecast-card",
+        operation: retryAttempt ? "retry-load" : "load",
+        error: loadError,
+        fallbackRendered: true,
+      });
       setCardState("active");
     }
   }, [trialExpired]);
@@ -152,6 +162,16 @@ const ForecastCard = ({
   useEffect(() => {
     void loadForecast();
   }, [loadForecast]);
+
+  const handleRetryLoad = useCallback(() => {
+    if (hasRetriedLoad) {
+      return;
+    }
+
+    setHasRetriedLoad(true);
+    setCardState("loading");
+    void loadForecast(true);
+  }, [hasRetriedLoad, loadForecast]);
 
   const handleRecompute = useCallback(async () => {
     if (isRecomputing) return;
@@ -165,7 +185,13 @@ const ForecastCard = ({
       });
       setForecast(updated);
       persistForecast(updated);
-    } catch {
+    } catch (recomputeError) {
+      logWidgetFallbackError({
+        widget: "forecast-card",
+        operation: "manual-recompute",
+        error: recomputeError,
+        fallbackRendered: true,
+      });
       setError("Erro ao atualizar projeção.");
     } finally {
       setIsRecomputing(false);
@@ -266,7 +292,24 @@ const ForecastCard = ({
         </button>
       </div>
 
-      {error ? (
+      {hasLoadError ? (
+        <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+          <p>Não foi possível carregar a projeção deste widget.</p>
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleRetryLoad}
+              disabled={hasRetriedLoad}
+              className="rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {hasRetriedLoad ? "Nova tentativa indisponível" : "Tentar novamente"}
+            </button>
+            {hasRetriedLoad ? (
+              <span className="text-xs text-red-600">Limite de 1 nova tentativa atingido.</span>
+            ) : null}
+          </div>
+        </div>
+      ) : error ? (
         <p className="mt-2 text-xs text-red-600">{error}</p>
       ) : forecast !== null ? (
         <>
@@ -336,7 +379,9 @@ const ForecastCard = ({
 
           <BankLimitPanel forecast={forecast} money={money} />
         </>
-      ) : null}
+      ) : (
+        <p className="mt-3 text-xs text-cf-text-secondary">Sem dados de projeção para exibir neste momento.</p>
+      )}
     </div>
   );
 };

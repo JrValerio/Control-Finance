@@ -6,6 +6,7 @@ import { GOAL_ICONS, goalsService } from "../services/goals.service";
 import { forecastService } from "../services/forecast.service";
 import GoalFormModal from "./GoalFormModal";
 import ConfirmDialog from "./ConfirmDialog";
+import { logWidgetFallbackError } from "../utils/widgetFallbackTelemetry";
 
 // ── Goal Card ────────────────────────────────────────────────────────────────
 
@@ -211,22 +212,37 @@ export default function GoalsSection() {
   const [projectedBalance, setProjectedBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasRetriedFetch, setHasRetriedFetch] = useState(false);
   const [modal, setModal] = useState<ModalMode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Goal | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = async (retryAttempt = false) => {
     setError(null);
     try {
       const [goalsData, forecast] = await Promise.all([
         goalsService.list(),
         forecastService
-          .getCurrent({ feature: "forecast", widget: "goals-section", operation: "load" })
-          .catch(() => null),
+          .getCurrent({ feature: "forecast", widget: "goals-section", operation: retryAttempt ? "retry-load" : "load" })
+          .catch((forecastError) => {
+            logWidgetFallbackError({
+              widget: "goals-section",
+              operation: retryAttempt ? "retry-load" : "load",
+              error: forecastError,
+              fallbackRendered: true,
+            });
+            return null;
+          }),
       ]);
       setGoals(goalsData);
       setProjectedBalance(forecast?.adjustedProjectedBalance ?? null);
     } catch (err) {
+      logWidgetFallbackError({
+        widget: "goals-section",
+        operation: retryAttempt ? "retry-load" : "load",
+        error: err,
+        fallbackRendered: true,
+      });
       setError(getApiErrorMessage(err, "Erro ao carregar metas."));
     } finally {
       setLoading(false);
@@ -331,10 +347,19 @@ export default function GoalsSection() {
             <span>{error}</span>
             <button
               type="button"
-              onClick={() => { setLoading(true); void fetchData(); }}
+              onClick={() => {
+                if (hasRetriedFetch) {
+                  return;
+                }
+
+                setHasRetriedFetch(true);
+                setLoading(true);
+                void fetchData(true);
+              }}
+              disabled={hasRetriedFetch}
               className="shrink-0 text-xs font-semibold underline"
             >
-              Tentar novamente
+              {hasRetriedFetch ? "Nova tentativa indisponível" : "Tentar novamente"}
             </button>
           </div>
         ) : goals.length === 0 ? (
