@@ -158,6 +158,7 @@ const BANK_INSIGHT_SYSTEM =
   "Você é o Especialista Financeiro do app Control Finance. Analise a situação da conta corrente e retorne UMA frase de no máximo 160 caracteres explicando o que o usuário deve saber agora. Seja direto e prático, sem jargão. Retorne APENAS o texto, sem formatação, sem aspas, sem JSON.";
 
 const classifyBankRisk = (summary, accounts) => {
+  if (summary.totalLimitTotal <= 0 && summary.totalBalance < 0) return "critical";
   if (accounts.some((a) => a.limitTotal > 0 && a.limitUsed >= a.limitTotal)) return "critical";
   if (summary.totalLimitUsed > 0 || summary.totalBalance < 0) return "warning";
   return "success";
