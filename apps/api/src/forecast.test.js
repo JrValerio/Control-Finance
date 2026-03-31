@@ -472,12 +472,20 @@ describe("forecast — bills integration", () => {
     const userId = await getUserIdByEmail("fc-bills-realtime@test.dev");
 
     await dbQuery(
-      `INSERT INTO user_profiles (user_id, salary_monthly, payday, bank_limit_total)
-       VALUES ($1, 100, 31, 800)`,
+      `INSERT INTO user_profiles (user_id, bank_limit_total)
+       VALUES ($1, 800)`,
       [userId],
     );
 
-    // Recompute without bills — stored projectedBalance has no bills
+    // Seed a known income transaction so projectedBalance is deterministic (100),
+    // regardless of the current date (avoids salary/payday timing sensitivity)
+    await dbQuery(
+      `INSERT INTO transactions (user_id, type, value, date, description)
+       VALUES ($1, 'Entrada', 100, $2, 'Renda')`,
+      [userId, CURRENT_MONTH_START],
+    );
+
+    // Recompute without bills — stored projectedBalance = 100 (netToDate=100, dailyAvg=0)
     await request(app)
       .post("/forecasts/recompute")
       .set("Authorization", `Bearer ${token}`);
