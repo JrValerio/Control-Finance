@@ -21,6 +21,12 @@ type ApiConfigurationError = Error & {
   code: "API_URL_NOT_CONFIGURED";
 };
 
+export type ApiRequestContext = {
+  feature?: string;
+  widget?: string;
+  operation?: string;
+};
+
 type QueueEntry = { resolve: () => void; reject: (err: unknown) => void };
 
 export const resolveApiUrl = (env: EnvConfig = import.meta.env) => {
@@ -39,6 +45,10 @@ export const resolveApiUrl = (env: EnvConfig = import.meta.env) => {
 
 const API_URL = resolveApiUrl();
 const REQUEST_ID_HEADER_NAME = "x-request-id";
+const FEATURE_HEADER_NAME = "x-cf-feature";
+const WIDGET_HEADER_NAME = "x-cf-widget";
+const OPERATION_HEADER_NAME = "x-cf-operation";
+const REQUEST_STARTED_AT = "_requestStartedAt";
 const isApiConfigured = Boolean(API_URL);
 let unauthorizedHandler: UnauthorizedHandler = undefined;
 let paymentRequiredHandler: PaymentRequiredHandler = undefined;
@@ -130,6 +140,57 @@ const resolveErrorRequestId = (error: unknown) => {
 
 const shouldLogApiErrors = () => import.meta.env?.MODE !== "test";
 
+const shouldLogApiCompleted = (url: string) =>
+  /(^\/dashboard\/snapshot$)|(^\/forecasts\/current$)|(^\/forecasts\/recompute$)/.test(url);
+
+const normalizeContextValue = (value: unknown) =>
+  typeof value === "string" && value.trim() ? value.trim().slice(0, 80) : "";
+
+const getHeaderValue = (
+  headers: InternalAxiosRequestConfig["headers"] | Record<string, unknown> | undefined,
+  headerName: string,
+) => {
+  if (!headers || typeof headers !== "object") {
+    return "";
+  }
+
+  const mutableHeaders = headers as { set?: (name: string, value: string) => void } & Record<
+    string,
+    unknown
+  >;
+
+  const directValue =
+    mutableHeaders[headerName] ?? mutableHeaders[headerName.toLowerCase()] ?? "";
+
+  return normalizeContextValue(directValue);
+};
+
+const resolveRequestRoute = (urlValue: unknown) => {
+  if (typeof urlValue !== "string" || !urlValue.trim()) {
+    return "";
+  }
+
+  return urlValue.split("?")[0] || "";
+};
+
+const resolveDurationMs = (startedAt: unknown) => {
+  const parsed = Number(startedAt);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+
+  return Math.max(0, Date.now() - parsed);
+};
+
+const resolveRequestContext = (headers: InternalAxiosRequestConfig["headers"] | undefined) => ({
+  feature: getHeaderValue(headers, FEATURE_HEADER_NAME) || null,
+  widget: getHeaderValue(headers, WIDGET_HEADER_NAME) || null,
+  operation: getHeaderValue(headers, OPERATION_HEADER_NAME) || null,
+});
+
+const resolveMethod = (method: unknown) =>
+  typeof method === "string" && method.trim() ? method.toUpperCase() : "GET";
+
 const drainQueue = (error?: unknown) => {
   pendingQueue.forEach(({ resolve, reject }) => {
     if (error) {
@@ -149,6 +210,27 @@ export const setPaymentRequiredHandler = (handler: PaymentRequiredHandler) => {
   paymentRequiredHandler = typeof handler === "function" ? handler : undefined;
 };
 
+export const withApiRequestContext = (context: ApiRequestContext = {}) => {
+  const feature = normalizeContextValue(context.feature);
+  const widget = normalizeContextValue(context.widget);
+  const operation = normalizeContextValue(context.operation);
+  const headers: Record<string, string> = {};
+
+  if (feature) {
+    headers[FEATURE_HEADER_NAME] = feature;
+  }
+
+  if (widget) {
+    headers[WIDGET_HEADER_NAME] = widget;
+  }
+
+  if (operation) {
+    headers[OPERATION_HEADER_NAME] = operation;
+  }
+
+  return { headers };
+};
+
 export const api = axios.create({
   baseURL: API_URL || undefined,
   timeout: 8000,
@@ -161,6 +243,7 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   }
 
   setRequestHeader(config, REQUEST_ID_HEADER_NAME, createRequestId());
+  (config as InternalAxiosRequestConfig & Record<string, unknown>)[REQUEST_STARTED_AT] = Date.now();
 
   return config;
 });
@@ -222,16 +305,50 @@ const resolvePaywallPayload = (
 };
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const requestConfig = response.config as InternalAxiosRequestConfig & Record<string, unknown>;
+    const requestRoute = resolveRequestRoute(requestConfig?.url);
+
+    if (shouldLogApiErrors() && shouldLogApiCompleted(requestRoute)) {
+      const requestId =
+        getHeaderValue(response.headers as Record<string, unknown>, REQUEST_ID_HEADER_NAME) ||
+        getHeaderValue(requestConfig.headers, REQUEST_ID_HEADER_NAME) ||
+        null;
+
+      console.log(
+        JSON.stringify({
+          level: "info",
+          event: "web.api.request.completed",
+          requestId,
+          method: resolveMethod(requestConfig?.method),
+          route: requestRoute,
+          status: response.status,
+          latencyMs: resolveDurationMs(requestConfig?.[REQUEST_STARTED_AT]),
+          ...resolveRequestContext(requestConfig.headers),
+        }),
+      );
+    }
+
+    return response;
+  },
   async (error) => {
     const requestId = resolveErrorRequestId(error);
+    const config = error?.config as (InternalAxiosRequestConfig & Record<string, unknown>) | undefined;
+    const requestRoute = resolveRequestRoute(config?.url);
 
-    if (requestId && shouldLogApiErrors()) {
+    if (shouldLogApiErrors()) {
       console.error(
         JSON.stringify({
           level: "error",
           event: "web.api.request.error",
-          requestId,
+          requestId: requestId || null,
+          method: resolveMethod(config?.method),
+          route: requestRoute || null,
+          status: Number(error?.response?.status) || null,
+          latencyMs: resolveDurationMs(config?.[REQUEST_STARTED_AT]),
+          timeoutMs: Number(config?.timeout) || null,
+          timeout: error?.code === "ECONNABORTED",
+          ...resolveRequestContext(config?.headers),
         }),
       );
     }

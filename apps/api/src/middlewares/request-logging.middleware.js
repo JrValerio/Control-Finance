@@ -20,6 +20,25 @@ const resolveUserId = (req) => {
   return Number.isInteger(parsedUserId) && parsedUserId > 0 ? parsedUserId : null;
 };
 
+const normalizeContextValue = (value) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.slice(0, 80);
+};
+
+const resolveClientContext = (req) => ({
+  feature: normalizeContextValue(req.headers?.["x-cf-feature"]),
+  widget: normalizeContextValue(req.headers?.["x-cf-widget"]),
+  operation: normalizeContextValue(req.headers?.["x-cf-operation"]),
+});
+
 export const requestLoggingMiddleware = (req, res, next) => {
   const startedAt = Date.now();
 
@@ -34,6 +53,7 @@ export const requestLoggingMiddleware = (req, res, next) => {
       status: res.statusCode,
       latencyMs: resolveLatencyMs(startedAt),
       userId: resolveUserId(req),
+      ...resolveClientContext(req),
     });
   });
 

@@ -101,7 +101,10 @@ const HealthOverview = (): JSX.Element | null => {
   const [isLoadingInsight, setIsLoadingInsight] = useState(true);
 
   useEffect(() => {
-    void forecastService.getCurrent().then(setForecast).catch(() => undefined);
+    void forecastService
+      .getCurrent({ feature: "forecast", widget: "health-overview", operation: "load" })
+      .then(setForecast)
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {

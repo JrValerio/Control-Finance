@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, withApiRequestContext, type ApiRequestContext } from "./api";
 
 export interface ForecastBankLimit {
   total: number;
@@ -27,13 +27,13 @@ export interface Forecast {
 }
 
 export const forecastService = {
-  getCurrent: async (): Promise<Forecast | null> => {
-    const { data } = await api.get<Forecast | null>("/forecasts/current");
+  getCurrent: async (context?: ApiRequestContext): Promise<Forecast | null> => {
+    const { data } = await api.get<Forecast | null>("/forecasts/current", withApiRequestContext(context));
     return data;
   },
 
-  recompute: async (): Promise<Forecast> => {
-    const { data } = await api.post<Forecast>("/forecasts/recompute");
+  recompute: async (context?: ApiRequestContext): Promise<Forecast> => {
+    const { data } = await api.post<Forecast>("/forecasts/recompute", undefined, withApiRequestContext(context));
     return data;
   },
 };
