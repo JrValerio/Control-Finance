@@ -43,6 +43,15 @@ TOTAL DA FATURA    R$ 980,00
 PAGAMENTO MÍNIMO R$ 98,00
 `.trim();
 
+const VALID_ITAU_TEXT_APRIL_SAME_TOTAL = `
+BANCO ITAÚ S.A.
+**** 1234
+PERÍODO DE 08/03/2026 A 07/04/2026
+VENCIMENTO  15/04/2026
+TOTAL DA FATURA    R$ 1.247,80
+PAGAMENTO MÍNIMO R$ 124,78
+`.trim();
+
 const INVALID_TEXT = `Este texto nao tem nenhum dado de fatura.`;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -264,7 +273,7 @@ describe("credit-card-invoices", () => {
       });
     // Manually set credit_card_id on the bill since the API doesn't expose it directly
     await dbQuery(
-      `UPDATE bills SET credit_card_id = $1 WHERE id = $2`,
+      `UPDATE bills SET credit_card_id = $1, bill_type = 'credit_card_invoice' WHERE id = $2`,
       [cardId, billRes.body.id]
     );
     const billId = billRes.body.id;
@@ -291,8 +300,16 @@ describe("credit-card-invoices", () => {
     const billRes = await request(app)
       .post("/bills")
       .set("Authorization", `Bearer ${token}`)
-      .send({ title: "Fatura março", amount: 1247.80, dueDate: "2026-03-15" });
-    await dbQuery(`UPDATE bills SET credit_card_id = $1 WHERE id = $2`, [cardId, billRes.body.id]);
+      .send({
+        title: "Fatura março",
+        amount: 1247.80,
+        dueDate: "2026-03-15",
+        billType: "credit_card_invoice",
+      });
+    await dbQuery(
+      `UPDATE bills SET credit_card_id = $1, bill_type = 'credit_card_invoice' WHERE id = $2`,
+      [cardId, billRes.body.id],
+    );
     const billId = billRes.body.id;
 
     // First link
@@ -308,6 +325,81 @@ describe("credit-card-invoices", () => {
       .send({ billId });
 
     expect(res.status).toBe(409);
+  });
+
+  it("POST link-bill retorna 422 quando valor da pendencia difere do total da fatura", async () => {
+    const token = await registerAndLogin("inv-link-amount-mismatch@test.dev");
+    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+
+    const cardRes = await createCard(token);
+    const cardId = cardRes.body.id;
+
+    const invRes = await uploadInvoice(token, cardId);
+    const invoiceId = invRes.body.id;
+
+    const billRes = await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Fatura Itaú com valor divergente",
+        amount: 1000,
+        dueDate: "2026-03-15",
+        billType: "credit_card_invoice",
+      });
+
+    await dbQuery(
+      `UPDATE bills SET credit_card_id = $1, bill_type = 'credit_card_invoice' WHERE id = $2`,
+      [cardId, billRes.body.id],
+    );
+
+    const res = await request(app)
+      .post(`/credit-cards/${cardId}/invoices/${invoiceId}/link-bill`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ billId: billRes.body.id });
+
+    expect(res.status).toBe(422);
+    expect(res.body.message).toBe("Valor da pendencia difere do total da fatura.");
+  });
+
+  it("POST link-bill retorna 409 quando a mesma pendencia ja esta vinculada a outra fatura", async () => {
+    const token = await registerAndLogin("inv-link-bill-already-linked@test.dev");
+    const cardRes = await createCard(token);
+    const cardId = cardRes.body.id;
+
+    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+    const firstInvoiceRes = await uploadInvoice(token, cardId);
+
+    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT_APRIL_SAME_TOTAL);
+    const secondInvoiceRes = await uploadInvoice(token, cardId);
+
+    const billRes = await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Fatura Itaú março",
+        amount: 1247.80,
+        dueDate: "2026-03-15",
+        billType: "credit_card_invoice",
+      });
+    await dbQuery(
+      `UPDATE bills SET credit_card_id = $1, bill_type = 'credit_card_invoice' WHERE id = $2`,
+      [cardId, billRes.body.id],
+    );
+    const billId = billRes.body.id;
+
+    const firstLinkRes = await request(app)
+      .post(`/credit-cards/${cardId}/invoices/${firstInvoiceRes.body.id}/link-bill`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ billId });
+    expect(firstLinkRes.status).toBe(200);
+
+    const secondLinkRes = await request(app)
+      .post(`/credit-cards/${cardId}/invoices/${secondInvoiceRes.body.id}/link-bill`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ billId });
+
+    expect(secondLinkRes.status).toBe(409);
+    expect(secondLinkRes.body.message).toBe("Pendencia ja esta vinculada a outra fatura.");
   });
 
   it("POST link-bill retorna 404 para fatura de outro usuario", async () => {

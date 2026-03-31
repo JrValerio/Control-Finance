@@ -2,6 +2,8 @@ import { dbQuery } from "../db/index.js";
 import { extractTextFromPdfWithOcr } from "../domain/imports/pdf-ocr.js";
 import { parseItauInvoice } from "../domain/imports/itau-invoice.parser.js";
 
+const CREDIT_CARD_INVOICE_BILL_TYPE = "credit_card_invoice";
+
 const createError = (status, message, extra = {}) => {
   const error = new Error(message);
   error.status = status;
@@ -32,6 +34,8 @@ const normalizeInvoiceId = (value) => {
   }
   return parsed;
 };
+
+const toMoney = (value) => Number(Number(value || 0).toFixed(2));
 
 // ─── Period inference ─────────────────────────────────────────────────────────
 
@@ -240,7 +244,7 @@ export const linkBillToInvoiceForUser = async (rawUserId, rawCardId, rawInvoiceI
 
   // Invoice ownership
   const { rows: invRows } = await dbQuery(
-    `SELECT id, linked_bill_id FROM credit_card_invoices
+    `SELECT id, linked_bill_id, total_amount FROM credit_card_invoices
       WHERE id = $1 AND credit_card_id = $2 AND user_id = $3`,
     [invoiceId, cardId, userId]
   );
@@ -249,14 +253,40 @@ export const linkBillToInvoiceForUser = async (rawUserId, rawCardId, rawInvoiceI
 
   // Bill ownership + same card
   const { rows: billRows } = await dbQuery(
-    `SELECT id, credit_card_id FROM bills WHERE id = $1 AND user_id = $2`,
+    `SELECT id, credit_card_id, bill_type, status, amount FROM bills WHERE id = $1 AND user_id = $2`,
     [billId, userId]
   );
   if (!billRows.length) throw createError(404, "Pendencia nao encontrada.");
 
+  if (billRows[0].bill_type !== CREDIT_CARD_INVOICE_BILL_TYPE) {
+    throw createError(422, "A pendencia informada nao e do tipo fatura de cartao.");
+  }
+
+  if (billRows[0].status !== "pending") {
+    throw createError(409, "Apenas pendencias pendentes podem ser vinculadas a fatura.");
+  }
+
   const billCardId = billRows[0].credit_card_id ? Number(billRows[0].credit_card_id) : null;
-  if (billCardId !== null && billCardId !== cardId) {
-    throw createError(422, "A pendencia pertence a outro cartao.");
+  if (billCardId !== cardId) {
+    throw createError(422, "A pendencia deve pertencer ao mesmo cartao da fatura.");
+  }
+
+  const invoiceAmount = toMoney(invRows[0].total_amount);
+  const billAmount = toMoney(billRows[0].amount);
+  if (billAmount !== invoiceAmount) {
+    throw createError(422, "Valor da pendencia difere do total da fatura.");
+  }
+
+  const { rows: existingLinkRows } = await dbQuery(
+    `SELECT id
+      FROM credit_card_invoices
+      WHERE user_id = $1
+        AND linked_bill_id = $2
+      LIMIT 1`,
+    [userId, billId],
+  );
+  if (existingLinkRows.length > 0) {
+    throw createError(409, "Pendencia ja esta vinculada a outra fatura.");
   }
 
   const { rows: updated } = await dbQuery(
