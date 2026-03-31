@@ -81,9 +81,24 @@ const normalizeSnapshot = (raw: Record<string, unknown>): DashboardSnapshot => (
   consignado: normalizeConsignado((raw.consignado as Record<string, unknown>) ?? {}),
 });
 
+let snapshotInFlightRequest: Promise<DashboardSnapshot> | null = null;
+
 export const dashboardService = {
   getSnapshot: async (context?: ApiRequestContext): Promise<DashboardSnapshot> => {
-    const { data } = await api.get("/dashboard/snapshot", withApiRequestContext(context));
-    return normalizeSnapshot(data as Record<string, unknown>);
+    if (snapshotInFlightRequest) {
+      return snapshotInFlightRequest;
+    }
+
+    const requestPromise = api
+      .get("/dashboard/snapshot", withApiRequestContext(context))
+      .then(({ data }) => normalizeSnapshot(data as Record<string, unknown>))
+      .finally(() => {
+        if (snapshotInFlightRequest === requestPromise) {
+          snapshotInFlightRequest = null;
+        }
+      });
+
+    snapshotInFlightRequest = requestPromise;
+    return requestPromise;
   },
 };

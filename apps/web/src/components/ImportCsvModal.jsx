@@ -469,7 +469,11 @@ const ImportCsvModal = ({
 
       await profileService.updateProfile(profilePatch);
       try {
-        await forecastService.recompute();
+        await forecastService.recompute({
+          feature: "forecast",
+          widget: "import-csv-modal",
+          operation: "apply-profile-recompute",
+        });
       } catch (forecastError) {
         setPlanningUpdateError(
           getApiErrorMessage(
