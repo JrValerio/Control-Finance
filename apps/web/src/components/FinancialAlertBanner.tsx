@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { forecastService } from "../services/forecast.service";
 import { formatCurrency } from "../utils/formatCurrency";
+import { logWidgetFallbackError } from "../utils/widgetFallbackTelemetry";
 
 const DISMISS_KEY = "cf.forecast_alert.dismissed_v1";
 
@@ -16,12 +17,22 @@ const FinancialAlertBanner = (): JSX.Element | null => {
   });
 
   useEffect(() => {
-    void forecastService.getCurrent({ feature: "forecast", widget: "financial-alert-banner", operation: "load" }).then((forecast) => {
-      if (forecast !== null) {
-        setProjectedBalance(forecast.adjustedProjectedBalance);
-        setMonth(forecast.month);
-      }
-    });
+    void forecastService
+      .getCurrent({ feature: "forecast", widget: "financial-alert-banner", operation: "load" })
+      .then((forecast) => {
+        if (forecast !== null) {
+          setProjectedBalance(forecast.adjustedProjectedBalance);
+          setMonth(forecast.month);
+        }
+      })
+      .catch((error) => {
+        logWidgetFallbackError({
+          widget: "financial-alert-banner",
+          operation: "load",
+          error,
+          fallbackRendered: true,
+        });
+      });
   }, []);
 
   if (dismissed || projectedBalance === null || projectedBalance >= 0) {

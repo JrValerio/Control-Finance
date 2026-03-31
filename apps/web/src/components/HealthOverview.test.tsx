@@ -72,22 +72,24 @@ describe("HealthOverview", () => {
     vi.resetAllMocks();
   });
 
-  it("retorna null quando forecast e null", async () => {
+  it("renderiza estado vazio quando forecast e null", async () => {
     (forecastService.getCurrent as ReturnType<typeof vi.fn>).mockResolvedValue(null);
     await act(async () => {
       render(<HealthOverview />);
     });
-    expect(screen.queryByText("Saúde Financeira do Mês")).toBeNull();
+    expect(screen.getByText("Saúde Financeira do Mês")).toBeInTheDocument();
+    expect(screen.getByText("Sem dados suficientes para exibir este widget.")).toBeInTheDocument();
   });
 
-  it("retorna null quando daysRemaining e zero", async () => {
+  it("renderiza estado vazio quando daysRemaining e zero", async () => {
     (forecastService.getCurrent as ReturnType<typeof vi.fn>).mockResolvedValue(
       buildForecast({ daysRemaining: 0 }),
     );
     await act(async () => {
       render(<HealthOverview />);
     });
-    expect(screen.queryByText("Saúde Financeira do Mês")).toBeNull();
+    expect(screen.getByText("Saúde Financeira do Mês")).toBeInTheDocument();
+    expect(screen.getByText("Sem dados suficientes para exibir este widget.")).toBeInTheDocument();
   });
 
   it("renderiza titulo e paineis quando forecast e valido", async () => {

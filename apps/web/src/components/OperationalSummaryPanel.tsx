@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useMaskedCurrency } from "../context/DiscreetModeContext";
 import { dashboardService, type DashboardSnapshot } from "../services/dashboard.service";
+import { getApiErrorMessage } from "../utils/apiError";
+import { logWidgetFallbackError } from "../utils/widgetFallbackTelemetry";
 
 // ─── Tile ─────────────────────────────────────────────────────────────────────
 
@@ -50,15 +52,44 @@ const SkeletonTile = () => (
 const OperationalSummaryPanel = (): JSX.Element | null => {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [hasRetriedLoad, setHasRetriedLoad] = useState(false);
   const money = useMaskedCurrency();
 
+  const loadSnapshot = async (retryAttempt = false) => {
+    setIsLoading(true);
+    setLoadError(null);
+
+    try {
+      const data = await dashboardService
+        .getSnapshot({ feature: "dashboard", widget: "operational-summary-panel", operation: retryAttempt ? "retry-load" : "load" });
+      setSnapshot(data);
+    } catch (error) {
+      setSnapshot(null);
+      setLoadError(getApiErrorMessage(error, "Não foi possível carregar o resumo operacional."));
+      logWidgetFallbackError({
+        widget: "operational-summary-panel",
+        operation: retryAttempt ? "retry-load" : "load",
+        error,
+        fallbackRendered: true,
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    dashboardService
-      .getSnapshot({ feature: "dashboard", widget: "operational-summary-panel", operation: "load" })
-      .then(setSnapshot)
-      .catch(() => {/* non-blocking — panel just won't render */})
-      .finally(() => setIsLoading(false));
+    void loadSnapshot();
   }, []);
+
+  const handleRetry = () => {
+    if (hasRetriedLoad) {
+      return;
+    }
+
+    setHasRetriedLoad(true);
+    void loadSnapshot(true);
+  };
 
   if (isLoading) {
     return (
@@ -70,7 +101,34 @@ const OperationalSummaryPanel = (): JSX.Element | null => {
     );
   }
 
-  if (!snapshot) return null;
+  if (loadError) {
+    return (
+      <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+        <p>{loadError}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={hasRetriedLoad}
+            className="rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {hasRetriedLoad ? "Nova tentativa indisponível" : "Tentar novamente"}
+          </button>
+          {hasRetriedLoad ? (
+            <span className="text-xs text-red-600">Limite de 1 nova tentativa atingido.</span>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <div className="rounded border border-cf-border bg-cf-surface px-4 py-3 text-sm text-cf-text-secondary">
+        Resumo operacional indisponível no momento.
+      </div>
+    );
+  }
 
   const { bankBalance, bills, cards, income, forecast, consignado } = snapshot;
 
