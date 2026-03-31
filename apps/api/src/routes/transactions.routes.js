@@ -60,6 +60,18 @@ const createError = (status, message) => {
   return error;
 };
 
+const isExplicitConfirmation = (value) => {
+  const normalizedValue = String(value || "").trim().toLowerCase();
+
+  return ["true", "1", "yes", "confirm"].includes(normalizedValue);
+};
+
+const ensureDestructiveActionConfirmation = (value) => {
+  if (!isExplicitConfirmation(value)) {
+    throw createError(400, "Confirmacao explicita obrigatoria para esta acao destrutiva.");
+  }
+};
+
 const ensureValidImportFile = (file) => {
   if (!file) {
     throw createError(400, "Arquivo do extrato (file) e obrigatorio.");
@@ -258,6 +270,7 @@ router.post("/", transactionsWriteRateLimiter, async (req, res, next) => {
 
 router.delete("/imports/:sessionId", transactionsWriteRateLimiter, async (req, res, next) => {
   try {
+    ensureDestructiveActionConfirmation(req.body?.confirm ?? req.query?.confirm);
     const result = await deleteImportSessionForUser(req.user.id, req.params.sessionId);
     res.status(200).json(result);
   } catch (error) {
@@ -267,6 +280,7 @@ router.delete("/imports/:sessionId", transactionsWriteRateLimiter, async (req, r
 
 router.post("/bulk-delete", transactionsWriteRateLimiter, async (req, res, next) => {
   try {
+    ensureDestructiveActionConfirmation(req.body?.confirm ?? req.query?.confirm);
     const ids = Array.isArray(req.body?.transactionIds) ? req.body.transactionIds : [];
     const result = await bulkDeleteTransactionsForUser(req.user.id, ids);
     res.status(200).json(result);
