@@ -295,6 +295,39 @@ describe("IncomeSourcesPage", () => {
     });
   });
 
+  it("exibe badges de status do extrato (rascunho e confirmada)", async () => {
+    vi.mocked(incomeSourcesService.listStatements).mockResolvedValueOnce([
+      buildListedStatement({ id: 10, status: "draft" }),
+      buildListedStatement({
+        id: 11,
+        status: "posted",
+        postedTransactionId: 900,
+        reconciliation: {
+          status: "manual_entry",
+          summary: "Extrato lancado como entrada manual no app.",
+          linkedTransaction: {
+            id: 900,
+            type: "Entrada",
+            value: 2803.52,
+            date: "2026-02-23",
+            description: "INSS Credito",
+            importSessionId: null,
+            importDocumentType: null,
+            deletedAt: null,
+          },
+          candidates: [],
+        },
+      }),
+    ]);
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Rascunho")).toBeInTheDocument();
+      expect(screen.getByText("Confirmada")).toBeInTheDocument();
+    });
+  });
+
   it("Salvar rascunho chama createStatement sem postStatement", async () => {
     const user = userEvent.setup();
     vi.mocked(incomeSourcesService.createStatement).mockResolvedValue(buildStatementResult());
