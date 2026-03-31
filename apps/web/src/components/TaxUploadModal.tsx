@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type MouseEvent } from "react";
+import type { TaxDocumentDetail } from "../services/tax.service";
 
-export type TaxUploadStage = "idle" | "uploading" | "processing" | "success" | "error";
+export type TaxUploadStage = "idle" | "uploading" | "processing" | "preview" | "success" | "error";
 
 interface TaxUploadModalProps {
   isOpen: boolean;
@@ -8,12 +9,15 @@ interface TaxUploadModalProps {
   stage: TaxUploadStage;
   statusMessage?: string;
   errorMessage?: string;
+  previewDocument?: TaxDocumentDetail | null;
+  previewFactCount?: number;
   onClose: () => void;
   onSubmit: (payload: {
     file: File;
     sourceLabel: string;
     sourceHint: string;
   }) => Promise<void> | void;
+  onConfirmPreview?: () => void;
 }
 
 const TAX_DOCUMENT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -28,6 +32,33 @@ const ACCEPTED_MIME_TYPES = [
   "image/jpg",
 ];
 const ACCEPT_ATTRIBUTE = ".pdf,.csv,.png,.jpg,.jpeg,application/pdf,text/csv,image/png,image/jpeg";
+
+const PREVIEW_DOCUMENT_TYPE_LABELS: Record<string, string> = {
+  unknown: "Tipo ainda não identificado",
+  income_report_bank: "Informe bancário",
+  income_report_employer: "Informe do empregador",
+  income_report_inss: "Informe do INSS",
+  medical_statement: "Comprovante médico",
+  education_receipt: "Comprovante educacional",
+  loan_statement: "Comprovante de empréstimo",
+  bank_statement_support: "Extrato de apoio",
+};
+
+const PREVIEW_STATUS_CLASSNAMES: Record<string, string> = {
+  uploaded: "border-slate-200 bg-slate-50 text-slate-700",
+  classified: "border-blue-200 bg-blue-50 text-blue-700",
+  extracted: "border-cyan-200 bg-cyan-50 text-cyan-700",
+  normalized: "border-green-200 bg-green-50 text-green-700",
+  failed: "border-red-200 bg-red-50 text-red-700",
+};
+
+const PREVIEW_STATUS_LABELS: Record<string, string> = {
+  uploaded: "Enviado",
+  classified: "Classificado",
+  extracted: "Extraído",
+  normalized: "Processado",
+  failed: "Falhou",
+};
 
 const extractFileExtension = (fileName: string) => {
   const lastDotIndex = fileName.lastIndexOf(".");
@@ -70,8 +101,11 @@ const TaxUploadModal = ({
   stage,
   statusMessage = "",
   errorMessage = "",
+  previewDocument = null,
+  previewFactCount = 0,
   onClose,
   onSubmit,
+  onConfirmPreview,
 }: TaxUploadModalProps): JSX.Element | null => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [sourceLabel, setSourceLabel] = useState("");
@@ -80,6 +114,7 @@ const TaxUploadModal = ({
 
   const isBusy = stage === "uploading" || stage === "processing";
   const isSuccess = stage === "success";
+  const isPreview = stage === "preview";
   const helperText = useMemo(
     () => "Envie um PDF, CSV ou imagem do documento fiscal. O limite atual é de 10 MB.",
     [],
@@ -147,6 +182,19 @@ const TaxUploadModal = ({
     return null;
   }
 
+  const previewDocumentTypeLabel =
+    previewDocument
+      ? (PREVIEW_DOCUMENT_TYPE_LABELS[previewDocument.documentType] ?? previewDocument.documentType)
+      : null;
+
+  const previewStatusLabel = previewDocument
+    ? (PREVIEW_STATUS_LABELS[previewDocument.processingStatus] ?? previewDocument.processingStatus)
+    : null;
+
+  const previewStatusClassName = previewDocument
+    ? (PREVIEW_STATUS_CLASSNAMES[previewDocument.processingStatus] ?? "border-slate-200 bg-slate-50 text-slate-700")
+    : "";
+
   return (
     <div
       className="fixed inset-0 z-40 overflow-y-auto bg-black/50 p-4 sm:p-6"
@@ -164,23 +212,100 @@ const TaxUploadModal = ({
           <div className="flex items-start justify-between gap-4 border-b border-cf-border px-5 py-4">
             <div>
               <h2 id="tax-upload-modal-title" className="text-lg font-semibold text-cf-text-primary">
-                Enviar documento fiscal
+                {isPreview ? "Documento processado" : "Enviar documento fiscal"}
               </h2>
               <p className="mt-1 text-sm text-cf-text-secondary">
-                Exercício {taxYear}. O arquivo entra na revisão fiscal sem você sair desta tela.
+                Exercício {taxYear}.{" "}
+                {isPreview
+                  ? "Confira os dados extraídos antes de continuar."
+                  : "O arquivo entra na revisão fiscal sem você sair desta tela."}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isBusy}
-              className="text-sm font-semibold text-cf-text-secondary hover:text-cf-text-primary disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Fechar
-            </button>
+            {!isPreview ? (
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isBusy}
+                className="text-sm font-semibold text-cf-text-secondary hover:text-cf-text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Fechar
+              </button>
+            ) : null}
           </div>
 
-          {isSuccess ? (
+          {isPreview && previewDocument ? (
+            <>
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4" data-testid="tax-upload-modal-body">
+                <div className="space-y-4">
+                  {/* Document metadata */}
+                  <dl className="divide-y divide-cf-border rounded border border-cf-border bg-cf-bg-subtle text-sm">
+                    <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+                      <dt className="font-semibold text-cf-text-secondary">Arquivo</dt>
+                      <dd className="truncate text-right text-cf-text-primary">{previewDocument.originalFileName}</dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+                      <dt className="font-semibold text-cf-text-secondary">Tipo</dt>
+                      <dd className="text-cf-text-primary">{previewDocumentTypeLabel}</dd>
+                    </div>
+                    {previewDocument.sourceLabel ? (
+                      <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+                        <dt className="font-semibold text-cf-text-secondary">Fonte</dt>
+                        <dd className="text-cf-text-primary">{previewDocument.sourceLabel}</dd>
+                      </div>
+                    ) : null}
+                    <div className="flex items-center justify-between gap-4 px-4 py-2.5">
+                      <dt className="font-semibold text-cf-text-secondary">Status</dt>
+                      <dd>
+                        <span
+                          className={`rounded border px-2 py-0.5 text-xs font-semibold ${previewStatusClassName}`}
+                        >
+                          {previewStatusLabel}
+                        </span>
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {/* Facts summary */}
+                  {previewDocument.processingStatus === "failed" ? (
+                    <div
+                      className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+                      role="alert"
+                    >
+                      Não foi possível processar o documento. Verifique se o arquivo é legível e tente novamente.
+                    </div>
+                  ) : previewFactCount > 0 ? (
+                    <div
+                      className="rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
+                      role="status"
+                    >
+                      <span className="font-semibold">{previewFactCount}</span>{" "}
+                      {previewFactCount === 1
+                        ? "fato fiscal identificado"
+                        : "fatos fiscais identificados"}{" "}
+                      e disponível{previewFactCount === 1 ? "" : "is"} na fila de revisão.
+                    </div>
+                  ) : (
+                    <div
+                      className="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"
+                      role="status"
+                    >
+                      Nenhum fato identificado neste documento. Verifique se o arquivo contém dados fiscais legíveis.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t border-cf-border px-5 py-4">
+                <button
+                  type="button"
+                  onClick={onConfirmPreview}
+                  className="rounded border border-brand-1 bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </>
+          ) : isSuccess ? (
             <>
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4" data-testid="tax-upload-modal-body">
                 <div
@@ -209,7 +334,7 @@ const TaxUploadModal = ({
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="tax-document-file" className="text-sm font-medium text-cf-text-primary">
+                  <label htmlFor="tax-document-file" className="text-sm font-semibold text-cf-text-primary">
                     Arquivo fiscal
                   </label>
                   <input
@@ -232,7 +357,7 @@ const TaxUploadModal = ({
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="tax-document-source-label" className="text-sm font-medium text-cf-text-primary">
+                  <label htmlFor="tax-document-source-label" className="text-sm font-semibold text-cf-text-primary">
                     Fonte ou instituição
                   </label>
                   <input
@@ -242,14 +367,14 @@ const TaxUploadModal = ({
                     disabled={isBusy}
                     maxLength={120}
                     onChange={(event) => setSourceLabel(event.target.value)}
-                    placeholder="Ex.: Banco Inter, ACME LTDA, INSS"
+                    placeholder="Ex.: Banco Inter, INSS, Vivo"
                     className="rounded border border-cf-border-input bg-cf-surface px-3 py-2 text-sm text-cf-text-primary outline-none focus:border-brand-1"
                   />
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <label htmlFor="tax-document-source-hint" className="text-sm font-medium text-cf-text-primary">
-                    Observação
+                  <label htmlFor="tax-document-source-hint" className="text-sm font-semibold text-cf-text-primary">
+                    Observação <span className="font-normal text-cf-text-secondary">(opcional)</span>
                   </label>
                   <input
                     id="tax-document-source-hint"

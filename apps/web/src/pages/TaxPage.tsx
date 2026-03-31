@@ -6,6 +6,7 @@ import { profileService } from "../services/profile.service";
 import {
   taxService,
   type TaxDocument,
+  type TaxDocumentDetail,
   type TaxDocumentsListResult,
   type TaxFact,
   type TaxFactsListResult,
@@ -371,6 +372,8 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
   const [uploadStage, setUploadStage] = useState<TaxUploadStage>("idle");
   const [uploadStatusMessage, setUploadStatusMessage] = useState("");
   const [uploadErrorMessage, setUploadErrorMessage] = useState("");
+  const [uploadPreviewDocument, setUploadPreviewDocument] = useState<TaxDocumentDetail | null>(null);
+  const [uploadPreviewFactCount, setUploadPreviewFactCount] = useState(0);
   const [manualFactErrorMessage, setManualFactErrorMessage] = useState("");
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guard: fire auto-sync at most once per mount (StrictMode + dep-change safety)
@@ -385,7 +388,9 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
     successTimerRef.current = setTimeout(() => setSuccessMessage(""), 4000);
   }, []);
 
-  const loadPageData = useCallback(async () => {
+  const loadPageData = useCallback(async (): Promise<TaxFactsListResult> => {
+    const EMPTY_FACTS: TaxFactsListResult = { items: [], page: 1, pageSize: DEFAULT_FACTS_PAGE_SIZE, total: 0 };
+
     setIsLoadingPage(true);
     setPageError("");
 
@@ -423,8 +428,10 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       );
     }
 
+    const freshFacts = factsResult.status === "fulfilled" ? factsResult.value : EMPTY_FACTS;
+
     if (factsResult.status === "fulfilled") {
-      setFactsPage(factsResult.value);
+      setFactsPage(freshFacts);
     } else {
       nextErrors.push(
         getApiErrorMessage(factsResult.reason, "Não foi possível carregar a fila de revisão."),
@@ -445,6 +452,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
 
     setPageError(nextErrors[0] || "");
     setIsLoadingPage(false);
+    return freshFacts;
   }, [taxYear]);
 
   useEffect(() => {
@@ -488,7 +496,7 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       });
   }, [isLoadingPage, factsPage.total, documentsPage.total, taxYear, loadPageData]);
 
-  const refreshAfterDocumentLifecycle = useCallback(async () => {
+  const refreshAfterDocumentLifecycle = useCallback(async (): Promise<TaxFactsListResult> => {
     let rebuildErrorMessage = "";
 
     try {
@@ -500,17 +508,21 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       );
     }
 
-    await loadPageData();
+    const freshFacts = await loadPageData();
 
     if (rebuildErrorMessage) {
       setPageError((currentError) => currentError || rebuildErrorMessage);
     }
+
+    return freshFacts;
   }, [loadPageData, taxYear]);
 
   const resetUploadFlow = useCallback(() => {
     setUploadStage("idle");
     setUploadStatusMessage("");
     setUploadErrorMessage("");
+    setUploadPreviewDocument(null);
+    setUploadPreviewFactCount(0);
   }, []);
 
   const handleOpenUploadModal = () => {
@@ -530,6 +542,13 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
 
     setIsUploadModalOpen(false);
     resetUploadFlow();
+  };
+
+  const handleConfirmUploadPreview = () => {
+    const successLabel = "Documento enviado e processado. Fatos disponíveis na fila de revisão.";
+    setUploadStage("success");
+    setUploadStatusMessage(successLabel);
+    showSuccess(successLabel);
   };
 
   const handleCloseManualFactModal = () => {
@@ -565,15 +584,17 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
       setUploadStatusMessage("Lendo documento, classificando e atualizando a fila fiscal...");
 
       try {
-        await taxService.reprocessDocument(uploadedDocument.id);
-        await refreshAfterDocumentLifecycle();
+        const processedDocument = await taxService.reprocessDocument(uploadedDocument.id);
+        const freshFacts = await refreshAfterDocumentLifecycle();
 
-        const successLabel =
-          "Documento enviado e processado. Se houver fatos extraídos, eles já aparecem na fila de revisão.";
+        const factCount = freshFacts.items.filter(
+          (f) => f.sourceDocumentId === processedDocument.id,
+        ).length;
 
-        setUploadStage("success");
-        setUploadStatusMessage(successLabel);
-        showSuccess(successLabel);
+        setUploadPreviewDocument(processedDocument);
+        setUploadPreviewFactCount(factCount);
+        setUploadStage("preview");
+        setUploadStatusMessage("");
       } catch (processingError) {
         await loadPageData();
         setUploadStage("error");
@@ -1613,8 +1634,11 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
         stage={uploadStage}
         statusMessage={uploadStatusMessage}
         errorMessage={uploadErrorMessage}
+        previewDocument={uploadPreviewDocument}
+        previewFactCount={uploadPreviewFactCount}
         onClose={handleCloseUploadModal}
         onSubmit={handleUploadDocument}
+        onConfirmPreview={handleConfirmUploadPreview}
       />
       <TaxManualFactModal
         isOpen={isManualFactModalOpen}
