@@ -184,6 +184,12 @@ const resolveNextDueDate = (closingDate, dueDay) => {
   return clampDateDay(nextMonthDate.getUTCFullYear(), nextMonthDate.getUTCMonth(), dueDay);
 };
 
+const resolveEffectiveClosingDay = (closingDate, configuredClosingDay) => {
+  const [yearPart, monthPart] = closingDate.split("-").map(Number);
+  const lastDayOfMonth = new Date(Date.UTC(yearPart, monthPart, 0)).getUTCDate();
+  return Math.min(configuredClosingDay, lastDayOfMonth);
+};
+
 const mapCardRow = (row) => ({
   id: Number(row.id),
   userId: Number(row.user_id),
@@ -574,7 +580,8 @@ export const closeCreditCardInvoiceForUser = async (userId, cardId, payload = {}
     const card = await getCardForUserOrThrow(client, normalizedUserId, normalizedCardId);
     const mappedCard = mapCardRow(card);
 
-    const closingDayReached = Number(closingDate.slice(-2)) >= mappedCard.closingDay;
+    const effectiveClosingDay = resolveEffectiveClosingDay(closingDate, mappedCard.closingDay);
+    const closingDayReached = Number(closingDate.slice(-2)) >= effectiveClosingDay;
     if (!closingDayReached) {
       throw createError(409, "Ainda nao chegou o dia de fechamento deste cartao.");
     }

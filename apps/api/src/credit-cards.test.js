@@ -243,6 +243,59 @@ describe("credit cards", () => {
     expectErrorResponseWithRequestId(closeRes, 409, "Ainda nao chegou o dia de fechamento deste cartao.");
   });
 
+  it("POST /credit-cards/:id/close-invoice usa ultimo dia do mes quando fechamento configurado excede o calendario", async () => {
+    const token = await registerAndLogin("credit-cards-close-clamped-day@test.dev");
+
+    const createCardRes = await request(app)
+      .post("/credit-cards")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Cartao 31",
+        limitTotal: 2000,
+        closingDay: 31,
+        dueDay: 10,
+      });
+
+    const cardId = createCardRes.body.id;
+
+    await request(app)
+      .post(`/credit-cards/${cardId}/purchases`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Mercado",
+        amount: 200,
+        purchaseDate: "2026-04-10",
+      });
+
+    const closeEarlyRes = await request(app)
+      .post(`/credit-cards/${cardId}/close-invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ closingDate: "2026-04-29" });
+
+    expectErrorResponseWithRequestId(
+      closeEarlyRes,
+      409,
+      "Ainda nao chegou o dia de fechamento deste cartao.",
+    );
+
+    const closeRes = await request(app)
+      .post(`/credit-cards/${cardId}/close-invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ closingDate: "2026-04-30" });
+
+    expect(closeRes.status).toBe(200);
+    expect(closeRes.body).toMatchObject({
+      purchasesCount: 1,
+      total: 200,
+      invoice: {
+        amount: 200,
+        status: "pending",
+        referenceMonth: "2026-04",
+        dueDate: "2026-05-10",
+      },
+    });
+  });
+
   it("fechar fatura gera bill pendente e pagar a fatura cria a saída real de caixa", async () => {
     const email = "credit-cards-bill-flow@test.dev";
     const token = await registerAndLogin(email);
