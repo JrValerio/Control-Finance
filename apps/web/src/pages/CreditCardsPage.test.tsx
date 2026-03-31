@@ -165,8 +165,31 @@ describe("CreditCardsPage", () => {
     expect(screen.getByText("Fatura Nubank 2026-03")).toBeInTheDocument();
     expect(screen.getByText("24.00% do limite")).toBeInTheDocument();
     expect(screen.getAllByText("Com compras no ciclo").length).toBeGreaterThan(0);
+    expect(screen.getByText("Fatura pendente")).toBeInTheDocument();
+    expect(screen.getByText("Ação: registrar pagamento da fatura até o vencimento.")).toBeInTheDocument();
     expect(screen.getByText("Fatura do ciclo")).toBeInTheDocument();
     expect(screen.getByText("Pendente")).toBeInTheDocument();
+  });
+
+  it("destaca ciclo aberto quando há compras sem fatura pendente", async () => {
+    vi.mocked(creditCardsService.list).mockResolvedValueOnce({
+      items: [
+        buildCard({
+          pendingInvoicesCount: 0,
+          pendingInvoicesTotal: 0,
+          invoices: [],
+          openPurchasesCount: 2,
+          openPurchasesTotal: 280,
+        }),
+      ],
+    });
+
+    renderPage();
+
+    expect(await screen.findByText("Nubank")).toBeInTheDocument();
+    expect(screen.getByText("Ciclo aberto")).toBeInTheDocument();
+    expect(screen.getByText("Ação: fechar a fatura quando o dia de fechamento chegar.")).toBeInTheDocument();
+    expect(screen.getByText("Compras em ciclo aberto aguardando fechamento")).toBeInTheDocument();
   });
 
   it("desabilita fechar fatura quando nao ha compras abertas", async () => {
@@ -214,6 +237,8 @@ describe("CreditCardsPage", () => {
 
     expect(await screen.findByText("Nubank")).toBeInTheDocument();
     expect(screen.getByText("Atrasada")).toBeInTheDocument();
+    expect(screen.getByText("Fatura atrasada")).toBeInTheDocument();
+    expect(screen.getByText("Ação: regularize a fatura vencida para normalizar o ciclo.")).toBeInTheDocument();
   });
 
   it("cria cartão novo pelo modal", async () => {

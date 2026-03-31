@@ -44,6 +44,48 @@ const INVOICE_STATUS_BADGE_CLASSNAMES = {
   overdue: "border-red-200 bg-red-50 text-red-700",
 } as const;
 
+type CardCycleStatus = "no_cycle" | "open_cycle" | "pending_invoice" | "overdue_invoice";
+
+const CYCLE_STATUS_LABELS: Record<CardCycleStatus, string> = {
+  no_cycle: "Sem ciclo aberto",
+  open_cycle: "Ciclo aberto",
+  pending_invoice: "Fatura pendente",
+  overdue_invoice: "Fatura atrasada",
+};
+
+const CYCLE_STATUS_BADGE_CLASSNAMES: Record<CardCycleStatus, string> = {
+  no_cycle: "border-cf-border bg-cf-bg-subtle text-cf-text-secondary",
+  open_cycle: "border-blue-200 bg-blue-50 text-blue-700",
+  pending_invoice: "border-amber-200 bg-amber-50 text-amber-700",
+  overdue_invoice: "border-red-200 bg-red-50 text-red-700",
+};
+
+const getCardCycleStatus = (card: CreditCardItem): CardCycleStatus => {
+  const hasOverdueInvoice = card.invoices.some(
+    (invoice) => invoice.status === "pending" && invoice.isOverdue,
+  );
+  if (hasOverdueInvoice) return "overdue_invoice";
+
+  const hasPendingInvoice = card.invoices.some((invoice) => invoice.status === "pending");
+  if (hasPendingInvoice) return "pending_invoice";
+
+  if (card.openPurchasesCount > 0) return "open_cycle";
+  return "no_cycle";
+};
+
+const getCardCycleActionLabel = (cycleStatus: CardCycleStatus): string => {
+  if (cycleStatus === "overdue_invoice") {
+    return "Ação: regularize a fatura vencida para normalizar o ciclo.";
+  }
+  if (cycleStatus === "pending_invoice") {
+    return "Ação: registrar pagamento da fatura até o vencimento.";
+  }
+  if (cycleStatus === "open_cycle") {
+    return "Ação: fechar a fatura quando o dia de fechamento chegar.";
+  }
+  return "Sem pendências operacionais no cartão neste momento.";
+};
+
 const getInvoiceBadge = (invoice: CreditCardItem["invoices"][number]) => {
   if (invoice.status === "paid") {
     return {
@@ -263,6 +305,10 @@ const CreditCardsPage = ({
                 card.invoices.find((invoice) => invoice.status === "pending") ?? null;
               const usageStatusLabel = USAGE_STATUS_LABELS[card.usage.status];
               const usageStatusClassName = USAGE_STATUS_BADGE_CLASSNAMES[card.usage.status];
+              const cycleStatus = getCardCycleStatus(card);
+              const cycleStatusLabel = CYCLE_STATUS_LABELS[cycleStatus];
+              const cycleStatusClassName = CYCLE_STATUS_BADGE_CLASSNAMES[cycleStatus];
+              const cycleActionLabel = getCardCycleActionLabel(cycleStatus);
 
               return (
                 <section key={card.id} className="rounded border border-cf-border bg-cf-surface p-4">
@@ -275,6 +321,11 @@ const CreditCardsPage = ({
                       >
                         {usageStatusLabel}
                       </span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${cycleStatusClassName}`}
+                      >
+                        {cycleStatusLabel}
+                      </span>
                     </div>
                     <p className="mt-1 text-xs text-cf-text-secondary">
                       Fecha no dia {card.closingDay} e vence no dia {card.dueDay}
@@ -283,6 +334,9 @@ const CreditCardsPage = ({
                       {card.openPurchasesCount} compra{card.openPurchasesCount === 1 ? "" : "s"} em aberto
                       {card.openPurchasesCount === 1 ? "" : "s"} · {card.pendingInvoicesCount} fatura
                       {card.pendingInvoicesCount === 1 ? "" : "s"} pendente{card.pendingInvoicesCount === 1 ? "" : "s"}
+                    </p>
+                    <p className={`mt-1 text-xs ${cycleStatus === "overdue_invoice" ? "text-red-600" : cycleStatus === "pending_invoice" ? "text-amber-700" : "text-cf-text-secondary"}`}>
+                      {cycleActionLabel}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -351,15 +405,15 @@ const CreditCardsPage = ({
                           : formatCurrency(0)}
                     </p>
                     {pendingInvoice ? (
-                      <p className="text-xs text-cf-text-secondary">
+                      <p className={`text-xs ${pendingInvoice.isOverdue ? "text-red-600" : "text-amber-700"}`}>
                         {pendingInvoice.isOverdue
-                          ? `Atrasada desde ${formatDate(pendingInvoice.dueDate)}`
-                          : `Vence em ${formatDate(pendingInvoice.dueDate)}`}
+                          ? `Obrigação atrasada desde ${formatDate(pendingInvoice.dueDate)}`
+                          : `Obrigação pendente com vencimento em ${formatDate(pendingInvoice.dueDate)}`}
                       </p>
                     ) : card.openPurchasesCount > 0 ? (
-                      <p className="text-xs text-cf-text-secondary">Compras deste ciclo aguardando fechamento</p>
+                      <p className="text-xs text-blue-700">Compras em ciclo aberto aguardando fechamento</p>
                     ) : (
-                      <p className="text-xs text-cf-text-secondary">Sem fatura pendente no momento</p>
+                      <p className="text-xs text-cf-text-secondary">Ciclo sem compras e sem faturas pendentes</p>
                     )}
                   </div>
                 </div>

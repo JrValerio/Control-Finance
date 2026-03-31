@@ -86,6 +86,9 @@ describe("CreditCardsSummaryWidget", () => {
     expect(screen.getByText(/680,00|680,00/)).toBeInTheDocument();
     expect(screen.getByText(/1\.900,00|1900,00/)).toBeInTheDocument();
     expect(screen.getByText("3 faturas")).toBeInTheDocument();
+    expect(screen.getByText("Limite em uso")).toBeInTheDocument();
+    expect(screen.getByText("Em uso")).toBeInTheDocument();
+    expect(screen.getByText("43.60% do limite total")).toBeInTheDocument();
   });
 
   it("mostra estado vazio amigável quando não há cartão cadastrado", async () => {
