@@ -494,6 +494,15 @@ export const bulkApproveTaxFactsByUser = async (userId, payload = {}) => {
       throw createTaxError(404, "Um ou mais fatos fiscais nao foram encontrados.");
     }
 
+    const taxYears = [...new Set(facts.map((fact) => Number(fact.tax_year)))];
+
+    if (taxYears.length !== 1) {
+      throw createTaxError(
+        400,
+        "Aprovacao em lote exige fatos do mesmo exercicio fiscal (taxYear).",
+      );
+    }
+
     const factIdsSql = buildFactIdsQuery(factIds);
     const updateResult = await client.query(
       `UPDATE tax_facts
@@ -518,6 +527,7 @@ export const bulkApproveTaxFactsByUser = async (userId, payload = {}) => {
 
     return {
       updatedCount: Number(updateResult.rowCount || 0),
+      taxYear: taxYears[0],
     };
   });
 };

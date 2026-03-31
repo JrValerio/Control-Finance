@@ -1401,6 +1401,18 @@ describe("Tax API foundation", () => {
       id: factId,
       reviewStatus: "approved",
     });
+    expect(reviewResponse.body.preview).toMatchObject({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      summary: expect.objectContaining({
+        status: "preview",
+        taxYear: 2026,
+      }),
+      obligation: expect.objectContaining({
+        taxYear: 2026,
+      }),
+    });
 
     const persistedFactResult = await dbQuery(
       `SELECT review_status, updated_at
@@ -1493,6 +1505,18 @@ describe("Tax API foundation", () => {
       amount: 54000,
       dedupeStrength: "strong",
     });
+    expect(reviewResponse.body.preview).toMatchObject({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      summary: expect.objectContaining({
+        status: "preview",
+        taxYear: 2026,
+      }),
+      obligation: expect.objectContaining({
+        taxYear: 2026,
+      }),
+    });
 
     const persistedFactResult = await dbQuery(
       `SELECT amount, subcategory, dedupe_key, review_status
@@ -1581,8 +1605,27 @@ describe("Tax API foundation", () => {
       });
 
     expect(bulkResponse.status).toBe(200);
-    expect(bulkResponse.body).toEqual({
+    expect(bulkResponse.body).toMatchObject({
       updatedCount: 3,
+      taxYear: 2026,
+      preview: {
+        taxYear: 2026,
+        exerciseYear: 2026,
+        calendarYear: 2025,
+        summary: expect.objectContaining({
+          status: "preview",
+          taxYear: 2026,
+          sourceCounts: {
+            documents: 1,
+            factsPending: 0,
+            factsApproved: 3,
+          },
+        }),
+        obligation: expect.objectContaining({
+          taxYear: 2026,
+          approvedFactsCount: 3,
+        }),
+      },
     });
 
     const persistedFactsResult = await dbQuery(
@@ -1621,6 +1664,48 @@ describe("Tax API foundation", () => {
       factsPending: 0,
       factsApproved: 3,
     });
+  });
+
+  it("POST /tax/facts/bulk-review retorna 400 quando recebe factIds de taxYears diferentes", async () => {
+    const token = await registerAndLogin("tax-facts-bulk-mixed-taxyear@test.dev");
+
+    const firstFactResponse = await request(app)
+      .post("/tax/facts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        taxYear: 2026,
+        factType: "taxable_income",
+        subcategory: "manual_income_2026",
+        referencePeriod: "2025-12",
+        amount: 1000,
+      });
+    const secondFactResponse = await request(app)
+      .post("/tax/facts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        taxYear: 2025,
+        factType: "taxable_income",
+        subcategory: "manual_income_2025",
+        referencePeriod: "2024-12",
+        amount: 900,
+      });
+
+    expect(firstFactResponse.status).toBe(201);
+    expect(secondFactResponse.status).toBe(201);
+
+    const response = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds: [firstFactResponse.body.fact.id, secondFactResponse.body.fact.id],
+        action: "approve",
+      });
+
+    expectErrorResponseWithRequestId(
+      response,
+      400,
+      "Aprovacao em lote exige fatos do mesmo exercicio fiscal (taxYear).",
+    );
   });
 
   it("GET /tax/rules/:taxYear retorna regras oficiais seedadas para o exercicio 2026", async () => {
