@@ -29,12 +29,32 @@ interface ModalState {
   editing: BankAccountItem | null;
 }
 
-const statusOf = (account: BankAccountItem) => {
-  if (account.limitUsed > 0 && account.limitUsed >= account.limitTotal && account.limitTotal > 0) {
-    return "critical";
+type OperationalLimitStatus = "unused" | "using" | "exceeded";
+
+const resolveAccountLimitStatus = (account: BankAccountItem): OperationalLimitStatus => {
+  if (account.limitTotal <= 0) {
+    return account.balance < 0 ? "exceeded" : "unused";
   }
-  if (account.balance < 0) return "limit_in_use";
-  return "healthy";
+  if (account.limitUsed >= account.limitTotal && account.limitUsed > 0) {
+    return "exceeded";
+  }
+  if (account.limitUsed > 0) {
+    return "using";
+  }
+  return "unused";
+};
+
+const resolveSummaryLimitStatus = (summary: BankAccountsSummary): OperationalLimitStatus => {
+  if (summary.totalLimitTotal <= 0) {
+    return summary.totalBalance < 0 ? "exceeded" : "unused";
+  }
+  if (summary.totalLimitUsed >= summary.totalLimitTotal && summary.totalLimitUsed > 0) {
+    return "exceeded";
+  }
+  if (summary.totalLimitUsed > 0) {
+    return "using";
+  }
+  return "unused";
 };
 
 const BankAccountsWidget = (): JSX.Element => {
@@ -171,7 +191,19 @@ const BankAccountsWidget = (): JSX.Element => {
   }
 
   const hasAccounts = summary.accountsCount > 0;
-  const usingLimit = summary.totalLimitUsed > 0;
+  const limitStatus = resolveSummaryLimitStatus(summary);
+  const isLimitUsing = limitStatus === "using";
+  const isLimitExceeded = limitStatus === "exceeded";
+  const limitTone = isLimitExceeded
+    ? "text-red-600"
+    : isLimitUsing
+      ? "text-amber-700"
+      : "text-cf-text-primary";
+  const limitSupportTone = isLimitExceeded
+    ? "text-red-600"
+    : isLimitUsing
+      ? "text-amber-700"
+      : "text-cf-text-secondary";
 
   return (
     <>
@@ -224,19 +256,17 @@ const BankAccountsWidget = (): JSX.Element => {
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">
                   Limite disponível
                 </p>
-                <p
-                  className={`text-sm font-semibold ${
-                    usingLimit ? "text-amber-700" : "text-cf-text-primary"
-                  }`}
-                >
+                <p className={`text-sm font-semibold ${limitTone}`}>
                   {money(summary.totalLimitAvailable)}
                 </p>
-                <p
-                  className={`text-xs ${usingLimit ? "text-amber-700" : "text-cf-text-secondary"}`}
-                >
-                  {usingLimit
-                    ? `${money(summary.totalLimitUsed)} em uso`
-                    : `de ${money(summary.totalLimitTotal)} total`}
+                <p className={`text-xs ${limitSupportTone}`}>
+                  {isLimitExceeded
+                    ? "Limite esgotado"
+                    : isLimitUsing
+                      ? `${money(summary.totalLimitUsed)} em uso`
+                      : summary.totalLimitTotal > 0
+                        ? `de ${money(summary.totalLimitTotal)} total`
+                        : "Sem limite configurado"}
                 </p>
               </div>
 
@@ -282,7 +312,15 @@ const BankAccountsWidget = (): JSX.Element => {
             {/* Account list */}
             <div className="space-y-2">
               {accounts.map((account) => {
-                const status = statusOf(account);
+                const status = resolveAccountLimitStatus(account);
+                const statusLabel =
+                  status === "exceeded"
+                    ? "Excedido"
+                    : status === "using"
+                      ? "Em uso"
+                      : account.limitTotal > 0
+                        ? "Sem uso"
+                        : "Sem limite";
                 return (
                   <div
                     key={account.id}
@@ -292,9 +330,9 @@ const BankAccountsWidget = (): JSX.Element => {
                       <div className="flex items-center gap-1.5">
                         <span
                           className={`inline-block h-2 w-2 rounded-full flex-shrink-0 ${
-                            status === "critical"
+                            status === "exceeded"
                               ? "bg-red-500"
-                              : status === "limit_in_use"
+                              : status === "using"
                                 ? "bg-amber-500"
                                 : "bg-emerald-500"
                           }`}
@@ -307,6 +345,17 @@ const BankAccountsWidget = (): JSX.Element => {
                             · {account.bankName}
                           </p>
                         ) : null}
+                        <span
+                          className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                            status === "exceeded"
+                              ? "border-red-200 bg-red-50 text-red-700"
+                              : status === "using"
+                                ? "border-amber-200 bg-amber-50 text-amber-700"
+                                : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          }`}
+                        >
+                          {statusLabel}
+                        </span>
                       </div>
                       <p
                         className={`mt-0.5 text-xs ${
