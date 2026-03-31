@@ -7,7 +7,9 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 const TITLE_MAX_LENGTH = 200;
 const VALID_STATUS_FILTERS = new Set(["pending", "paid", "overdue"]);
+const VALID_BUCKET_FILTERS = new Set(["paid", "overdue", "due_soon", "future"]);
 const VALID_BILL_TYPES = new Set(["energy", "water", "rent", "internet", "phone", "gas", "other"]);
+const DUE_SOON_DAYS = 7;
 
 const createError = (status, message) => {
   const error = new Error(message);
@@ -151,6 +153,13 @@ const normalizeStatusFilter = (value) => {
   return lower;
 };
 
+const normalizeBucketFilter = (value) => {
+  if (typeof value === "undefined" || value === null || value === "") return undefined;
+  const lower = String(value).toLowerCase().trim();
+  if (!VALID_BUCKET_FILTERS.has(lower)) return undefined;
+  return lower;
+};
+
 const normalizePaidAt = (value) => {
   if (typeof value === "undefined" || value === null || value === "") return new Date();
   const parsed = new Date(value);
@@ -173,9 +182,67 @@ const normalizeOptionalImportSessionId = (value) => {
   return s || null;
 };
 
+const toDayStart = (value) => {
+  if (!value) return null;
+  if (typeof value === "string") {
+    if (ISO_DATE_REGEX.test(value)) {
+      const [year, month, day] = value.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+    const parsedDate = new Date(value);
+    if (Number.isNaN(parsedDate.getTime())) return null;
+    return new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+  }
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) return null;
+  return new Date(parsedDate.getFullYear(), parsedDate.getMonth(), parsedDate.getDate());
+};
+
+const calculateDaysUntilDue = (dueDateValue, today = startOfToday()) => {
+  const dueDateStart = toDayStart(dueDateValue);
+  if (!dueDateStart) return null;
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((dueDateStart.getTime() - today.getTime()) / millisecondsPerDay);
+};
+
+const resolveOperationalBucket = ({ status, dueDateValue, today = startOfToday() }) => {
+  if (status === "paid") {
+    return "paid";
+  }
+
+  const daysUntilDue = calculateDaysUntilDue(dueDateValue, today);
+  if (daysUntilDue == null) {
+    return "future";
+  }
+
+  if (daysUntilDue < 0) {
+    return "overdue";
+  }
+
+  if (daysUntilDue <= DUE_SOON_DAYS) {
+    return "due_soon";
+  }
+
+  return "future";
+};
+
 // ─── Row mapping ──────────────────────────────────────────────────────────────
 
 const mapBillRow = (row) => ({
+  ...(() => {
+    const dueDateRaw = row.due_date;
+    const status = row.status;
+    const daysUntilDue = status === "pending" ? calculateDaysUntilDue(dueDateRaw) : null;
+    const operationalBucket = resolveOperationalBucket({
+      status,
+      dueDateValue: dueDateRaw,
+    });
+
+    return {
+      operationalBucket,
+      daysUntilDue,
+    };
+  })(),
   id: Number(row.id),
   userId: Number(row.user_id),
   title: row.title,
@@ -234,14 +301,31 @@ export const createBillForUser = async (userId, payload = {}) => {
 export const listBillsByUser = async (userId, filters = {}) => {
   const normalizedUserId = normalizeUserId(userId);
   const status = normalizeStatusFilter(filters.status);
+  const bucket = normalizeBucketFilter(filters.bucket);
   const limit = normalizePaginationLimit(filters.limit);
   const offset = normalizePaginationOffset(filters.offset);
+
+  if (status && bucket) {
+    throw createError(400, "Use apenas um filtro: status ou bucket.");
+  }
 
   const whereConditions = ["user_id = $1"];
   const params = [normalizedUserId];
   let paramIndex = 2;
 
-  if (status === "overdue") {
+  if (bucket === "paid") {
+    whereConditions.push(`status = 'paid'`);
+  } else if (bucket === "overdue") {
+    whereConditions.push(`status = 'pending'`);
+    whereConditions.push(`due_date < CURRENT_DATE`);
+  } else if (bucket === "due_soon") {
+    whereConditions.push(`status = 'pending'`);
+    whereConditions.push(`due_date >= CURRENT_DATE`);
+    whereConditions.push(`due_date <= CURRENT_DATE + INTERVAL '${DUE_SOON_DAYS} day'`);
+  } else if (bucket === "future") {
+    whereConditions.push(`status = 'pending'`);
+    whereConditions.push(`due_date > CURRENT_DATE + INTERVAL '${DUE_SOON_DAYS} day'`);
+  } else if (status === "overdue") {
     whereConditions.push(`status = 'pending'`);
     whereConditions.push(`due_date < CURRENT_DATE`);
   } else if (status === "pending" || status === "paid") {

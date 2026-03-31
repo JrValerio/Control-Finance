@@ -36,6 +36,8 @@ const buildBill = (overrides: Partial<Bill> = {}): Bill => ({
   dueDate: "2026-03-25",
   status: "pending",
   isOverdue: false,
+  operationalBucket: "future",
+  daysUntilDue: 20,
   categoryId: null,
   paidAt: null,
   notes: null,
@@ -108,7 +110,7 @@ describe("BillsPage", () => {
 
   it("exibe badge Vencida para bill com isOverdue true", async () => {
     vi.mocked(billsService.list).mockResolvedValue(
-      buildListResult([buildBill({ isOverdue: true })]),
+      buildListResult([buildBill({ isOverdue: true, operationalBucket: "overdue", daysUntilDue: -1 })]),
     );
 
     renderPage();
@@ -120,7 +122,14 @@ describe("BillsPage", () => {
 
   it("exibe badge Paga para bill com status paid", async () => {
     vi.mocked(billsService.list).mockResolvedValue(
-      buildListResult([buildBill({ status: "paid", paidAt: "2026-02-15T10:00:00.000Z" })]),
+      buildListResult([
+        buildBill({
+          status: "paid",
+          paidAt: "2026-02-15T10:00:00.000Z",
+          operationalBucket: "paid",
+          daysUntilDue: null,
+        }),
+      ]),
     );
 
     renderPage();
@@ -182,6 +191,35 @@ describe("BillsPage", () => {
     await waitFor(() => {
       expect(billsService.list).toHaveBeenCalledWith(
         expect.objectContaining({ status: "overdue" }),
+      );
+    });
+  });
+
+  it("exibe badge A vencer para bill com bucket due_soon", async () => {
+    vi.mocked(billsService.list).mockResolvedValue(
+      buildListResult([buildBill({ operationalBucket: "due_soon", daysUntilDue: 3 })]),
+    );
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("A vencer")).toBeInTheDocument();
+    });
+  });
+
+  it("clicar filtro A vencer chama list com status due_soon", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByText("Conta de Agua")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "A vencer" }));
+
+    await waitFor(() => {
+      expect(billsService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "due_soon" }),
       );
     });
   });

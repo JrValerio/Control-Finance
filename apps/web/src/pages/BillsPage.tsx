@@ -39,23 +39,30 @@ const isCreditCardInvoice = (bill: Bill) => bill.billType === "credit_card_invoi
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
 const BillStatusBadge = ({ bill }: { bill: Bill }): JSX.Element => {
-  if (bill.status === "paid") {
+  if (bill.operationalBucket === "paid") {
     return (
       <span className="whitespace-nowrap rounded px-2 py-0.5 text-xs font-semibold bg-green-100 text-green-700">
         Paga
       </span>
     );
   }
-  if (bill.isOverdue) {
+  if (bill.operationalBucket === "overdue") {
     return (
       <span className="whitespace-nowrap rounded border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
         Vencida
       </span>
     );
   }
+  if (bill.operationalBucket === "due_soon") {
+    return (
+      <span className="whitespace-nowrap rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+        A vencer
+      </span>
+    );
+  }
   return (
-    <span className="whitespace-nowrap rounded px-2 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700">
-      Pendente
+    <span className="whitespace-nowrap rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs font-semibold text-slate-700">
+      Futura
     </span>
   );
 };
@@ -247,6 +254,8 @@ const BillsPage = ({
     { label: "Todos", value: undefined },
     { label: "Pendentes", value: "pending" },
     { label: "Vencidas", value: "overdue" },
+    { label: "A vencer", value: "due_soon" },
+    { label: "Futuras", value: "future" },
     { label: "Pagas", value: "paid" },
   ];
 

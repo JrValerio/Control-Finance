@@ -27,6 +27,7 @@ const toLocalDate = (offsetDays) => {
 
 const FUTURE_DATE = toLocalDate(30);   // 30 days from now — never overdue
 const PAST_DATE = toLocalDate(-30);    // 30 days ago — always overdue
+const DUE_SOON_DATE = toLocalDate(3);  // within due-soon window
 
 describe("bills", () => {
   beforeAll(async () => {
@@ -76,12 +77,15 @@ describe("bills", () => {
       dueDate: FUTURE_DATE,
       status: "pending",
       isOverdue: false,
+      operationalBucket: "future",
       categoryId: null,
       paidAt: null,
       notes: null,
       provider: null,
       referenceMonth: null,
     });
+    expect(typeof res.body.daysUntilDue).toBe("number");
+    expect(res.body.daysUntilDue).toBeGreaterThan(7);
     expect(Number.isInteger(res.body.id)).toBe(true);
     expect(typeof res.body.createdAt).toBe("string");
   });
@@ -247,6 +251,71 @@ describe("bills", () => {
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].title).toBe("Atrasada");
     expect(res.body.items[0].isOverdue).toBe(true);
+    expect(res.body.items[0].operationalBucket).toBe("overdue");
+  });
+
+  it("GET /bills?bucket=due_soon retorna apenas pendentes a vencer", async () => {
+    const token = await registerAndLogin("bills-bucket-due-soon@test.dev");
+    const userId = await getUserIdByEmail("bills-bucket-due-soon@test.dev");
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "A vencer", amount: 70, dueDate: DUE_SOON_DATE });
+
+    await dbQuery(
+      `INSERT INTO bills (user_id, title, amount, due_date) VALUES ($1, $2, $3, $4)`,
+      [userId, "Futura", 200, FUTURE_DATE],
+    );
+
+    const res = await request(app)
+      .get("/bills?bucket=due_soon")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0]).toMatchObject({
+      title: "A vencer",
+      operationalBucket: "due_soon",
+      status: "pending",
+    });
+  });
+
+  it("GET /bills?bucket=future retorna apenas pendentes futuras", async () => {
+    const token = await registerAndLogin("bills-bucket-future@test.dev");
+    const userId = await getUserIdByEmail("bills-bucket-future@test.dev");
+
+    await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "A vencer", amount: 70, dueDate: DUE_SOON_DATE });
+
+    await dbQuery(
+      `INSERT INTO bills (user_id, title, amount, due_date) VALUES ($1, $2, $3, $4)`,
+      [userId, "Futura", 200, FUTURE_DATE],
+    );
+
+    const res = await request(app)
+      .get("/bills?bucket=future")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0]).toMatchObject({
+      title: "Futura",
+      operationalBucket: "future",
+      status: "pending",
+    });
+  });
+
+  it("GET /bills retorna 400 quando status e bucket sao enviados juntos", async () => {
+    const token = await registerAndLogin("bills-filter-ambiguous@test.dev");
+
+    const res = await request(app)
+      .get("/bills?status=pending&bucket=future")
+      .set("Authorization", `Bearer ${token}`);
+
+    expectErrorResponseWithRequestId(res, 400, "Use apenas um filtro: status ou bucket.");
   });
 
   // ─── Summary ─────────────────────────────────────────────────────────────────
@@ -378,6 +447,8 @@ describe("bills", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.bill).toMatchObject({ id: billId, status: "paid", isOverdue: false });
+    expect(res.body.bill.operationalBucket).toBe("paid");
+    expect(res.body.bill.daysUntilDue).toBeNull();
     expect(typeof res.body.bill.paidAt).toBe("string");
 
     // Transaction created

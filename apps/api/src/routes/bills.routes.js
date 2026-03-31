@@ -43,6 +43,7 @@ router.get("/", async (req, res, next) => {
   try {
     const result = await listBillsByUser(req.user.id, {
       status: req.query.status,
+      bucket: req.query.bucket,
       limit: req.query.limit,
       offset: req.query.offset,
     });
