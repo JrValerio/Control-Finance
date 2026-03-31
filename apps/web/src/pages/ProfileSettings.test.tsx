@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import ProfileSettings from "./ProfileSettings";
 import { profileService } from "../services/profile.service";
 import { DiscreetModeProvider } from "../context/DiscreetModeContext";
@@ -31,15 +32,20 @@ const buildMe = (overrides = {}) => ({
   ...overrides,
 });
 
-const renderPage = (props: {
-  onBack?: () => void;
-  onLogout?: () => void;
-  onOpenBilling?: () => void;
-} = {}) =>
+const renderPage = (
+  props: {
+    onBack?: () => void;
+    onLogout?: () => void;
+    onOpenBilling?: () => void;
+  } = {},
+  { initialEntries = ["/app/settings/profile"] } = {},
+) =>
   render(
-    <DiscreetModeProvider>
-      <ProfileSettings {...props} />
-    </DiscreetModeProvider>,
+    <MemoryRouter initialEntries={initialEntries}>
+      <DiscreetModeProvider>
+        <ProfileSettings {...props} />
+      </DiscreetModeProvider>
+    </MemoryRouter>,
   );
 
 describe("ProfileSettings — Dados da conta", () => {
@@ -338,5 +344,28 @@ describe("ProfileSettings — Assinatura", () => {
     renderPage();
     await waitFor(() => expect(screen.getByText("Acesso ativo")).toBeInTheDocument());
     expect(screen.getByText(/Consulte Faturamento para ver o que está liberado agora/)).toBeInTheDocument();
+  });
+});
+
+describe("ProfileSettings — CPF deep-link", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    vi.mocked(profileService.getMe).mockResolvedValue(buildMe());
+    vi.mocked(profileService.updateProfile).mockResolvedValue({} as ReturnType<typeof profileService.updateProfile> extends Promise<infer T> ? T : never);
+  });
+
+  it("renders CPF input regardless of ?focus param", async () => {
+    renderPage({}, { initialEntries: ["/app/settings/profile?focus=taxpayer_cpf"] });
+    await waitFor(() =>
+      expect(screen.getByLabelText(/CPF do titular/i)).toBeInTheDocument(),
+    );
+  });
+
+  it("renders CPF input without ?focus param", async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByLabelText(/CPF do titular/i)).toBeInTheDocument(),
+    );
   });
 });

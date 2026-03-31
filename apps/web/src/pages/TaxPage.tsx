@@ -17,6 +17,7 @@ import { formatCurrency } from "../utils/formatCurrency";
 
 interface TaxPageProps {
   onBack?: () => void;
+  onOpenProfileSettings?: () => void;
 }
 
 interface CorrectionDraft {
@@ -330,7 +331,7 @@ const FactSummaryCard = ({
   </div>
 );
 
-const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
+const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxPageProps): JSX.Element => {
   const params = useParams();
   const taxYear = useMemo(() => normalizeRouteTaxYear(params.taxYear), [params.taxYear]);
 
@@ -1228,10 +1229,23 @@ const TaxPage = ({ onBack = undefined }: TaxPageProps): JSX.Element => {
                   key={warning.code}
                   className="rounded border border-amber-200 bg-white/60 px-3 py-2 text-sm text-amber-900"
                 >
-                  <span className="font-semibold" title={warning.code}>
-                    {formatFactWarningLabel(warning.code)}
-                  </span>
-                  : {warning.message}
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <span>
+                      <span className="font-semibold" title={warning.code}>
+                        {formatFactWarningLabel(warning.code)}
+                      </span>
+                      : {warning.message}
+                    </span>
+                    {warning.code === "TAXPAYER_CPF_NOT_CONFIGURED" && onOpenProfileSettings ? (
+                      <button
+                        type="button"
+                        onClick={onOpenProfileSettings}
+                        className="shrink-0 rounded border border-amber-400 bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-200"
+                      >
+                        Configurar CPF
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>

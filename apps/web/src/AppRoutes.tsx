@@ -187,7 +187,11 @@ const TaxRoute = () => {
     navigate("/app");
   };
 
-  return <TaxPage onBack={handleBack} />;
+  const handleOpenProfileSettings = () => {
+    navigate("/app/settings/profile?focus=taxpayer_cpf");
+  };
+
+  return <TaxPage onBack={handleBack} onOpenProfileSettings={handleOpenProfileSettings} />;
 };
 
 const RootRedirect = () => {
