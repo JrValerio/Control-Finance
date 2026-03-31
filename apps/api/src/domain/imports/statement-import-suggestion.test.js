@@ -233,7 +233,7 @@ describe("extractEnergyBillSuggestion", () => {
 
   it("resolve referenceMonth para MM/AAAA a partir de nome de mes", () => {
     const result = extractEnergyBillSuggestion(ENERGY_SAMPLE);
-    expect(result.referenceMonth).toBe("12/2025");
+    expect(result.referenceMonth).toBe("2025-12");
   });
 
   it("extrai dueDate como ISO", () => {
@@ -254,7 +254,16 @@ describe("extractEnergyBillSuggestion", () => {
   it("aceita referenceMonth numerico MM/AAAA", () => {
     const text = "CPFL Energia\nReferência: 03/2026\nVencimento: 10/04/2026\nTOTAL A PAGAR R$ 300,00";
     const result = extractEnergyBillSuggestion(text);
-    expect(result.referenceMonth).toBe("03/2026");
+    expect(result.referenceMonth).toBe("2026-03");
+  });
+
+  it("tolera labels abreviados de referencia, vencimento e valor", () => {
+    const text = "ENEL\nRef.: 3/2026\nVenc.: 05/04/2026\nValor do documento R$ 199,90";
+    const result = extractEnergyBillSuggestion(text);
+    expect(result).not.toBeNull();
+    expect(result.referenceMonth).toBe("2026-03");
+    expect(result.dueDate).toBe("2026-04-05");
+    expect(result.amountDue).toBeCloseTo(199.9);
   });
 });
 
@@ -293,7 +302,7 @@ describe("extractWaterBillSuggestion", () => {
 
   it("resolve referenceMonth MM/AAAA numerico", () => {
     const result = extractWaterBillSuggestion(WATER_SAMPLE);
-    expect(result.referenceMonth).toBe("02/2026");
+    expect(result.referenceMonth).toBe("2026-02");
   });
 
   it("extrai dueDate como ISO", () => {
@@ -309,5 +318,14 @@ describe("extractWaterBillSuggestion", () => {
   it("extrai customerCode da matricula", () => {
     const result = extractWaterBillSuggestion(WATER_SAMPLE);
     expect(result.customerCode).toMatch(/62092/);
+  });
+
+  it("aceita referencia com mes abreviado e total com impostos", () => {
+    const text = "SABESP\nRef.: mar./2026\nData de vencimento: 12/04/2026\nTotal com impostos R$ 88,71";
+    const result = extractWaterBillSuggestion(text);
+    expect(result).not.toBeNull();
+    expect(result.referenceMonth).toBe("2026-03");
+    expect(result.dueDate).toBe("2026-04-12");
+    expect(result.amountDue).toBeCloseTo(88.71);
   });
 });
