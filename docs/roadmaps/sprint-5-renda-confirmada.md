@@ -2,6 +2,29 @@
 
 > Documento operacional para executar a Sprint 5 com foco em verdade financeira: renda reconhecida corretamente no dominio, no agregado mensal e na projecao.
 
+Status: concluida em 31/03/2026.
+
+---
+
+## 0. Entregas executadas
+
+### PRs da Sprint 5
+
+1. PR #355 - S5.1 (testes de semantica e guard rails)
+2. PR #356 - S5.2 (integridade backend no vinculo de extrato)
+3. PR #357 - S5.3 (status explicito de renda confirmada no frontend)
+4. PR #358 - S5.4 (hardening final e fechamento executivo)
+
+### Evidencia de validacao final (S5.4)
+
+- API lint: `npm -w apps/api run lint`
+- API testes direcionados: `npm -w apps/api run test -- src/forecast.test.js src/income-sources.test.js src/transactions.test.js`
+- Web lint: `npm -w apps/web run lint`
+- Web typecheck: `npm -w apps/web run typecheck`
+- Web testes direcionados: `npm -w apps/web run test:run -- src/pages/IncomeSourcesPage.test.tsx src/services/auth.service.test.ts`
+
+Todos os comandos acima concluiram com sucesso.
+
 ---
 
 ## 1. Objetivo

@@ -381,7 +381,7 @@ Legenda de status:
 | Sprint | Foco | Escopo de fechamento | Status |
 |---|---|---|---|
 | Sprint 4 | Forecast semantics (projeção confiável) | saldo real como base, obrigações futuras sem abatimento duplo, trilha de home/auth estabilizada e CI verde em main | ✅ |
-| Sprint 5 | Renda confirmada ponta a ponta (pensão/INSS) | documento -> entidade -> agregado mensal -> projeção sem sumir/duplicar | 🟡 |
+| Sprint 5 | Renda confirmada ponta a ponta (pensão/INSS) | documento -> entidade -> agregado mensal -> projeção sem sumir/duplicar | ✅ |
 
 ### Fase 2 - Operação financeira real
 
@@ -402,8 +402,10 @@ Legenda de status:
 ### Decisão executiva atual
 
 - Sprint 4 fechada.
-- Sprint 5 iniciada.
+- Sprint 5 concluida.
+- Sprint 6 e o proximo alvo.
 - Documento operacional da Sprint 5: `docs/roadmaps/sprint-5-renda-confirmada.md`.
+- Evidencias da Sprint 5: PR #355, PR #356, PR #357, PR #358.
 - Pendências manuais continuam rastreadas fora de CI (prova visual do PR #348 e validação E2E real do OAuth).
 
 ---
