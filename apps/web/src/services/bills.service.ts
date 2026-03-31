@@ -3,7 +3,8 @@ import { api } from "./api";
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export type BillStatus = "pending" | "paid";
-export type BillStatusFilter = "pending" | "paid" | "overdue" | undefined;
+export type BillOperationalBucket = "paid" | "overdue" | "due_soon" | "future";
+export type BillStatusFilter = "pending" | "paid" | "overdue" | "due_soon" | "future" | undefined;
 export type MatchStatus = "unmatched" | "matched";
 
 export interface Bill {
@@ -14,6 +15,8 @@ export interface Bill {
   dueDate: string;
   status: BillStatus;
   isOverdue: boolean;
+  operationalBucket: BillOperationalBucket;
+  daysUntilDue: number | null;
   categoryId: number | null;
   paidAt: string | null;
   notes: string | null;
@@ -144,6 +147,10 @@ interface BillApiPayload {
   status?: unknown;
   isOverdue?: unknown;
   is_overdue?: unknown;
+  operationalBucket?: unknown;
+  operational_bucket?: unknown;
+  daysUntilDue?: unknown;
+  days_until_due?: unknown;
   categoryId?: unknown;
   category_id?: unknown;
   paidAt?: unknown;
@@ -178,21 +185,76 @@ const normalizeISOString = (value: unknown): string => {
   return "";
 };
 
+const toDayStart = (value: string): Date | null => {
+  if (!value) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+};
+
+const fallbackDaysUntilDue = (dueDate: string): number | null => {
+  const dueDateStart = toDayStart(dueDate);
+  if (!dueDateStart) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const millisecondsPerDay = 24 * 60 * 60 * 1000;
+  return Math.round((dueDateStart.getTime() - today.getTime()) / millisecondsPerDay);
+};
+
+const normalizeOperationalBucket = (
+  value: unknown,
+  fallback: BillOperationalBucket,
+): BillOperationalBucket => {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (
+    normalized === "paid" ||
+    normalized === "overdue" ||
+    normalized === "due_soon" ||
+    normalized === "future"
+  ) {
+    return normalized;
+  }
+  return fallback;
+};
+
 const normalizeBill = (raw: BillApiPayload): Bill => {
   const id = Number(raw.id);
   const userId = Number(raw.userId ?? raw.user_id);
   const amount = Number(raw.amount);
   const categoryId = raw.categoryId ?? raw.category_id;
   const categoryIdNum = categoryId != null && categoryId !== "" ? Number(categoryId) : null;
+  const dueDate = normalizeISOString(raw.dueDate ?? raw.due_date);
+  const isOverdue = Boolean(raw.isOverdue ?? raw.is_overdue);
+  const status: BillStatus = raw.status === "paid" ? "paid" : "pending";
+  const normalizedDaysUntilDueRaw = Number(raw.daysUntilDue ?? raw.days_until_due);
+  const daysUntilDue =
+    status === "pending"
+      ? Number.isInteger(normalizedDaysUntilDueRaw)
+        ? normalizedDaysUntilDueRaw
+        : fallbackDaysUntilDue(dueDate)
+      : null;
+  const fallbackBucket: BillOperationalBucket =
+    status === "paid"
+      ? "paid"
+      : isOverdue
+        ? "overdue"
+        : daysUntilDue != null && daysUntilDue <= 7
+          ? "due_soon"
+          : "future";
 
   return {
     id: Number.isInteger(id) && id > 0 ? id : 0,
     userId: Number.isInteger(userId) && userId > 0 ? userId : 0,
     title: typeof raw.title === "string" ? raw.title.trim() : "",
     amount: Number.isFinite(amount) ? amount : 0,
-    dueDate: normalizeISOString(raw.dueDate ?? raw.due_date),
-    status: raw.status === "paid" ? "paid" : "pending",
-    isOverdue: Boolean(raw.isOverdue ?? raw.is_overdue),
+    dueDate,
+    status,
+    isOverdue,
+    operationalBucket: normalizeOperationalBucket(
+      raw.operationalBucket ?? raw.operational_bucket,
+      fallbackBucket,
+    ),
+    daysUntilDue,
     categoryId:
       categoryIdNum != null && Number.isInteger(categoryIdNum) && categoryIdNum > 0
         ? categoryIdNum
@@ -237,7 +299,13 @@ export const billsService = {
     offset?: number;
   } = {}): Promise<BillsListResult> => {
     const params: Record<string, string | number> = {};
-    if (opts.status) params.status = opts.status;
+    if (opts.status) {
+      if (opts.status === "due_soon" || opts.status === "future") {
+        params.bucket = opts.status;
+      } else {
+        params.status = opts.status;
+      }
+    }
     if (opts.limit != null) params.limit = opts.limit;
     if (opts.offset != null) params.offset = opts.offset;
 
