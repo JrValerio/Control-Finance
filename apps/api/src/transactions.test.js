@@ -32,6 +32,13 @@ describe("transactions", () => {
     resetImportRateLimiterState();
     resetWriteRateLimiterState();
     resetHttpMetricsForTests();
+    await dbQuery("DELETE FROM user_forecasts");
+    await dbQuery("DELETE FROM bank_accounts");
+    await dbQuery("DELETE FROM user_profiles");
+    await dbQuery("DELETE FROM income_statement_deductions");
+    await dbQuery("DELETE FROM income_statements");
+    await dbQuery("DELETE FROM income_deductions");
+    await dbQuery("DELETE FROM income_sources");
     await dbQuery("DELETE FROM transactions");
     await dbQuery("DELETE FROM subscriptions");
     await dbQuery("DELETE FROM users");
@@ -41,6 +48,127 @@ describe("transactions", () => {
     const response = await request(app).get("/transactions");
 
     expect(response.status).toBe(401);
+  });
+
+  it("GET /transactions/summary nao inclui extrato draft como renda confirmada", async () => {
+    const token = await registerAndLogin("summary-draft-nao-conta@controlfinance.dev");
+
+    const sourceResponse = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Pensao INSS" });
+
+    const draftResponse = await request(app)
+      .post(`/income-sources/${sourceResponse.body.id}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-03",
+        netAmount: 2803.52,
+        paymentDate: "2026-03-07",
+      });
+
+    expect(draftResponse.status).toBe(201);
+    expect(draftResponse.body.statement.status).toBe("draft");
+
+    const summaryResponse = await request(app)
+      .get("/transactions/summary")
+      .query({ month: "2026-03" })
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body).toMatchObject({
+      month: "2026-03",
+      income: 0,
+      expense: 0,
+      balance: 0,
+    });
+  });
+
+  it("GET /transactions/summary inclui extrato posted como renda confirmada", async () => {
+    const token = await registerAndLogin("summary-posted-conta@controlfinance.dev");
+
+    const sourceResponse = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Pensao INSS" });
+
+    const draftResponse = await request(app)
+      .post(`/income-sources/${sourceResponse.body.id}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-03",
+        netAmount: 3150,
+        paymentDate: "2026-03-07",
+      });
+
+    const postResponse = await request(app)
+      .post(`/income-sources/statements/${draftResponse.body.statement.id}/post`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(postResponse.status).toBe(200);
+    expect(postResponse.body.statement.status).toBe("posted");
+
+    const summaryResponse = await request(app)
+      .get("/transactions/summary")
+      .query({ month: "2026-03" })
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body).toMatchObject({
+      month: "2026-03",
+      income: 3150,
+      expense: 0,
+      balance: 3150,
+    });
+  });
+
+  it("GET /transactions/summary nao duplica renda ao vincular extrato em transacao existente", async () => {
+    const token = await registerAndLogin("summary-link-sem-duplicar@controlfinance.dev");
+
+    const sourceResponse = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Pensao INSS" });
+
+    const transactionResponse = await request(app)
+      .post("/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        type: "Entrada",
+        value: 2800,
+        date: "2026-03-07",
+        description: "Credito INSS importado",
+      });
+
+    const draftResponse = await request(app)
+      .post(`/income-sources/${sourceResponse.body.id}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-03",
+        netAmount: 2800,
+        paymentDate: "2026-03-07",
+      });
+
+    const linkResponse = await request(app)
+      .post(`/income-sources/statements/${draftResponse.body.statement.id}/link-transaction`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ transactionId: transactionResponse.body.id });
+
+    expect(linkResponse.status).toBe(200);
+    expect(linkResponse.body.statement.status).toBe("posted");
+
+    const summaryResponse = await request(app)
+      .get("/transactions/summary")
+      .query({ month: "2026-03" })
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body).toMatchObject({
+      month: "2026-03",
+      income: 2800,
+      expense: 0,
+      balance: 2800,
+    });
   });
 
   it("cria e lista transacoes do usuario autenticado", async () => {
