@@ -53,6 +53,20 @@ const getReconciliationBadge = (status: IncomeStatementReconciliation["status"])
   }
 };
 
+const getStatementStatusBadge = (status: "draft" | "posted") => {
+  if (status === "posted") {
+    return {
+      label: "Confirmada",
+      className: "border-green-200 bg-green-50 text-green-700",
+    };
+  }
+
+  return {
+    label: "Rascunho",
+    className: "border-amber-200 bg-amber-50 text-amber-700",
+  };
+};
+
 const IncomeSourcesPage = ({
   onBack = undefined,
 }: IncomeSourcesPageProps): JSX.Element => {
@@ -476,6 +490,7 @@ const IncomeSourcesPage = ({
                       {(statementsBySource[source.id] ?? []).slice(0, 3).map((statement) => {
                         const reconciliation = statement.reconciliation;
                         const badge = getReconciliationBadge(reconciliation?.status ?? "pending");
+                        const statementStatusBadge = getStatementStatusBadge(statement.status);
 
                         return (
                           <div
@@ -492,11 +507,18 @@ const IncomeSourcesPage = ({
                                   {statement.paymentDate ? ` · Pago em ${statement.paymentDate}` : ""}
                                 </p>
                               </div>
-                              <span
-                                className={`rounded border px-2 py-0.5 text-xs font-semibold ${badge.className}`}
-                              >
-                                {badge.label}
-                              </span>
+                              <div className="flex items-center gap-1">
+                                <span
+                                  className={`rounded border px-2 py-0.5 text-xs font-semibold ${statementStatusBadge.className}`}
+                                >
+                                  {statementStatusBadge.label}
+                                </span>
+                                <span
+                                  className={`rounded border px-2 py-0.5 text-xs font-semibold ${badge.className}`}
+                                >
+                                  {badge.label}
+                                </span>
+                              </div>
                             </div>
 
                             {reconciliation ? (
