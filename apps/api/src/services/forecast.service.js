@@ -119,7 +119,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
   const bankLimitTotal =
     profile?.bank_limit_total != null ? Number(profile.bank_limit_total) : null;
 
-  // 2. This-month totals
+  // 2. Realized month totals (up to today only)
   const monthlyResult = await dbQuery(
     `SELECT
        COALESCE(SUM(CASE WHEN type = 'Saida'  THEN value ELSE 0 END), 0) AS spending_to_date,
@@ -129,12 +129,26 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
        AND deleted_at IS NULL
        AND date >= $2
        AND date <= $3`,
-    [uid, mStart, mEnd],
+    [uid, mStart, todayStr],
   );
   const spendingToDate = Number(monthlyResult.rows[0].spending_to_date);
   const incomeToDate = Number(monthlyResult.rows[0].income_to_date);
 
-  // 3. Daily average spending over last 60 days
+  // 2b. Real current balance base from active bank accounts.
+  // If there are no active accounts yet, keep legacy fallback to realized net this month.
+  const bankBalanceResult = await dbQuery(
+    `SELECT
+       COALESCE(SUM(balance), 0)::numeric AS total_balance,
+       COUNT(*)::int AS active_accounts_count
+     FROM bank_accounts
+     WHERE user_id = $1
+       AND is_active = true`,
+    [uid],
+  );
+  const totalBankBalance = Number(bankBalanceResult.rows[0]?.total_balance || 0);
+  const activeAccountsCount = Number(bankBalanceResult.rows[0]?.active_accounts_count || 0);
+
+  // 3. Daily average spending over last 60 realized days (up to today)
   const sixtyDaysAgo = daysAgoStr(now, 60);
   const dailyResult = await dbQuery(
     `SELECT COALESCE(SUM(value), 0) AS total_60d
@@ -144,30 +158,31 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
        AND type      = 'Saida'
        AND date >= $2
        AND date <= $3`,
-    [uid, sixtyDaysAgo, mEnd],
+    [uid, sixtyDaysAgo, todayStr],
   );
   const total60d = Number(dailyResult.rows[0].total_60d);
   const dailyAvgSpending = total60d / 60;
 
-  // 4a. income_expected — competence-based: all statements for reference_month = current month
+  // 4a. income_expected — confirmed statements for current month.
+  // Unconfirmed/draft statements are excluded from projection semantics.
   const stmtExpectedResult = await dbQuery(
     `SELECT COALESCE(SUM(st.net_amount), 0) AS total
      FROM income_statements st
      JOIN income_sources s ON s.id = st.income_source_id
      WHERE s.user_id = $1
-       AND st.reference_month = $2`,
+       AND st.reference_month = $2
+       AND st.status = 'posted'`,
     [uid, currentMonth],
   );
   const statementsExpected = Number(stmtExpectedResult.rows[0].total);
 
-  // 4b. incomeAdjustment — cash-flow-based: draft statements whose payment_date
-  //     is still upcoming within the current month (posted ones already live in transactions)
+  // 4b. incomeAdjustment — confirmed inflows still in the future within the month.
   const stmtCashResult = await dbQuery(
     `SELECT COALESCE(SUM(st.net_amount), 0) AS total
      FROM income_statements st
      JOIN income_sources s ON s.id = st.income_source_id
      WHERE s.user_id = $1
-       AND st.status = 'draft'
+       AND st.status = 'posted'
        AND st.payment_date > $2
        AND st.payment_date <= $3`,
     [uid, todayStr, mEnd],
@@ -175,8 +190,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
   const statementsCashPending = Number(stmtCashResult.rows[0].total);
 
   // 4c. Resolve incomeExpected and incomeAdjustment.
-  //     Statements win over salary; salary is fallback only.
-  //     Posted statements are never added to incomeAdjustment (already in incomeToDate).
+  // Confirmed statements win over salary; salary remains fallback only.
   const hasStatementsThisMonth = statementsExpected > 0;
   const incomeExpected = hasStatementsThisMonth
     ? statementsExpected
@@ -189,7 +203,8 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
 
   // 5. Projected balance
   const netToDate = incomeToDate - spendingToDate;
-  const projectedBalance = netToDate + incomeAdjustment - dailyAvgSpending * daysRemaining;
+  const realBalanceBase = activeAccountsCount > 0 ? totalBankBalance : netToDate;
+  const projectedBalance = realBalanceBase + incomeAdjustment - dailyAvgSpending * daysRemaining;
 
   // 6. Flip detection against previous stored value
   const prevResult = await dbQuery(

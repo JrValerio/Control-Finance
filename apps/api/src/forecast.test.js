@@ -19,6 +19,7 @@ import { computeForecast, getLatestForecast } from "./services/forecast.service.
 const FIXED_NOW = new Date("2026-03-10T12:00:00.000Z");
 const FIXED_MONTH = "2026-03";
 const FIXED_MONTH_START = "2026-03-01";
+const FIXED_MONTH_END = "2026-03-31";
 
 const resetState = async () => {
   resetLoginProtectionState();
@@ -26,6 +27,10 @@ const resetState = async () => {
   resetWriteRateLimiterState();
   resetHttpMetricsForTests();
   await dbQuery("DELETE FROM user_forecasts");
+  await dbQuery("DELETE FROM bank_accounts");
+  await dbQuery("DELETE FROM bills");
+  await dbQuery("DELETE FROM income_statements");
+  await dbQuery("DELETE FROM income_sources");
   await dbQuery("DELETE FROM user_profiles");
   await dbQuery("DELETE FROM transactions");
   await dbQuery("DELETE FROM user_identities");
@@ -358,6 +363,109 @@ describe("computeForecast — flip detection (deterministic)", () => {
   });
 });
 
+describe("computeForecast — projection semantics (deterministic)", () => {
+  beforeAll(async () => { await setupTestDb(); });
+  afterAll(async () => { await clearDbClientForTests(); });
+  beforeEach(resetState);
+
+  it("usa saldo real de contas como base e trata bills pendentes como obrigacao futura", async () => {
+    await registerAndLogin("fc-sem-a@test.dev");
+    const userId = await getUserIdByEmail("fc-sem-a@test.dev");
+
+    await dbQuery(
+      `INSERT INTO bank_accounts (user_id, name, balance, limit_total)
+       VALUES ($1, 'Conta corrente', 1000, 500)`,
+      [userId],
+    );
+
+    await dbQuery(
+      `INSERT INTO bills (user_id, title, amount, due_date, status)
+       VALUES ($1, 'Internet', 300, $2, 'pending')`,
+      [userId, FIXED_MONTH_END],
+    );
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.projectedBalance).toBe(1000);
+    expect(result.spendingToDate).toBe(0);
+    expect(result.billsPendingTotal).toBe(300);
+    expect(result.billsPendingCount).toBe(1);
+    expect(result.adjustedProjectedBalance).toBe(700);
+  });
+
+  it("inclui fatura aberta como obrigacao futura sem tratar como saida liquidada", async () => {
+    await registerAndLogin("fc-sem-b@test.dev");
+    const userId = await getUserIdByEmail("fc-sem-b@test.dev");
+
+    await dbQuery(
+      `INSERT INTO bank_accounts (user_id, name, balance, limit_total)
+       VALUES ($1, 'Conta principal', 1200, 0)`,
+      [userId],
+    );
+
+    await dbQuery(
+      `INSERT INTO bills (user_id, title, amount, due_date, status, bill_type)
+       VALUES ($1, 'Fatura Cartao Março', 450, $2, 'pending', 'credit_card_invoice')`,
+      [userId, FIXED_MONTH_END],
+    );
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.spendingToDate).toBe(0);
+    expect(result.projectedBalance).toBe(1200);
+    expect(result.billsPendingTotal).toBe(450);
+    expect(result.adjustedProjectedBalance).toBe(750);
+  });
+
+  it("renda confirmada futura aumenta a projecao", async () => {
+    await registerAndLogin("fc-sem-c@test.dev");
+    const userId = await getUserIdByEmail("fc-sem-c@test.dev");
+
+    await dbQuery(
+      `INSERT INTO bank_accounts (user_id, name, balance, limit_total)
+       VALUES ($1, 'Conta salário', 1000, 0)`,
+      [userId],
+    );
+
+    const sourceId = await insertIncomeSource(userId, "Salário principal");
+    await insertStatement(sourceId, {
+      referenceMonth: "2026-03",
+      netAmount: 500,
+      paymentDate: "2026-03-25",
+      status: "posted",
+    });
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.incomeExpected).toBe(500);
+    expect(result.projectedBalance).toBe(1500);
+  });
+
+  it("renda nao confirmada (draft) nao aumenta a projecao", async () => {
+    await registerAndLogin("fc-sem-d@test.dev");
+    const userId = await getUserIdByEmail("fc-sem-d@test.dev");
+
+    await dbQuery(
+      `INSERT INTO bank_accounts (user_id, name, balance, limit_total)
+       VALUES ($1, 'Conta salário', 1000, 0)`,
+      [userId],
+    );
+
+    const sourceId = await insertIncomeSource(userId, "Renda detectada");
+    await insertStatement(sourceId, {
+      referenceMonth: "2026-03",
+      netAmount: 400,
+      paymentDate: "2026-03-20",
+      status: "draft",
+    });
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
+    expect(result.incomeExpected).toBeNull();
+    expect(result.projectedBalance).toBe(1000);
+  });
+});
+
 // ─── Forecast + Bills integration ────────────────────────────────────────────
 
 // Helpers for real current-month boundaries (HTTP tests use real `now`)
@@ -607,7 +715,7 @@ describe("computeForecast — statement-aware income (deterministic)", () => {
     expect(result.projectedBalance).toBe(0); // netToDate=0, adj=0, daily=0
   });
 
-  it("statement draft com payment_date futuro: incomeAdjustment=net_amount", async () => {
+  it("statement draft com payment_date futuro: nao entra na projecao sem confirmacao", async () => {
     await registerAndLogin("fc-stmt-draft-future@test.dev");
     const userId = await getUserIdByEmail("fc-stmt-draft-future@test.dev");
 
@@ -621,11 +729,11 @@ describe("computeForecast — statement-aware income (deterministic)", () => {
 
     const result = await computeForecast(userId, { now: FIXED_NOW });
 
-    expect(result.incomeExpected).toBe(3500);
-    expect(result.projectedBalance).toBe(3500); // netToDate=0, adj=3500, daily=0
+    expect(result.incomeExpected).toBeNull();
+    expect(result.projectedBalance).toBe(0);
   });
 
-  it("statement draft com payment_date passada: incomeAdjustment=0", async () => {
+  it("statement draft com payment_date passada: permanece fora da projecao", async () => {
     await registerAndLogin("fc-stmt-draft-past@test.dev");
     const userId = await getUserIdByEmail("fc-stmt-draft-past@test.dev");
 
@@ -639,9 +747,7 @@ describe("computeForecast — statement-aware income (deterministic)", () => {
 
     const result = await computeForecast(userId, { now: FIXED_NOW });
 
-    // incomeExpected = statement net_amount (competence)
-    expect(result.incomeExpected).toBe(3500);
-    // but no cash adjustment (payment date already passed without posting)
+    expect(result.incomeExpected).toBeNull();
     expect(result.projectedBalance).toBe(0);
   });
 
@@ -660,9 +766,7 @@ describe("computeForecast — statement-aware income (deterministic)", () => {
 
     const result = await computeForecast(userId, { now: FIXED_NOW });
 
-    // income_expected de março = 4200 (competência)
-    expect(result.incomeExpected).toBe(4200);
-    // mas não entra no caixa projetado de março
+    expect(result.incomeExpected).toBeNull();
     expect(result.projectedBalance).toBe(0);
   });
 
@@ -680,8 +784,26 @@ describe("computeForecast — statement-aware income (deterministic)", () => {
 
     const result = await computeForecast(userId, { now: FIXED_NOW });
 
+    expect(result.incomeExpected).toBeNull();
+    expect(result.projectedBalance).toBe(0);
+  });
+
+  it("statement posted com payment_date futuro: entra na projecao como renda confirmada", async () => {
+    await registerAndLogin("fc-stmt-posted-future@test.dev");
+    const userId = await getUserIdByEmail("fc-stmt-posted-future@test.dev");
+
+    const sid = await insertIncomeSource(userId);
+    await insertStatement(sid, {
+      referenceMonth: "2026-03",
+      netAmount: 2800,
+      paymentDate: "2026-03-20",
+      status: "posted",
+    });
+
+    const result = await computeForecast(userId, { now: FIXED_NOW });
+
     expect(result.incomeExpected).toBe(2800);
-    expect(result.projectedBalance).toBe(0); // sem data, sem ajuste de caixa
+    expect(result.projectedBalance).toBe(2800);
   });
 
   it("multiplas fontes: soma corretamente em income_expected e incomeAdjustment", async () => {
@@ -709,7 +831,7 @@ describe("computeForecast — statement-aware income (deterministic)", () => {
 
     const result = await computeForecast(userId, { now: FIXED_NOW });
 
-    expect(result.incomeExpected).toBe(6500); // 5000 + 1500
-    expect(result.projectedBalance).toBe(1500); // adj = apenas draft futuro
+    expect(result.incomeExpected).toBe(5000);
+    expect(result.projectedBalance).toBe(0);
   });
 });
