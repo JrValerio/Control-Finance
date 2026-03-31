@@ -562,11 +562,17 @@ const MONTH_NAMES_MAP = {
 
 const resolveReferenceMonth = (raw) => {
   if (!raw) return null;
-  const numericMatch = raw.match(/(\d{2})\/?(\d{4})/);
-  if (numericMatch) return `${numericMatch[1]}/${numericMatch[2]}`;
+  const numericMatch = String(raw).match(/\b(\d{1,2})\s*\/\s*(\d{4})\b/);
+  if (numericMatch) {
+    const month = Number(numericMatch[1]);
+    if (Number.isInteger(month) && month >= 1 && month <= 12) {
+      return `${String(month).padStart(2, "0")}/${numericMatch[2]}`;
+    }
+  }
   const normalized = collapseWhitespace(raw)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,]/g, " ")
     .toLowerCase();
   const namedMatch = normalized.match(/([a-z]+)[\s/]+(\d{4})/);
   if (namedMatch) {
@@ -717,17 +723,19 @@ const detectIssuerFromText = (normalizedText, candidates) => {
 const extractBillFields = (normalizedText) => {
   // Reference month
   const refMatch = normalizedText.match(
-    /(?:referencia|referencia do mes|competencia|periodo de referencia|mes de referencia)[:\s]+([a-z]+[\s/]+\d{4}|\d{1,2}[/]\d{4})/i,
+    /(?:referencia|referencia do mes|competencia|periodo de referencia|mes de referencia|ref\.?)[:\s]+([a-z]{3,12}[\s./-]+\d{4}|\d{1,2}\s*\/\s*\d{4})/i,
   );
-  const referenceMonth = resolveReferenceMonth(refMatch ? refMatch[1] : null);
+  const referenceMonth = toISOReferenceMonth(refMatch ? refMatch[1] : null);
 
   // Due date
-  const dueMatch = normalizedText.match(/vencimento[:\s]+(\d{2}\/\d{2}\/\d{4})/i);
+  const dueMatch = normalizedText.match(
+    /(?:vencimento|venc\.?|data de vencimento)[:\s]+(\d{2}\/\d{2}\/\d{4})/i,
+  );
   const dueDate = dueMatch ? toIsoDateString(dueMatch[1]) : null;
 
   // Amount due
   const amountMatch = normalizedText.match(
-    /(?:total a pagar|valor a pagar|total do documento|valor total)[:\s]*r?\$?\s*([\d.,]+)/i,
+    /(?:total a pagar|valor a pagar|total do documento|valor total|valor do documento|total com impostos)[:\s]*r?\$?\s*([\d.,]+)/i,
   );
   const amountDue = amountMatch ? parseSignedAmount(amountMatch[1]) : null;
 
