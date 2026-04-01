@@ -406,10 +406,11 @@ Legenda de status:
 - Sprint 6 concluida.
 - Sprint 7 concluida.
 - Sprint 8 concluida.
-- Sprint 9 iniciada.
+- Sprint 9 em andamento com base fiscal oficializada na main.
 - S9.1 concluida (contrato fiscal anual e bootstrap) no PR #375.
+- S9.2 backend concluida no PR #377 (preview pos-review, guard rail de taxYear e contrato anual consistente).
+- S9.2 frontend + S9.3 + S9.4 oficializadas no PR #378 (preview na TaxPage, resumo conferivel e modo imprimivel/PDF).
 - Subfrente oficial da Sprint 9: UX fiscal + espelhamento frontend do dominio fiscal.
-- Gap critico explicitado: resumo do IRPF ainda precisa fechar como superficie de conferencia guiada.
 - Documento operacional da Sprint 6: `docs/roadmaps/sprint-6-guard-rails-documentais.md`.
 - Documento operacional da Sprint 7: `docs/roadmaps/sprint-7-conta-corrente-operacional.md`.
 - Documento operacional da Sprint 8: `docs/roadmaps/sprint-8-cartao-ciclo-conciliacao.md`.
@@ -419,7 +420,8 @@ Legenda de status:
 - Evidencias da Sprint 6: PR #359, PR #360, PR #361, PR #362.
 - Evidencias da Sprint 7: PR #364, PR #365, PR #366, PR #367.
 - Evidencias da Sprint 8: PR #369, PR #370, PR #371, PR #372.
-- Evidencias iniciais da Sprint 9: PR #374, PR #375.
+- Evidencias da Sprint 9: PR #374, PR #375, PR #376, PR #377, PR #378.
+- Proxima linha: continuar os proximos slices do IRPF MVP a partir da base fiscal ja conferivel e imprimivel.
 - Pendências manuais continuam rastreadas fora de CI (prova visual do PR #348 e validação E2E real do OAuth).
 
 ---
