@@ -152,6 +152,16 @@ describe("Tax API foundation", () => {
     );
   });
 
+  it("GET /tax/income-statement-clt/:taxYear retorna 401 sem token", async () => {
+    const response = await request(app).get("/tax/income-statement-clt/2026");
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
   it("GET /tax/export/:taxYear retorna 401 sem token", async () => {
     const response = await request(app).get("/tax/export/2026?format=json");
 
@@ -1067,6 +1077,108 @@ describe("Tax API foundation", () => {
         conflict_code: null,
       }),
     ]);
+  });
+
+  it("GET /tax/income-statement-clt/:taxYear agrega meses aprovados de holerite CLT", async () => {
+    const token = await registerAndLogin("tax-clt-income-statement@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Holerite",
+            "Demonstrativo de Pagamento de Salario",
+            "Empresa ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Funcionario Joao da Silva",
+            "CPF 123.456.789-00",
+            "Competencia 03/2025",
+            "001 SALARIO BASE 8.500,00 0,00",
+            "998 INSS 0,00 876,00",
+            "999 IRRF 0,00 423,35",
+            "Total de Proventos 8.500,00",
+            "Total de Descontos 1.299,35",
+            "Liquido a Receber 7.200,65",
+            "Base FGTS 8.500,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "holerite-income-statement.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+
+    const factIds = (
+      await dbQuery(
+        `SELECT id
+         FROM tax_facts
+         WHERE source_document_id = $1
+         ORDER BY id ASC`,
+        [uploadResponse.body.document.id],
+      )
+    ).rows.map((row) => Number(row.id));
+
+    const approveResponse = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds,
+        action: "approve",
+      });
+
+    expect(approveResponse.status).toBe(200);
+
+    const statementResponse = await request(app)
+      .get("/tax/income-statement-clt/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(statementResponse.status).toBe(200);
+    expect(statementResponse.body).toMatchObject({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      status: "generated",
+      totals: {
+        monthsWithData: 1,
+        annualGrossIncome: 8500,
+        annualNetIncome: 7200.65,
+        annualTotalDiscounts: 1299.35,
+        annualInssDiscount: 876,
+        annualIrrfWithheld: 423.35,
+        annualFgtsBase: 8500,
+      },
+      sourceCounts: {
+        approvedFacts: 6,
+        months: 1,
+      },
+      months: [
+        expect.objectContaining({
+          referenceMonth: "2025-03",
+          payrollTypes: ["monthly"],
+          employerName: "ACME LTDA",
+          employerDocument: "12345678000190",
+          grossIncome: 8500,
+          netIncome: 7200.65,
+          totalDiscounts: 1299.35,
+          inssDiscount: 876,
+          irrfWithheld: 423.35,
+          fgtsBase: 8500,
+        }),
+      ],
+    });
+    expect(Array.isArray(statementResponse.body.months?.[0]?.rubrics)).toBe(true);
   });
 
   it("POST /tax/documents/:id/reprocess normaliza informe bancario anual itemizado", async () => {
