@@ -47,6 +47,54 @@ describe("OperationalSummaryPanel", () => {
     vi.mocked(dashboardService.getSnapshot).mockResolvedValue(buildSnapshot());
   });
 
+  it("exibe saldo tecnico quando ha contas vencidas", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        bankBalance: 1000,
+        bills: {
+          overdueCount: 2,
+          overdueTotal: 300,
+          dueSoonCount: 0,
+          dueSoonTotal: 0,
+          upcomingCount: 0,
+          upcomingTotal: 0,
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Saldo técnico: R$ 700,00")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("2 vencidas somam R$ 300,00")).toBeInTheDocument();
+  });
+
+  it("mantem saldo disponivel quando nao ha vencidas", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        bankBalance: 1000,
+        bills: {
+          overdueCount: 0,
+          overdueTotal: 0,
+          dueSoonCount: 1,
+          dueSoonTotal: 80,
+          upcomingCount: 0,
+          upcomingTotal: 0,
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Saldo disponível")).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/Saldo técnico:/)).not.toBeInTheDocument();
+  });
+
   it("mostra proximas contas quando nao ha urgencia imediata", async () => {
     vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
       buildSnapshot({
