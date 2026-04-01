@@ -1014,6 +1014,59 @@ describe("Tax API foundation", () => {
       fgtsBase: 8500,
     });
     expect(Array.isArray(extractionResult.rows[0]?.raw_json?.extraction?.rubrics)).toBe(true);
+
+    const factsResult = await dbQuery(
+      `SELECT fact_type, subcategory, amount, dedupe_strength, conflict_code
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+
+    expect(factsResult.rows).toEqual([
+      expect.objectContaining({
+        fact_type: "taxable_income",
+        subcategory: "clt_monthly_gross_income",
+        amount: 8500,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "withheld_tax",
+        subcategory: "clt_monthly_irrf_withheld",
+        amount: 423.35,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "other",
+        subcategory: "clt_monthly_net_income",
+        amount: 7200.65,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "other",
+        subcategory: "clt_monthly_total_discounts",
+        amount: 1299.35,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "other",
+        subcategory: "clt_monthly_inss_discount",
+        amount: 876,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "other",
+        subcategory: "clt_monthly_fgts_base",
+        amount: 8500,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+    ]);
   });
 
   it("POST /tax/documents/:id/reprocess normaliza informe bancario anual itemizado", async () => {
@@ -1260,6 +1313,79 @@ describe("Tax API foundation", () => {
         dedupe_strength: "weak",
         conflict_code: "TAX_FACT_DUPLICATE",
       }),
+    ]);
+  });
+
+  it("POST /tax/documents/:id/reprocess marca holerites CLT duplicados como conflito fraco", async () => {
+    const token = await registerAndLogin("tax-reprocess-clt-conflict@test.dev");
+    const sharedPayslipLines = [
+      "Holerite",
+      "Demonstrativo de Pagamento de Salario",
+      "Empresa ACME LTDA",
+      "CNPJ 12.345.678/0001-90",
+      "Funcionario Joao da Silva",
+      "CPF 123.456.789-00",
+      "Competencia 03/2025",
+      "001 SALARIO BASE 8.500,00 0,00",
+      "998 INSS 0,00 876,00",
+      "999 IRRF 0,00 423,35",
+      "Total de Proventos 8.500,00",
+      "Total de Descontos 1.299,35",
+      "Liquido a Receber 7.200,65",
+      "Base FGTS 8.500,00",
+    ];
+    const firstUploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from(sharedPayslipLines.join("\n"), "utf8"), {
+        filename: "holerite-a.csv",
+        contentType: "text/csv",
+      });
+    const secondUploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from([...sharedPayslipLines, "Segunda via"].join("\n"), "utf8"), {
+        filename: "holerite-b.csv",
+        contentType: "text/csv",
+      });
+
+    expect(firstUploadResponse.status).toBe(201);
+    expect(secondUploadResponse.status).toBe(201);
+
+    const firstReprocess = await request(app)
+      .post(`/tax/documents/${firstUploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+    const secondReprocess = await request(app)
+      .post(`/tax/documents/${secondUploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(firstReprocess.status).toBe(200);
+    expect(secondReprocess.status).toBe(200);
+
+    const factsResult = await dbQuery(
+      `SELECT source_document_id, dedupe_strength, conflict_code, COUNT(*) AS total
+       FROM tax_facts
+       WHERE source_document_id IN ($1, $2)
+       GROUP BY source_document_id, dedupe_strength, conflict_code
+       ORDER BY source_document_id ASC, dedupe_strength ASC`,
+      [firstUploadResponse.body.document.id, secondUploadResponse.body.document.id],
+    );
+
+    expect(factsResult.rows).toEqual([
+      {
+        source_document_id: firstUploadResponse.body.document.id,
+        dedupe_strength: "strong",
+        conflict_code: null,
+        total: 6,
+      },
+      {
+        source_document_id: secondUploadResponse.body.document.id,
+        dedupe_strength: "weak",
+        conflict_code: "TAX_FACT_DUPLICATE",
+        total: 6,
+      },
     ]);
   });
 
