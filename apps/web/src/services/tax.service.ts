@@ -79,6 +79,43 @@ export interface TaxSummary {
   generatedAt: string | null;
 }
 
+export interface TaxCltIncomeStatementMonth {
+  referenceMonth: string;
+  payrollTypes: string[];
+  employerName: string;
+  employerDocument: string;
+  grossIncome: number;
+  netIncome: number;
+  totalDiscounts: number;
+  inssDiscount: number;
+  irrfWithheld: number;
+  fgtsBase: number;
+  rubricsCount: number;
+  rubrics: Array<Record<string, unknown>>;
+}
+
+export interface TaxCltIncomeStatement {
+  taxYear: number;
+  exerciseYear: number;
+  calendarYear: number;
+  status: "generated" | "not_generated";
+  generatedAt: string | null;
+  totals: {
+    monthsWithData: number;
+    annualGrossIncome: number;
+    annualNetIncome: number;
+    annualTotalDiscounts: number;
+    annualInssDiscount: number;
+    annualIrrfWithheld: number;
+    annualFgtsBase: number;
+  };
+  sourceCounts: {
+    approvedFacts: number;
+    months: number;
+  };
+  months: TaxCltIncomeStatementMonth[];
+}
+
 export interface TaxObligationReason {
   code: string;
   message: string;
@@ -418,6 +455,60 @@ const normalizeSummary = (value: unknown): TaxSummary => {
   };
 };
 
+const normalizeCltIncomeStatementMonth = (value: unknown): TaxCltIncomeStatementMonth => {
+  const raw = normalizeObject(value);
+
+  return {
+    referenceMonth: normalizeString(raw.referenceMonth),
+    payrollTypes: Array.isArray(raw.payrollTypes)
+      ? raw.payrollTypes.map((item) => normalizeString(item)).filter(Boolean)
+      : [],
+    employerName: normalizeString(raw.employerName),
+    employerDocument: normalizeString(raw.employerDocument),
+    grossIncome: normalizeNumber(raw.grossIncome),
+    netIncome: normalizeNumber(raw.netIncome),
+    totalDiscounts: normalizeNumber(raw.totalDiscounts),
+    inssDiscount: normalizeNumber(raw.inssDiscount),
+    irrfWithheld: normalizeNumber(raw.irrfWithheld),
+    fgtsBase: normalizeNumber(raw.fgtsBase),
+    rubricsCount: normalizeNumber(raw.rubricsCount),
+    rubrics: Array.isArray(raw.rubrics)
+      ? raw.rubrics.map((item) => normalizeObject(item))
+      : [],
+  };
+};
+
+const normalizeCltIncomeStatement = (value: unknown): TaxCltIncomeStatement => {
+  const raw = normalizeObject(value);
+  const totals = normalizeObject(raw.totals);
+  const sourceCounts = normalizeObject(raw.sourceCounts);
+  const status = normalizeString(raw.status);
+
+  return {
+    taxYear: normalizeNumber(raw.taxYear),
+    exerciseYear: normalizeNumber(raw.exerciseYear),
+    calendarYear: normalizeNumber(raw.calendarYear),
+    status: status === "generated" ? "generated" : "not_generated",
+    generatedAt: normalizeNullableString(raw.generatedAt),
+    totals: {
+      monthsWithData: normalizeNumber(totals.monthsWithData),
+      annualGrossIncome: normalizeNumber(totals.annualGrossIncome),
+      annualNetIncome: normalizeNumber(totals.annualNetIncome),
+      annualTotalDiscounts: normalizeNumber(totals.annualTotalDiscounts),
+      annualInssDiscount: normalizeNumber(totals.annualInssDiscount),
+      annualIrrfWithheld: normalizeNumber(totals.annualIrrfWithheld),
+      annualFgtsBase: normalizeNumber(totals.annualFgtsBase),
+    },
+    sourceCounts: {
+      approvedFacts: normalizeNumber(sourceCounts.approvedFacts),
+      months: normalizeNumber(sourceCounts.months),
+    },
+    months: Array.isArray(raw.months)
+      ? raw.months.map((month) => normalizeCltIncomeStatementMonth(month))
+      : [],
+  };
+};
+
 const normalizeReason = (value: unknown): TaxObligationReason => {
   const raw = normalizeObject(value);
 
@@ -710,6 +801,11 @@ export const taxService = {
   getSummary: async (taxYear: number): Promise<TaxSummary> => {
     const { data } = await api.get(`/tax/summary/${taxYear}`);
     return normalizeSummary(data);
+  },
+
+  getCltIncomeStatement: async (taxYear: number): Promise<TaxCltIncomeStatement> => {
+    const { data } = await api.get(`/tax/income-statement-clt/${taxYear}`);
+    return normalizeCltIncomeStatement(data);
   },
 
   rebuildSummary: async (taxYear: number): Promise<TaxSummary> => {

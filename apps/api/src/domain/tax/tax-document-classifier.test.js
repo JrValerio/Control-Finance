@@ -32,6 +32,24 @@ describe("tax document classifier", () => {
     expect(result.documentType).toBe("income_report_employer");
   });
 
+  it("detecta holerite CLT como clt_payslip", () => {
+    const result = classifyTaxDocument({
+      originalFileName: "holerite-marco-2025.pdf",
+      text: [
+        "Holerite",
+        "Demonstrativo de Pagamento de Salario",
+        "Empresa ACME LTDA",
+        "Matricula 12345",
+        "Competencia 03/2025",
+        "Total de Proventos 8.500,00",
+        "Total de Descontos 2.100,35",
+        "Liquido a Receber 6.399,65",
+      ].join("\n"),
+    });
+
+    expect(result.documentType).toBe("clt_payslip");
+  });
+
   it("detecta INSS por sinais do texto", () => {
     const result = classifyTaxDocument({
       originalFileName: "inss.csv",

@@ -50,6 +50,42 @@ describe("tax document extractors", () => {
     expect(result.payload.thirteenthSalary).toBe(5000);
   });
 
+  it("extrai cabecalho e resumo de holerite CLT", () => {
+    const result = runTaxExtractorForDocument({
+      documentType: "clt_payslip",
+      text: [
+        "Holerite",
+        "Demonstrativo de Pagamento de Salario",
+        "Empresa ACME LTDA",
+        "CNPJ 12.345.678/0001-90",
+        "Funcionario Joao da Silva",
+        "CPF 123.456.789-00",
+        "Competencia 03/2025",
+        "001 SALARIO BASE 8.500,00 0,00",
+        "998 INSS 0,00 876,00",
+        "999 IRRF 0,00 423,35",
+        "Total de Proventos 8.500,00",
+        "Total de Descontos 1.299,35",
+        "Liquido a Receber 7.200,65",
+        "Base FGTS 8.500,00",
+      ].join("\n"),
+    });
+
+    expect(result.extractorName).toBe("clt-payslip");
+    expect(result.payload.referenceMonth).toBe("2025-03");
+    expect(result.payload.payrollType).toBe("monthly");
+    expect(result.payload.employerDocument).toBe("12.345.678/0001-90");
+    expect(result.payload.employeeDocument).toBe("123.456.789-00");
+    expect(result.payload.grossAmount).toBe(8500);
+    expect(result.payload.totalDiscounts).toBe(1299.35);
+    expect(result.payload.netAmount).toBe(7200.65);
+    expect(result.payload.rubricsSummary).toMatchObject({
+      count: 3,
+      totalEarnings: 8500,
+      totalDiscounts: 1299.35,
+    });
+  });
+
   it("extrai payload anual do INSS para IRPF", () => {
     const result = runTaxExtractorForDocument({
       documentType: "income_report_inss",

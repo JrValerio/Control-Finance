@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS tax_documents (
       'unknown',
       'income_report_bank',
       'income_report_employer',
+      'clt_payslip',
       'income_report_inss',
       'medical_statement',
       'education_receipt',

@@ -2,7 +2,7 @@
 
 > Documento operacional para executar a Sprint 10 com foco em estruturar o dominio CLT com confiabilidade transacional e rastreabilidade analitica.
 
-Status: em andamento; kickoff formal documental realizado em 01/04/2026.
+Status: em andamento; slices S10.1-S10.5 implementados em desenvolvimento em 01/04/2026; gate remoto de S10.6 pendente de deploy.
 
 ---
 
@@ -66,42 +66,42 @@ Transformar holerite em renda CLT estruturada confiavel, sem contaminar o ledger
 - Definir contrato minimo do dominio CLT (entrada, metadados, saidas e erros).
 - Introduzir classificacao base `clt_payslip` no pipeline documental.
 - Resultado esperado: fundacao de contrato e classificacao pronta para evolucao segura.
-- Status: em andamento (primeiro slice oficial da Sprint 10).
+- Status: concluido em desenvolvimento (contrato + migration + classificador + testes).
 
 ### Slice S10.2 - Extracao estruturada de cabecalho + resumo financeiro
 
 - Extrair cabecalho essencial (competencia, empregador, trabalhador, tipo de folha).
 - Consolidar resumo financeiro para leitura rapida de conferencia.
 - Resultado esperado: leitura confiavel de cabecalho + resumo sem depender de parsing manual ad hoc.
-- Status: pendente.
+- Status: concluido em desenvolvimento (extrator `clt-payslip` + persistencia de payload + testes).
 
 ### Slice S10.3 - Rubricas + normalizacao analitica
 
 - Estruturar rubricas de proventos e descontos em camada analitica.
 - Normalizar campos para comparabilidade mensal.
 - Resultado esperado: rubricas rastreaveis e consistentes para auditoria e explicacao.
-- Status: pendente.
+- Status: concluido em desenvolvimento (rubricas + fatos analiticos mensais + testes).
 
 ### Slice S10.4 - Dedupe + revisao manual
 
 - Introduzir dedupe para holerites e variacoes de documento equivalente.
 - Implementar trilha de revisao manual para conflitos e inconsistencias.
 - Resultado esperado: pipeline robusto contra duplicidade e erro de classificacao.
-- Status: pendente.
+- Status: concluido em desenvolvimento (cobertura de dedupe/conflito fraco entre holerites duplicados).
 
 ### Slice S10.5 - Geracao de `income_statement_clt`
 
 - Materializar saida consolidada CLT para consumo operacional e fiscal.
 - Garantir separacao entre camada transacional (liquido) e camada analitica (rubricas/bases).
 - Resultado esperado: `income_statement_clt` confiavel para conferencia humana e evolucao de produto.
-- Status: pendente.
+- Status: concluido em desenvolvimento (endpoint + contrato web + testes de agregacao).
 
 ### Slice S10.6 - Smoke/gate documental e operacional da sprint
 
 - Executar smoke da trilha CLT de ponta a ponta.
 - Registrar gate formal de encerramento da Sprint 10 com evidencias.
 - Resultado esperado: encerramento da sprint sustentado por execucao real + trilha documental.
-- Status: pendente.
+- Status: em andamento (script de smoke criado; evidencias de desenvolvimento prontas; gate remoto pendente deploy).
 
 ---
 
@@ -116,20 +116,20 @@ Transformar holerite em renda CLT estruturada confiavel, sem contaminar o ledger
 
 ## 8. Pendencia operacional aberta
 
-- Acao pendente: iniciar implementacao do Slice S10.1.
-- Criterio objetivo de conclusao: contrato minimo CLT + classificacao base publicados com CI verde e merge em `main`.
-- Evidencia esperada: diff tecnico + branch + commit + PR + CI verde + merge.
+- Acao pendente: publicar os commits da Sprint 10 e executar o smoke final no ambiente-alvo.
+- Criterio objetivo de conclusao: PR da Sprint 10 com CI verde, merge em `main` e rerun do smoke S10.6 sem bloqueios.
+- Evidencia esperada: branch + commits por slice + PR + CI verde + merge + artefatos do smoke remoto.
 - Status: aberta.
 
 ---
 
 ## 9. Proxima acao executavel
 
-- Comando/rotina: abrir branch do S10.1 e iniciar contrato CLT + classificacao base.
+- Comando/rotina: publicar branch da Sprint 10, abrir PR e executar gate remoto S10.6 apos merge.
 - Ambiente-alvo: repositorio Control Finance / `main`.
 - Dono: execucao operacional do projeto.
-- Saida esperada: primeiro slice da Sprint 10 entregue com trilha auditavel.
-- Bloqueios conhecidos: nenhum bloqueio tecnico critico registrado neste kickoff.
+- Saida esperada: Sprint 10 com fechamento auditavel ponta a ponta (dev + remoto).
+- Bloqueios conhecidos: ambiente remoto ainda sem deploy das alteracoes locais da Sprint 10.
 
 ---
 

@@ -37,6 +37,7 @@ const PREVIEW_DOCUMENT_TYPE_LABELS: Record<string, string> = {
   unknown: "Tipo ainda não identificado",
   income_report_bank: "Informe bancário",
   income_report_employer: "Informe do empregador",
+  clt_payslip: "Holerite CLT",
   income_report_inss: "Informe do INSS",
   medical_statement: "Comprovante médico",
   education_receipt: "Comprovante educacional",

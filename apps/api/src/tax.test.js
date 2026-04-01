@@ -152,6 +152,16 @@ describe("Tax API foundation", () => {
     );
   });
 
+  it("GET /tax/income-statement-clt/:taxYear retorna 401 sem token", async () => {
+    const response = await request(app).get("/tax/income-statement-clt/2026");
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
   it("GET /tax/export/:taxYear retorna 401 sem token", async () => {
     const response = await request(app).get("/tax/export/2026?format=json");
 
@@ -465,6 +475,7 @@ describe("Tax API foundation", () => {
     });
     expect(Array.isArray(response.body.documentTypes)).toBe(true);
     expect(response.body.documentTypes).toContain("income_report_bank");
+    expect(response.body.documentTypes).toContain("clt_payslip");
     expect(Array.isArray(response.body.ruleFamilies)).toBe(true);
     expect(response.body.ruleFamilies).toContain("obligation");
     expect(Array.isArray(response.body.supportedTaxYears)).toBe(true);
@@ -943,6 +954,233 @@ describe("Tax API foundation", () => {
     });
   });
 
+  it("POST /tax/documents/:id/reprocess classifica e extrai resumo estruturado de holerite CLT", async () => {
+    const token = await registerAndLogin("tax-reprocess-clt-payslip@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Holerite",
+            "Demonstrativo de Pagamento de Salario",
+            "Empresa ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Funcionario Joao da Silva",
+            "CPF 123.456.789-00",
+            "Competencia 03/2025",
+            "001 SALARIO BASE 8.500,00 0,00",
+            "998 INSS 0,00 876,00",
+            "999 IRRF 0,00 423,35",
+            "Total de Proventos 8.500,00",
+            "Total de Descontos 1.299,35",
+            "Liquido a Receber 7.200,65",
+            "Base FGTS 8.500,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "holerite-marco.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+    expect(reprocessResponse.body.document).toMatchObject({
+      id: uploadResponse.body.document.id,
+      documentType: "clt_payslip",
+      processingStatus: "normalized",
+    });
+    expect(reprocessResponse.body.document.latestExtraction).toMatchObject({
+      extractorName: "clt-payslip",
+      classification: "clt_payslip",
+    });
+
+    const extractionResult = await dbQuery(
+      `SELECT raw_json
+       FROM tax_document_extractions
+       WHERE document_id = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [uploadResponse.body.document.id],
+    );
+
+    expect(extractionResult.rows[0]?.raw_json?.extraction).toMatchObject({
+      referenceMonth: "2025-03",
+      payrollType: "monthly",
+      grossAmount: 8500,
+      totalDiscounts: 1299.35,
+      netAmount: 7200.65,
+      inssAmount: 876,
+      irrfAmount: 423.35,
+      fgtsBase: 8500,
+    });
+    expect(Array.isArray(extractionResult.rows[0]?.raw_json?.extraction?.rubrics)).toBe(true);
+
+    const factsResult = await dbQuery(
+      `SELECT fact_type, subcategory, amount, dedupe_strength, conflict_code
+       FROM tax_facts
+       WHERE source_document_id = $1
+       ORDER BY id ASC`,
+      [uploadResponse.body.document.id],
+    );
+
+    expect(factsResult.rows).toEqual([
+      expect.objectContaining({
+        fact_type: "taxable_income",
+        subcategory: "clt_monthly_gross_income",
+        amount: 8500,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "withheld_tax",
+        subcategory: "clt_monthly_irrf_withheld",
+        amount: 423.35,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "other",
+        subcategory: "clt_monthly_net_income",
+        amount: 7200.65,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "other",
+        subcategory: "clt_monthly_total_discounts",
+        amount: 1299.35,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "other",
+        subcategory: "clt_monthly_inss_discount",
+        amount: 876,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+      expect.objectContaining({
+        fact_type: "other",
+        subcategory: "clt_monthly_fgts_base",
+        amount: 8500,
+        dedupe_strength: "strong",
+        conflict_code: null,
+      }),
+    ]);
+  });
+
+  it("GET /tax/income-statement-clt/:taxYear agrega meses aprovados de holerite CLT", async () => {
+    const token = await registerAndLogin("tax-clt-income-statement@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Holerite",
+            "Demonstrativo de Pagamento de Salario",
+            "Empresa ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Funcionario Joao da Silva",
+            "CPF 123.456.789-00",
+            "Competencia 03/2025",
+            "001 SALARIO BASE 8.500,00 0,00",
+            "998 INSS 0,00 876,00",
+            "999 IRRF 0,00 423,35",
+            "Total de Proventos 8.500,00",
+            "Total de Descontos 1.299,35",
+            "Liquido a Receber 7.200,65",
+            "Base FGTS 8.500,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "holerite-income-statement.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+
+    const factIds = (
+      await dbQuery(
+        `SELECT id
+         FROM tax_facts
+         WHERE source_document_id = $1
+         ORDER BY id ASC`,
+        [uploadResponse.body.document.id],
+      )
+    ).rows.map((row) => Number(row.id));
+
+    const approveResponse = await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        factIds,
+        action: "approve",
+      });
+
+    expect(approveResponse.status).toBe(200);
+
+    const statementResponse = await request(app)
+      .get("/tax/income-statement-clt/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(statementResponse.status).toBe(200);
+    expect(statementResponse.body).toMatchObject({
+      taxYear: 2026,
+      exerciseYear: 2026,
+      calendarYear: 2025,
+      status: "generated",
+      totals: {
+        monthsWithData: 1,
+        annualGrossIncome: 8500,
+        annualNetIncome: 7200.65,
+        annualTotalDiscounts: 1299.35,
+        annualInssDiscount: 876,
+        annualIrrfWithheld: 423.35,
+        annualFgtsBase: 8500,
+      },
+      sourceCounts: {
+        approvedFacts: 6,
+        months: 1,
+      },
+      months: [
+        expect.objectContaining({
+          referenceMonth: "2025-03",
+          payrollTypes: ["monthly"],
+          employerName: "ACME LTDA",
+          employerDocument: "12345678000190",
+          grossIncome: 8500,
+          netIncome: 7200.65,
+          totalDiscounts: 1299.35,
+          inssDiscount: 876,
+          irrfWithheld: 423.35,
+          fgtsBase: 8500,
+        }),
+      ],
+    });
+    expect(Array.isArray(statementResponse.body.months?.[0]?.rubrics)).toBe(true);
+  });
+
   it("POST /tax/documents/:id/reprocess normaliza informe bancario anual itemizado", async () => {
     const token = await registerAndLogin("tax-reprocess-bank-annual@test.dev");
     const uploadResponse = await request(app)
@@ -1187,6 +1425,79 @@ describe("Tax API foundation", () => {
         dedupe_strength: "weak",
         conflict_code: "TAX_FACT_DUPLICATE",
       }),
+    ]);
+  });
+
+  it("POST /tax/documents/:id/reprocess marca holerites CLT duplicados como conflito fraco", async () => {
+    const token = await registerAndLogin("tax-reprocess-clt-conflict@test.dev");
+    const sharedPayslipLines = [
+      "Holerite",
+      "Demonstrativo de Pagamento de Salario",
+      "Empresa ACME LTDA",
+      "CNPJ 12.345.678/0001-90",
+      "Funcionario Joao da Silva",
+      "CPF 123.456.789-00",
+      "Competencia 03/2025",
+      "001 SALARIO BASE 8.500,00 0,00",
+      "998 INSS 0,00 876,00",
+      "999 IRRF 0,00 423,35",
+      "Total de Proventos 8.500,00",
+      "Total de Descontos 1.299,35",
+      "Liquido a Receber 7.200,65",
+      "Base FGTS 8.500,00",
+    ];
+    const firstUploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from(sharedPayslipLines.join("\n"), "utf8"), {
+        filename: "holerite-a.csv",
+        contentType: "text/csv",
+      });
+    const secondUploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from([...sharedPayslipLines, "Segunda via"].join("\n"), "utf8"), {
+        filename: "holerite-b.csv",
+        contentType: "text/csv",
+      });
+
+    expect(firstUploadResponse.status).toBe(201);
+    expect(secondUploadResponse.status).toBe(201);
+
+    const firstReprocess = await request(app)
+      .post(`/tax/documents/${firstUploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+    const secondReprocess = await request(app)
+      .post(`/tax/documents/${secondUploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(firstReprocess.status).toBe(200);
+    expect(secondReprocess.status).toBe(200);
+
+    const factsResult = await dbQuery(
+      `SELECT source_document_id, dedupe_strength, conflict_code, COUNT(*) AS total
+       FROM tax_facts
+       WHERE source_document_id IN ($1, $2)
+       GROUP BY source_document_id, dedupe_strength, conflict_code
+       ORDER BY source_document_id ASC, dedupe_strength ASC`,
+      [firstUploadResponse.body.document.id, secondUploadResponse.body.document.id],
+    );
+
+    expect(factsResult.rows).toEqual([
+      {
+        source_document_id: firstUploadResponse.body.document.id,
+        dedupe_strength: "strong",
+        conflict_code: null,
+        total: 6,
+      },
+      {
+        source_document_id: secondUploadResponse.body.document.id,
+        dedupe_strength: "weak",
+        conflict_code: "TAX_FACT_DUPLICATE",
+        total: 6,
+      },
     ]);
   });
 

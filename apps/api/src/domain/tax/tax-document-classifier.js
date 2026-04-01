@@ -48,6 +48,29 @@ const EMPLOYER_SIGNALS = [
   "contribuicao previdenciaria oficial",
 ];
 
+const PAYROLL_PRIMARY_SIGNALS = [
+  "holerite",
+  "contracheque",
+  "demonstrativo de pagamento",
+  "demonstrativo de pagamento de salario",
+  "recibo de pagamento",
+  "folha de pagamento",
+];
+
+const PAYROLL_SECONDARY_SIGNALS = [
+  "salario base",
+  "total de proventos",
+  "total proventos",
+  "total de descontos",
+  "liquido a receber",
+  "valor liquido",
+  "matricula",
+  "admissao",
+  "empresa",
+  "empregador",
+  "competencia",
+];
+
 const INSS_SIGNALS = [
   "instituto nacional do seguro social",
   "historico de creditos",
@@ -131,6 +154,17 @@ const isEmployerIncomeReport = (normalizedText) =>
   normalizedText.includes(EMPLOYER_SIGNALS[0]) ||
   countMatches(normalizedText, EMPLOYER_SIGNALS) >= 3;
 
+const isCltPayslip = (normalizedText, importDocumentType) => {
+  if (importDocumentType === "income_statement_payroll") {
+    return true;
+  }
+
+  return (
+    PAYROLL_PRIMARY_SIGNALS.some((signal) => normalizedText.includes(signal)) &&
+    countMatches(normalizedText, [...PAYROLL_PRIMARY_SIGNALS, ...PAYROLL_SECONDARY_SIGNALS]) >= 4
+  );
+};
+
 const isInssIncomeReport = (normalizedText) =>
   normalizedText.includes("instituto nacional do seguro social") &&
   countMatches(normalizedText, INSS_SIGNALS) >= 2;
@@ -183,6 +217,7 @@ export const classifyTaxDocument = ({
 }) => {
   const normalizedText = normalizeForClassification(text);
   const extension = path.extname(String(originalFileName || "")).toLowerCase();
+  const importDocumentType = detectImportDocumentType({ text, extension });
 
   if (!normalizedText) {
     return createClassification({
@@ -193,7 +228,7 @@ export const classifyTaxDocument = ({
   }
 
   if (
-    detectImportDocumentType({ text, extension }) === "income_statement_inss" ||
+    importDocumentType === "income_statement_inss" ||
     isInssIncomeReport(normalizedText) ||
     isInssAnnualIncomeReport(normalizedText)
   ) {
@@ -201,11 +236,23 @@ export const classifyTaxDocument = ({
       documentType: "income_report_inss",
       confidenceScore: 0.99,
       reasons: [
-        detectImportDocumentType({ text, extension }) === "income_statement_inss"
+        importDocumentType === "income_statement_inss"
           ? "matched_import_classifier:income_statement_inss"
           : "matched_inss_income_report_signals",
       ],
       sourceLabelSuggestion: "INSS",
+    });
+  }
+
+  if (isCltPayslip(normalizedText, importDocumentType)) {
+    return createClassification({
+      documentType: "clt_payslip",
+      confidenceScore: 0.98,
+      reasons: [
+        importDocumentType === "income_statement_payroll"
+          ? "matched_import_classifier:income_statement_payroll"
+          : "matched_clt_payroll_signals",
+      ],
     });
   }
 

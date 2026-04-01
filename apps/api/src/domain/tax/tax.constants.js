@@ -2,6 +2,7 @@ export const TAX_DOCUMENT_TYPES = Object.freeze([
   "unknown",
   "income_report_bank",
   "income_report_employer",
+  "clt_payslip",
   "income_report_inss",
   "medical_statement",
   "education_receipt",

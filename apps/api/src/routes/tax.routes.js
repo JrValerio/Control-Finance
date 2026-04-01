@@ -16,6 +16,7 @@ import { createManualTaxFactByUser, listTaxFactsByUser } from "../services/tax-f
 import { getTaxObligationByYear } from "../services/tax-obligation.service.js";
 import { bulkApproveTaxFactsByUser, reviewTaxFactByUser } from "../services/tax-reviews.service.js";
 import { getTaxRuleSetsByYear } from "../services/tax-rules.service.js";
+import { getCltIncomeStatementByYear } from "../services/tax-clt-income-statement.service.js";
 import {
   getTaxSummaryByYear,
   previewTaxSummaryByYear,
@@ -236,6 +237,15 @@ router.get("/summary/:taxYear", async (req, res, next) => {
   try {
     const summary = await getTaxSummaryByYear(req.user.id, req.params.taxYear);
     res.status(200).json(summary);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/income-statement-clt/:taxYear", async (req, res, next) => {
+  try {
+    const statement = await getCltIncomeStatementByYear(req.user.id, req.params.taxYear);
+    res.status(200).json(statement);
   } catch (error) {
     next(error);
   }
