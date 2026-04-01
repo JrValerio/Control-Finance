@@ -7,6 +7,7 @@ export type BillOperationalBucket = "paid" | "overdue" | "due_soon" | "future";
 export type BillStatusFilter = "pending" | "paid" | "overdue" | "due_soon" | "future" | undefined;
 export type MatchStatus = "unmatched" | "matched";
 export type BillType =
+  | "credit_card_invoice"
   | "energy"
   | "water"
   | "internet"
@@ -190,6 +191,7 @@ const normalizeStringOrNull = (value: unknown): string | null => {
 };
 
 const BILL_TYPE_VALUES = new Set<BillType>([
+  "credit_card_invoice",
   "energy",
   "water",
   "internet",
