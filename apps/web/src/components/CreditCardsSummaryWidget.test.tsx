@@ -123,10 +123,10 @@ describe("CreditCardsSummaryWidget", () => {
     renderWidget(onOpenCreditCards);
 
     await waitFor(() => {
-      expect(screen.getByText("Ver cartões →")).toBeInTheDocument();
+      expect(screen.getByText("Acompanhar cartões →")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText("Ver cartões →"));
+    await user.click(screen.getByText("Acompanhar cartões →"));
     expect(onOpenCreditCards).toHaveBeenCalledOnce();
   });
 });

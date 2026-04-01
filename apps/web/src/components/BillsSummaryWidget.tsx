@@ -53,7 +53,7 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
               ? "Abra o módulo de contas para revisar os lançamentos manualmente agora."
               : "Atualize a página em instantes para tentar carregar o resumo novamente."
           }
-          ctaLabel={onOpenBills ? "Ver pendências" : undefined}
+          ctaLabel={onOpenBills ? "Regularizar pendências" : undefined}
           onCta={onOpenBills}
         />
       </div>
@@ -83,6 +83,12 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
   const hasPendingBills = summary.pendingCount > 0;
   const severityLevel: OperationalSeverity = hasOverdueBills ? "risco" : hasPendingBills ? "atencao" : "normal";
   const cardToneClass = hasOverdueBills ? "border-red-300" : hasPendingBills ? "border-amber-300" : "border-cf-border";
+  const summaryActionLabel =
+    severityLevel === "risco"
+      ? "Regularizar pendências →"
+      : severityLevel === "atencao"
+        ? "Acompanhar pendências →"
+        : null;
   const statusContext = hasOverdueBills
     ? "Há contas vencidas exigindo ação imediata."
     : hasPendingBills
@@ -96,13 +102,13 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
           <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
           <OperationalSeverityBadge severity={severityLevel} />
         </div>
-        {onOpenBills ? (
+        {onOpenBills && summaryActionLabel ? (
           <button
             type="button"
             onClick={onOpenBills}
             className="text-xs text-brand-1 hover:underline"
           >
-            Ver pendências →
+            {summaryActionLabel}
           </button>
         ) : null}
       </div>

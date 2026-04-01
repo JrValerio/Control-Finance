@@ -270,6 +270,12 @@ const CreditCardsSummaryWidget = ({
     : hasCriticalInvoices
       ? "border-amber-300"
       : "border-cf-border";
+  const summaryActionLabel =
+    severityLevel === "risco"
+      ? "Revisar cartões →"
+      : severityLevel === "atencao"
+        ? "Acompanhar cartões →"
+        : null;
 
   if (isLoading) {
     return (
@@ -297,7 +303,7 @@ const CreditCardsSummaryWidget = ({
               ? "Abra o módulo de cartões para verificar os itens manualmente nesta sessão."
               : "Atualize a página em instantes para tentar novamente a leitura deste widget."
           }
-          ctaLabel={onOpenCreditCards ? "Ver cartões" : undefined}
+          ctaLabel={onOpenCreditCards ? "Revisar cartões" : undefined}
           onCta={onOpenCreditCards}
         />
       </div>
@@ -320,13 +326,13 @@ const CreditCardsSummaryWidget = ({
                 : `${aggregate.cardsCount} cartões ativos`}
           </p>
         </div>
-        {onOpenCreditCards ? (
+        {onOpenCreditCards && summaryActionLabel ? (
           <button
             type="button"
             onClick={onOpenCreditCards}
             className="text-xs text-brand-1 hover:underline"
           >
-            Ver cartões →
+            {summaryActionLabel}
           </button>
         ) : null}
       </div>
@@ -339,7 +345,7 @@ const CreditCardsSummaryWidget = ({
             happened="Nenhum cartão cadastrado ainda."
             impact="Sem cartões ativos, não há leitura de uso de limite nem de faturas pendentes."
             nextStep="Cadastre ao menos um cartão para liberar a visão operacional desta área."
-            ctaLabel={onOpenCreditCards ? "Ver cartões" : undefined}
+            ctaLabel={onOpenCreditCards ? "Cadastrar cartões" : undefined}
             onCta={onOpenCreditCards}
           />
         </div>
