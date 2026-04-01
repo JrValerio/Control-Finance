@@ -93,6 +93,11 @@ describe("OperationalSummaryPanel", () => {
     });
 
     expect(screen.getByText("1 em 7 dias somam R$ 80,00")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (content) => content.includes("Urgência 7d: 1 conta") && content.includes("80,00"),
+      ),
+    ).toBeInTheDocument();
     expect(screen.queryByText("Saldo disponível")).not.toBeInTheDocument();
   });
 
@@ -166,6 +171,11 @@ describe("OperationalSummaryPanel", () => {
     });
 
     expect(screen.getByText(/300[,.]00/)).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        (content) => content.includes("Urgência 7d: 1 conta") && content.includes("200,00"),
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText(/2 próximas/)).toBeInTheDocument();
   });
 });
