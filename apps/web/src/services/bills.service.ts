@@ -209,6 +209,34 @@ const normalizeBillType = (value: unknown): BillType | null => {
   return BILL_TYPE_VALUES.has(normalized as BillType) ? (normalized as BillType) : null;
 };
 
+const normalizeCreatePayload = (payload: CreateBillPayload): CreateBillPayload => {
+  const normalizedPayload: CreateBillPayload = { ...payload };
+
+  if (Object.prototype.hasOwnProperty.call(payload, "billType")) {
+    normalizedPayload.billType = normalizeBillType(payload.billType);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, "sourceImportSessionId")) {
+    normalizedPayload.sourceImportSessionId = normalizeStringOrNull(payload.sourceImportSessionId);
+  }
+
+  return normalizedPayload;
+};
+
+const normalizeUpdatePayload = (payload: UpdateBillPayload): UpdateBillPayload => {
+  const normalizedPayload: UpdateBillPayload = { ...payload };
+
+  if (Object.prototype.hasOwnProperty.call(payload, "billType")) {
+    normalizedPayload.billType = normalizeBillType(payload.billType);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, "sourceImportSessionId")) {
+    normalizedPayload.sourceImportSessionId = normalizeStringOrNull(payload.sourceImportSessionId);
+  }
+
+  return normalizedPayload;
+};
+
 const normalizeISOString = (value: unknown): string => {
   if (typeof value === "string" && value.trim()) return value.trim();
   return "";
@@ -355,12 +383,12 @@ export const billsService = {
   },
 
   create: async (payload: CreateBillPayload): Promise<Bill> => {
-    const { data } = await api.post("/bills", payload);
+    const { data } = await api.post("/bills", normalizeCreatePayload(payload));
     return normalizeBill(data as BillApiPayload);
   },
 
   update: async (id: number, payload: UpdateBillPayload): Promise<Bill> => {
-    const { data } = await api.patch(`/bills/${id}`, payload);
+    const { data } = await api.patch(`/bills/${id}`, normalizeUpdatePayload(payload));
     return normalizeBill(data as BillApiPayload);
   },
 
@@ -369,7 +397,9 @@ export const billsService = {
   },
 
   createBatch: async (bills: CreateBillPayload[]): Promise<Bill[]> => {
-    const { data } = await api.post<BillsBatchResult>("/bills/batch", { bills });
+    const { data } = await api.post<BillsBatchResult>("/bills/batch", {
+      bills: bills.map(normalizeCreatePayload),
+    });
     return (data.bills as BillApiPayload[]).map(normalizeBill);
   },
 
