@@ -587,6 +587,7 @@ function BenefitProfileView({
             nextStep="Se houver desconto em folha, adicione a rubrica para manter a leitura auditável."
             ctaLabel="Adicionar desconto"
             onCta={() => setAddingConsig(true)}
+            allowNormalCta
           />
         ) : null}
 
