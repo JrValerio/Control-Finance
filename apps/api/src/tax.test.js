@@ -465,6 +465,7 @@ describe("Tax API foundation", () => {
     });
     expect(Array.isArray(response.body.documentTypes)).toBe(true);
     expect(response.body.documentTypes).toContain("income_report_bank");
+    expect(response.body.documentTypes).toContain("clt_payslip");
     expect(Array.isArray(response.body.ruleFamilies)).toBe(true);
     expect(response.body.ruleFamilies).toContain("obligation");
     expect(Array.isArray(response.body.supportedTaxYears)).toBe(true);
