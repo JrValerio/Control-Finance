@@ -2,7 +2,7 @@
 
 > Documento operacional para executar a Sprint 9 com foco em consolidar a Central do Leao como modulo fiscal confiavel, auditavel e acionavel no fluxo real do usuario.
 
-Status: iniciada em 31/03/2026.
+Status: em andamento; S9.1, S9.2, S9.3 e S9.4 oficializadas na main em 31/03/2026.
 
 ---
 
@@ -12,6 +12,9 @@ Status: iniciada em 31/03/2026.
 
 1. PR #374 - kickoff documental da sprint
 2. PR #375 - S9.1 (contrato fiscal anual e bootstrap)
+3. PR #376 - docs de escopo UX fiscal
+4. PR #377 - S9.2 backend (preview pos-review + guard rail taxYear)
+5. PR #378 - frontend pendente oficializado (S9.2 frontend + S9.3 + S9.4)
 
 ### Resultado consolidado da S9.1
 
@@ -20,6 +23,14 @@ Status: iniciada em 31/03/2026.
 - Summary fiscal alinhando `exerciseYear` e `calendarYear` via configuracao ativa de regras.
 - Regressao de API para retorno `404` quando nao ha regras fiscais ativas para o exercicio.
 - Validacao local: `npm -w apps/api run test -- src/tax.test.js` (54 testes verdes) e `npm -w apps/api run lint`.
+
+### Resultado consolidado da S9.2, S9.3 e S9.4
+
+- S9.2 backend oficializada no PR #377 com `preview` em review/bulk-review, `taxYear` no retorno de lote e guard rail para impedir aprovacao em lote com exercicios diferentes.
+- S9.2 frontend oficializada no PR #378 com consumo de `preview` na TaxPage sem recarga obrigatoria do snapshot.
+- S9.3 oficializada no PR #378 com resumo da declaracao em tela, comparacao de regimes e painel operacional de pendencias.
+- S9.4 oficializada no PR #378 com modo imprimivel/PDF, botao dedicado de impressao e ajuste de layout para saida limpa.
+- Validacoes registradas no ciclo de oficializacao: backend (`src/tax.test.js` com 55 testes verdes) e frontend (`TaxPage.test.tsx` com 22 testes verdes + typecheck).
 
 ---
 
@@ -107,12 +118,14 @@ A Sprint 9 so fecha quando:
 - Cobrir bordas de pending/approved/corrected, conflitos e warnings operacionais.
 - Tornar preview fiscal estruturado antes da confirmacao final.
 - Resultado esperado: revisao guiada e previsivel para conferencia.
+- Status: concluida (PR #377 backend + PR #378 frontend).
 
 ### Slice S9.3 - Resumo da declaracao em tela
 
 - Consolidar blocos fiscais principais em leitura conferivel e acionavel.
 - Tornar comparacao de regimes explicita (deducoes legais x simplificado).
 - Resultado esperado: resumo anual confiavel e compreensivel para decisao.
+- Status: concluida (PR #378).
 
 ### Slice S9.4 - Modo imprimivel/PDF + fechamento executivo
 
@@ -121,6 +134,7 @@ A Sprint 9 so fecha quando:
 - Rodar lint, typecheck e suites direcionadas.
 - Atualizar roadmap para status de conclusao quando criterios forem cumpridos.
 - Resultado esperado: PR final da Sprint 9 pronto para merge com CI verde.
+- Status: concluida (PR #378).
 
 ### Trilha transversal da sprint
 
