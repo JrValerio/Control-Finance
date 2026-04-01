@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import OperationalSummaryPanel from "./OperationalSummaryPanel";
 import { dashboardService, type DashboardSnapshot } from "../services/dashboard.service";
 
@@ -99,6 +100,31 @@ describe("OperationalSummaryPanel", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText("Saldo disponível")).not.toBeInTheDocument();
+  });
+
+  it("dispara CTA de contas em 7 dias quando callback é fornecido", async () => {
+    const user = userEvent.setup();
+    const onOpenDueSoonBills = vi.fn();
+
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        bills: {
+          overdueCount: 0,
+          overdueTotal: 0,
+          dueSoonCount: 2,
+          dueSoonTotal: 150,
+          upcomingCount: 0,
+          upcomingTotal: 0,
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel onOpenDueSoonBills={onOpenDueSoonBills} />);
+
+    const cta = await screen.findByRole("button", { name: /Ver contas em 7 dias/i });
+    await user.click(cta);
+
+    expect(onOpenDueSoonBills).toHaveBeenCalledOnce();
   });
 
   it("mantem saldo disponivel quando nao ha vencidas nem contas em 7 dias", async () => {

@@ -11,6 +11,8 @@ interface TileProps {
   primary: string;
   secondary?: string;
   tertiary?: string;
+  actionLabel?: string;
+  onActionClick?: () => void;
   accent?: "default" | "warning" | "danger" | "success" | "muted";
 }
 
@@ -22,7 +24,7 @@ const ACCENT_CLASSES: Record<NonNullable<TileProps["accent"]>, string> = {
   muted: "text-cf-text-secondary",
 };
 
-const Tile = ({ label, primary, secondary, tertiary, accent = "default" }: TileProps) => (
+const Tile = ({ label, primary, secondary, tertiary, actionLabel, onActionClick, accent = "default" }: TileProps) => (
   <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
     <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-cf-text-secondary">
       {label}
@@ -33,6 +35,15 @@ const Tile = ({ label, primary, secondary, tertiary, accent = "default" }: TileP
     ) : null}
     {tertiary ? (
       <p className="text-xs text-cf-text-secondary">{tertiary}</p>
+    ) : null}
+    {actionLabel && onActionClick ? (
+      <button
+        type="button"
+        onClick={onActionClick}
+        className="mt-1 text-xs font-semibold text-brand-1 hover:text-brand-2"
+      >
+        {actionLabel} →
+      </button>
     ) : null}
   </div>
 );
@@ -49,7 +60,11 @@ const SkeletonTile = () => (
 
 // ─── Panel ────────────────────────────────────────────────────────────────────
 
-const OperationalSummaryPanel = (): JSX.Element | null => {
+interface OperationalSummaryPanelProps {
+  onOpenDueSoonBills?: () => void;
+}
+
+const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanelProps): JSX.Element | null => {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -207,6 +222,8 @@ const OperationalSummaryPanel = (): JSX.Element | null => {
             ? `${bills.upcomingCount} próxima${bills.upcomingCount > 1 ? "s" : ""}`
           : "Nenhuma pendente",
     tertiary: billsTertiaryTokens.length > 0 ? `+ ${billsTertiaryTokens.join(" • ")}` : undefined,
+    actionLabel: bills.dueSoonCount > 0 && onOpenDueSoonBills ? "Ver contas em 7 dias" : undefined,
+    onActionClick: bills.dueSoonCount > 0 && onOpenDueSoonBills ? onOpenDueSoonBills : undefined,
     accent: billsAccent,
   };
 

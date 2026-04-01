@@ -67,9 +67,9 @@ const buildListResult = (items: Bill[] = [buildBill()]) => ({
 
 // ─── Render helper ────────────────────────────────────────────────────────────
 
-const renderPage = () =>
+const renderPage = (initialEntries: string[] = ["/app/bills"]) =>
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <BillsPage onBack={vi.fn()} onLogout={vi.fn()} />
     </MemoryRouter>,
   );
@@ -220,6 +220,16 @@ describe("BillsPage", () => {
     await waitFor(() => {
       expect(billsService.list).toHaveBeenCalledWith(
         expect.objectContaining({ status: "due_soon" }),
+      );
+    });
+  });
+
+  it("aplica filtro inicial quando URL traz status=due_soon", async () => {
+    renderPage(["/app/bills?status=due_soon"]);
+
+    await waitFor(() => {
+      expect(billsService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "due_soon", offset: 0 }),
       );
     });
   });

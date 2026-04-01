@@ -39,7 +39,12 @@ const Dashboard = () => {
     navigate("/app/settings/security");
   };
 
-  const handleOpenBills = () => {
+  const handleOpenBills = (filter?: "due_soon") => {
+    if (filter === "due_soon") {
+      navigate("/app/bills?status=due_soon");
+      return;
+    }
+
     navigate("/app/bills");
   };
 
