@@ -212,9 +212,57 @@ describe("ImportCsvModal", () => {
     });
 
     expect(
-      screen.getByText(/energia, água, internet, telefone e TV/i),
+      screen.getByText(/energia, água, gás, internet, telefone e TV/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Criar pendência" })).toBeInTheDocument();
+  });
+
+  it("exibe badge e prefill para conta de gás detectada", async () => {
+    const file = new File(["dummy"], "gas.pdf", { type: "application/pdf" });
+    transactionsService.dryRunImportCsv.mockResolvedValueOnce(
+      buildDryRunResponse({
+        documentType: "utility_bill_gas",
+        summary: {
+          totalRows: 0,
+          validRows: 0,
+          invalidRows: 0,
+          duplicateRows: 0,
+          conflictRows: 0,
+          income: 0,
+          expense: 0,
+        },
+        rows: [],
+        suggestion: {
+          type: "bill",
+          billType: "gas",
+          issuer: "COMGAS",
+          referenceMonth: "2026-04",
+          dueDate: "2026-05-12",
+          amountDue: 95.4,
+          customerCode: "778899",
+        },
+      }),
+    );
+
+    render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Conta de gás")).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Criar pendência" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Nova pendência")).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText(/título/i)).toHaveValue("Conta de gás — COMGAS");
+    expect(screen.getByLabelText(/valor/i)).toHaveValue("95,40");
+    expect(screen.getByLabelText(/vencimento/i)).toHaveValue("2026-05-12");
+    expect(screen.getByLabelText(/mês de referência/i)).toHaveValue("2026-04");
   });
 
   it("prefill da pendência usa o tipo telecom extraído", async () => {

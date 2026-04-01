@@ -264,6 +264,8 @@ const ImportCsvModal = ({
           return { label: "Conta de energia", className: "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400" };
         case "utility_bill_water":
           return { label: "Conta de água", className: "border-cyan-300 bg-cyan-50 text-cyan-700 dark:border-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-400" };
+        case "utility_bill_gas":
+          return { label: "Conta de gás", className: "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-700 dark:bg-orange-950/40 dark:text-orange-300" };
         case "utility_bill_telecom":
           return { label: "Conta de internet/telefone/TV", className: "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" };
         default:
@@ -275,6 +277,7 @@ const ImportCsvModal = ({
     return (
       dryRunResult?.documentType === "utility_bill_energy" ||
       dryRunResult?.documentType === "utility_bill_water" ||
+      dryRunResult?.documentType === "utility_bill_gas" ||
       dryRunResult?.documentType === "utility_bill_telecom"
     );
   }, [dryRunResult]);
@@ -1011,7 +1014,7 @@ const ImportCsvModal = ({
 
             {isUtilityBill ? (
               <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
-                Boleto detectado. O suporte completo à importação de contas de energia, água, internet, telefone e TV chegará em breve. Por enquanto, nenhuma transação é extraída.
+                Boleto detectado. O suporte completo à importação de contas de energia, água, gás, internet, telefone e TV chegará em breve. Por enquanto, nenhuma transação é extraída.
               </div>
             ) : null}
 
