@@ -2,7 +2,7 @@
 
 > Documento operacional para executar a Sprint 9 com foco em consolidar a Central do Leao como modulo fiscal confiavel, auditavel e acionavel no fluxo real do usuario.
 
-Status: em andamento; S9.1, S9.2, S9.3 e S9.4 oficializadas na main em 31/03/2026.
+Status: concluida; gate S9.6 executado e decisao final registrada em 01/04/2026.
 
 ---
 
@@ -15,6 +15,9 @@ Status: em andamento; S9.1, S9.2, S9.3 e S9.4 oficializadas na main em 31/03/202
 3. PR #376 - docs de escopo UX fiscal
 4. PR #377 - S9.2 backend (preview pos-review + guard rail taxYear)
 5. PR #378 - frontend pendente oficializado (S9.2 frontend + S9.3 + S9.4)
+6. PR #381 - kickoff operacional da S9.5 (smoke e runbook)
+7. PR #382 - trava de governanca (S9.6 em pre-abertura aguardando gate)
+8. PR #383 - evidencia real da S9.5 e liberacao da S9.6 para gate formal
 
 ### Resultado consolidado da S9.1
 
@@ -157,7 +160,14 @@ A Sprint 9 so fecha quando:
 - Executar o gate de saida da sprint e registrar decisao executiva de encerramento.
 - Atualizar roadmap executivo movendo Sprint 9 para concluida quando todos os criterios forem satisfeitos.
 - Resultado esperado: Sprint 9 encerrada formalmente com evidencias remotas e documentais.
-- Status: liberada para inicio formal do gate (pre-abertura concluida).
+- Status: concluida (gate executado e Sprint 9 encerrada formalmente em 01/04/2026).
+
+#### Evidencia formal do gate S9.6
+
+- Documento de gate: `docs/runbooks/s9-6-gate-encerramento-sprint-9-2026-04-01.md`.
+- Validacao API: `npm -w apps/api run test -- src/tax.test.js` (55/55).
+- Validacao Web: `npm -w apps/web run test:run -- src/pages/TaxPage.test.tsx` (22/22).
+- Smoke real consolidado: runId `20260401-011715-8322`.
 
 ### Trilha transversal da sprint
 
@@ -171,7 +181,7 @@ A Sprint 9 so fecha quando:
 - Pendencias manuais externas continuam rastreadas (PR #348 visual e OAuth E2E).
 - Mudancas devem respeitar guard rails fiscais da arquitetura v1.31.0.
 - Evitar acoplamento com Sprint 10 durante a Sprint 9.
-- Bloqueio conhecido atual: nenhum bloqueio tecnico de evidencia operacional aberto para iniciar o gate da S9.6.
+- Bloqueio conhecido atual: nenhum bloqueio tecnico aberto para encerramento da Sprint 9.
 
 ---
 

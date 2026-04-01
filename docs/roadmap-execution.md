@@ -395,7 +395,7 @@ Legenda de status:
 
 | Sprint | Foco | Status |
 |---|---|---|
-| Sprint 9 | Central do Leão (IRPF MVP) | 🟡 |
+| Sprint 9 | Central do Leão (IRPF MVP) | ✅ |
 | Sprint 10 | CLT / Fundação de Holerite | ⚪ |
 | Sprint 11 | IA operacional por camadas | 🔵 |
 | Sprint 12 | Experiência avançada | 🔵 |
@@ -407,12 +407,12 @@ Legenda de status:
 - Sprint 6 concluida.
 - Sprint 7 concluida.
 - Sprint 8 concluida.
-- Sprint 9 em andamento com base fiscal oficializada na main.
+- Sprint 9 concluida com gate S9.6 executado formalmente.
 - S9.1 concluida (contrato fiscal anual e bootstrap) no PR #375.
 - S9.2 backend concluida no PR #377 (preview pos-review, guard rail de taxYear e contrato anual consistente).
 - S9.2 frontend + S9.3 + S9.4 oficializadas no PR #378 (preview na TaxPage, resumo conferivel e modo imprimivel/PDF).
 - S9.5 concluida com smoke real executado no ambiente-alvo (runId 20260401-011715-8322), pacote de evidencias em `tmp/smoke-irpf-mvp-20260401-011715-8322` e consolidacao documental em `docs/runbooks/s9-5-smoke-irpf-mvp-evidence-2026-04-01.md`.
-- S9.6 liberada para inicio formal do gate de encerramento da Sprint 9 (pre-abertura concluida).
+- S9.6 concluida com decisao final de encerramento da Sprint 9 registrada em `docs/runbooks/s9-6-gate-encerramento-sprint-9-2026-04-01.md`.
 - Subfrente oficial da Sprint 9: UX fiscal + espelhamento frontend do dominio fiscal.
 - Documento operacional da Sprint 6: `docs/roadmaps/sprint-6-guard-rails-documentais.md`.
 - Documento operacional da Sprint 7: `docs/roadmaps/sprint-7-conta-corrente-operacional.md`.
@@ -423,9 +423,9 @@ Legenda de status:
 - Evidencias da Sprint 6: PR #359, PR #360, PR #361, PR #362.
 - Evidencias da Sprint 7: PR #364, PR #365, PR #366, PR #367.
 - Evidencias da Sprint 8: PR #369, PR #370, PR #371, PR #372.
-- Evidencias da Sprint 9: PR #374, PR #375, PR #376, PR #377, PR #378, PR #381, PR #382.
-- Proxima linha: executar formalmente o gate S9.6 e registrar a decisao de encerramento da Sprint 9 com status final no roadmap executivo.
-- Bloqueio conhecido: nenhum bloqueio tecnico de evidencia operacional aberto para iniciar o gate S9.6.
+- Evidencias da Sprint 9: PR #374, PR #375, PR #376, PR #377, PR #378, PR #381, PR #382, PR #383.
+- Proxima linha: iniciar formalmente a Sprint 10 (CLT / Fundacao de Holerite), mantendo a mesma disciplina de gate por evidencia.
+- Bloqueio conhecido: nenhum bloqueio tecnico aberto para encerramento da Sprint 9.
 - Sprint 10 pode ser aberta em paralelo de forma nao bloqueante (discovery, contrato e DoD), sem misturar PRs com continuidade fiscal da Sprint 9.
 - Pendências manuais continuam rastreadas fora de CI (prova visual do PR #348 e validação E2E real do OAuth).
 
