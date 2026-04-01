@@ -130,6 +130,28 @@ describe("detectDocumentType", () => {
     });
   });
 
+  describe("utility_bill_telecom", () => {
+    it("detecta conta de internet com operadora + banda larga", () => {
+      const text = "VIVO FIBRA\nInternet Fixa\nBanda larga";
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("utility_bill_telecom");
+    });
+
+    it("detecta conta de telefone com operadora + linha movel", () => {
+      const text = "TIM\nServico Movel Pessoal\nNumero da linha: 11 99999-9999";
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("utility_bill_telecom");
+    });
+
+    it("detecta conta de TV por assinatura", () => {
+      const text = "SKY\nTV por assinatura\nFatura digital";
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("utility_bill_telecom");
+    });
+
+    it("NAO detecta telecom com apenas 1 sinal", () => {
+      const text = "vivo somente";
+      expect(detectDocumentType({ text, extension: ".pdf" })).not.toBe("utility_bill_telecom");
+    });
+  });
+
   describe("bank_statement via conteudo", () => {
     it("detecta extrato com saldo anterior", () => {
       const text = "Saldo anterior: R$ 1.000,00\nlançamentos do periodo";

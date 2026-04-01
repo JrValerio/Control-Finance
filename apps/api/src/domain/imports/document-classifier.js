@@ -69,6 +69,26 @@ const WATER_SIGNALS = [
   "hidrometro",
 ];
 
+const TELECOM_SIGNALS = [
+  "vivo",
+  "tim",
+  "claro",
+  "oi",
+  "sky",
+  "net claro",
+  "fatura digital",
+  "internet fixa",
+  "banda larga",
+  "fibra",
+  "linha movel",
+  "linha fixa",
+  "servico movel pessoal",
+  "tv por assinatura",
+  "combo",
+  "numero da linha",
+  "codigo de barras",
+];
+
 const BANK_STATEMENT_SIGNALS = [
   "saldo anterior",
   "saldo final",
@@ -114,6 +134,11 @@ export const detectDocumentType = ({ text = "", extension = "" }) => {
   // Water bill — 2+ signals
   if (countMatches(normalized, WATER_SIGNALS) >= 2) {
     return "utility_bill_water";
+  }
+
+  // Telecom bill (internet/phone/tv) — 2+ signals
+  if (countMatches(normalized, TELECOM_SIGNALS) >= 2) {
+    return "utility_bill_telecom";
   }
 
   // PDF with bank statement content
