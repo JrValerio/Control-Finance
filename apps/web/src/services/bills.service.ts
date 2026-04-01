@@ -77,6 +77,8 @@ export interface UtilityPanelSummary {
   overdueAmount: number;
   dueSoonCount: number;
   dueSoonAmount: number;
+  upcomingCount: number;
+  upcomingAmount: number;
   paidCount: number;
   paidAmount: number;
 }
@@ -426,6 +428,8 @@ export const billsService = {
         overdueAmount: Number(data.summary?.overdueAmount) || 0,
         dueSoonCount: Number(data.summary?.dueSoonCount) || 0,
         dueSoonAmount: Number(data.summary?.dueSoonAmount) || 0,
+        upcomingCount: Number(data.summary?.upcomingCount) || 0,
+        upcomingAmount: Number(data.summary?.upcomingAmount) || 0,
         paidCount: Number(data.summary?.paidCount) || 0,
         paidAmount: Number(data.summary?.paidAmount) || 0,
       },

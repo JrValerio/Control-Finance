@@ -82,6 +82,8 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.summary.totalAmount).toBe(0);
     expect(res.body.summary.overdueCount).toBe(0);
     expect(res.body.summary.dueSoonCount).toBe(0);
+    expect(res.body.summary.upcomingCount).toBe(0);
+    expect(res.body.summary.upcomingAmount).toBe(0);
     expect(res.body.summary.paidCount).toBe(0);
     expect(res.body.summary.paidAmount).toBe(0);
   });
@@ -165,6 +167,8 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.summary.overdueAmount).toBeCloseTo(200);
     expect(res.body.summary.dueSoonCount).toBe(2);
     expect(res.body.summary.dueSoonAmount).toBeCloseTo(130);
+    expect(res.body.summary.upcomingCount).toBe(2);
+    expect(res.body.summary.upcomingAmount).toBeCloseTo(100);
     expect(res.body.summary.totalPending).toBe(6);
     expect(res.body.summary.totalAmount).toBeCloseTo(430);
     expect(res.body.summary.paidCount).toBe(0);
@@ -214,6 +218,8 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.summary.totalPending).toBe(1);
     expect(res.body.summary.paidCount).toBe(1);
     expect(res.body.summary.paidAmount).toBeCloseTo(150);
+    expect(res.body.summary.upcomingCount).toBe(0);
+    expect(res.body.summary.upcomingAmount).toBe(0);
     expect(res.body.paid).toHaveLength(1);
     expect(res.body.paid[0].title).toBe("Energia paga");
     const allBills = [...res.body.overdue, ...res.body.dueSoon, ...res.body.upcoming];

@@ -274,6 +274,8 @@ const EMPTY_PANEL: UtilityPanel = {
     overdueAmount: 0,
     dueSoonCount: 0,
     dueSoonAmount: 0,
+    upcomingCount: 0,
+    upcomingAmount: 0,
     paidCount: 0,
     paidAmount: 0,
   },
@@ -484,9 +486,12 @@ const UtilityBillsWidget = (): JSX.Element => {
           {/* Futuras */}
           {upcoming.length > 0 ? (
             <div>
-              <div className="mb-1">
+              <div className="mb-1 flex items-center justify-between">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-cf-text-secondary">
                   Próximas ({upcoming.length})
+                </p>
+                <p className="text-[10px] font-medium text-cf-text-secondary">
+                  {money(summary.upcomingAmount)}
                 </p>
               </div>
               <div className="divide-y divide-cf-border rounded border border-cf-border bg-cf-bg-subtle px-3">

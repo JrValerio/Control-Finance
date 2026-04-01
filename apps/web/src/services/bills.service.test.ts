@@ -182,6 +182,8 @@ describe("bills service billType normalization", () => {
           overdueAmount: 0,
           dueSoonCount: 0,
           dueSoonAmount: 0,
+          upcomingCount: 0,
+          upcomingAmount: 0,
           paidCount: 1,
           paidAmount: 150,
         },
@@ -200,5 +202,7 @@ describe("bills service billType normalization", () => {
     });
     expect(result.summary.paidCount).toBe(1);
     expect(result.summary.paidAmount).toBe(150);
+    expect(result.summary.upcomingCount).toBe(0);
+    expect(result.summary.upcomingAmount).toBe(0);
   });
 });
