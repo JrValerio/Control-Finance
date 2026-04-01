@@ -151,7 +151,7 @@ const HealthOverview = (): JSX.Element | null => {
 
   if (isLoadingForecast) {
     return (
-      <div className="rounded border border-cf-border bg-cf-surface p-4">
+      <div className="h-full rounded border border-cf-border bg-cf-surface p-4">
         <p className="text-xs text-cf-text-secondary">Carregando saúde financeira...</p>
       </div>
     );
@@ -159,7 +159,7 @@ const HealthOverview = (): JSX.Element | null => {
 
   if (forecastError) {
     return (
-      <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+      <div className="h-full rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
         <p>{forecastError}</p>
         <div className="mt-2 flex items-center gap-2">
           <button
@@ -180,7 +180,7 @@ const HealthOverview = (): JSX.Element | null => {
 
   if (forecast === null || forecast.daysRemaining <= 0) {
     return (
-      <div className="rounded border border-cf-border bg-cf-surface p-4">
+      <div className="h-full rounded border border-cf-border bg-cf-surface p-4">
         <h3 className="text-sm font-semibold text-cf-text-primary">Saúde Financeira do Mês</h3>
         <p className="mt-2 text-xs text-cf-text-secondary">Sem dados suficientes para exibir este widget.</p>
       </div>
@@ -199,7 +199,7 @@ const HealthOverview = (): JSX.Element | null => {
   const showInsightPanel = isLoadingInsight || insight !== null;
 
   return (
-    <div className="rounded border border-cf-border bg-cf-surface p-4">
+    <div className="h-full rounded border border-cf-border bg-cf-surface p-4">
       <h3 className="mb-4 text-sm font-semibold text-cf-text-primary">Saúde Financeira do Mês</h3>
       <div className={`grid gap-4 ${showInsightPanel ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         {/* D5 — Gauge */}
