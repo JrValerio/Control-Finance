@@ -14,6 +14,7 @@ import {
   trackCommitFailMetrics,
   trackCommitSuccessMetrics,
   trackDryRunMetrics,
+  trackDryRunSemanticDriftMetrics,
 } from "../observability/import-observability.js";
 import {
   createTransactionForUser,
@@ -103,6 +104,104 @@ const ensureValidImportFile = (file) => {
   ) {
     throw createError(400, "Arquivo invalido. Envie um CSV, OFX ou PDF de extrato.");
   }
+};
+
+const UTILITY_DOCUMENT_EXPECTED_BILL_TYPES = {
+  utility_bill_energy: new Set(["energy"]),
+  utility_bill_water: new Set(["water"]),
+  utility_bill_gas: new Set(["gas"]),
+  utility_bill_telecom: new Set(["internet", "phone", "tv"]),
+};
+
+const normalizeBillTypeCandidate = (value) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedValue = value.trim().toLowerCase();
+  return normalizedValue || null;
+};
+
+const collectObservedBillTypes = (dryRunResult = {}) => {
+  const observedTypes = [];
+  const suggestionCandidates = [];
+
+  if (dryRunResult?.suggestion && typeof dryRunResult.suggestion === "object") {
+    suggestionCandidates.push(dryRunResult.suggestion);
+  }
+
+  if (Array.isArray(dryRunResult?.suggestions)) {
+    suggestionCandidates.push(...dryRunResult.suggestions);
+  }
+
+  suggestionCandidates.forEach((suggestion) => {
+    if (!suggestion || typeof suggestion !== "object") {
+      return;
+    }
+
+    if (String(suggestion.type || "").trim().toLowerCase() !== "bill") {
+      return;
+    }
+
+    const normalizedBillType = normalizeBillTypeCandidate(suggestion.billType);
+    if (normalizedBillType) {
+      observedTypes.push(normalizedBillType);
+    }
+  });
+
+  return [...new Set(observedTypes)];
+};
+
+const detectUtilityDryRunSemanticDrift = (dryRunResult = {}) => {
+  const normalizedDocumentType =
+    typeof dryRunResult?.documentType === "string"
+      ? dryRunResult.documentType.trim().toLowerCase()
+      : "";
+
+  const expectedBillTypesSet = UTILITY_DOCUMENT_EXPECTED_BILL_TYPES[normalizedDocumentType];
+
+  if (!expectedBillTypesSet) {
+    return {
+      driftDetected: false,
+      documentType: normalizedDocumentType || null,
+      expectedBillTypes: [],
+      observedBillTypes: [],
+      reason: null,
+    };
+  }
+
+  const observedBillTypes = collectObservedBillTypes(dryRunResult);
+  const expectedBillTypes = [...expectedBillTypesSet];
+
+  if (observedBillTypes.length === 0) {
+    return {
+      driftDetected: true,
+      documentType: normalizedDocumentType,
+      expectedBillTypes,
+      observedBillTypes,
+      reason: "missing_bill_suggestion",
+    };
+  }
+
+  const hasExpectedBillType = observedBillTypes.some((billType) => expectedBillTypesSet.has(billType));
+
+  if (!hasExpectedBillType) {
+    return {
+      driftDetected: true,
+      documentType: normalizedDocumentType,
+      expectedBillTypes,
+      observedBillTypes,
+      reason: "bill_type_mismatch",
+    };
+  }
+
+  return {
+    driftDetected: false,
+    documentType: normalizedDocumentType,
+    expectedBillTypes,
+    observedBillTypes,
+    reason: null,
+  };
 };
 
 const getListFiltersFromQuery = (query = {}, options = {}) => {
@@ -357,8 +456,25 @@ router.post("/import/dry-run", importRateLimiter, requireFeature("csv_import"), 
       const rowsTotal = Number(dryRunResult.summary?.totalRows) || 0;
       const validRows = Number(dryRunResult.summary?.validRows) || 0;
       const invalidRows = Number(dryRunResult.summary?.invalidRows) || 0;
+      const semanticDrift = detectUtilityDryRunSemanticDrift(dryRunResult);
 
       trackDryRunMetrics({ rowsTotal });
+      trackDryRunSemanticDriftMetrics({ driftDetected: semanticDrift.driftDetected });
+
+      if (semanticDrift.driftDetected) {
+        logImportEvent("import.dry_run.semantic_drift", {
+          requestId,
+          userId,
+          importId: dryRunResult.importId || null,
+          documentType: semanticDrift.documentType,
+          expectedBillTypes: semanticDrift.expectedBillTypes,
+          observedBillTypes: semanticDrift.observedBillTypes,
+          driftReason: semanticDrift.reason,
+          elapsedMs: elapsedTimer(),
+          statusCode: 200,
+        });
+      }
+
       logImportEvent("import.dry_run.success", {
         requestId,
         userId,

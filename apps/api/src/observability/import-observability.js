@@ -2,6 +2,7 @@ import { logError, logInfo } from "./logger.js";
 
 const METRIC_NAMES = {
   dryRunTotal: "import_dry_run_total",
+  dryRunSemanticDriftTotal: "import_dry_run_semantic_drift_total",
   commitTotal: "import_commit_total",
   commitSuccessTotal: "import_commit_success_total",
   commitFailTotal: "import_commit_fail_total",
@@ -11,6 +12,7 @@ const METRIC_NAMES = {
 
 const importMetricsState = {
   [METRIC_NAMES.dryRunTotal]: 0,
+  [METRIC_NAMES.dryRunSemanticDriftTotal]: 0,
   [METRIC_NAMES.commitTotal]: 0,
   [METRIC_NAMES.commitSuccessTotal]: 0,
   [METRIC_NAMES.commitFailTotal]: 0,
@@ -56,6 +58,8 @@ export const getImportMetricsSnapshot = () => {
 
   return {
     import_dry_run_total: importMetricsState[METRIC_NAMES.dryRunTotal],
+    import_dry_run_semantic_drift_total:
+      importMetricsState[METRIC_NAMES.dryRunSemanticDriftTotal],
     import_commit_total: importMetricsState[METRIC_NAMES.commitTotal],
     import_commit_success_total: importMetricsState[METRIC_NAMES.commitSuccessTotal],
     import_commit_fail_total: importMetricsState[METRIC_NAMES.commitFailTotal],
@@ -74,6 +78,14 @@ export const createElapsedTimer = () => {
 export const trackDryRunMetrics = ({ rowsTotal = 0 } = {}) => {
   incrementMetric(METRIC_NAMES.dryRunTotal);
   observeRows(rowsTotal);
+};
+
+export const trackDryRunSemanticDriftMetrics = ({ driftDetected = false } = {}) => {
+  if (!driftDetected) {
+    return;
+  }
+
+  incrementMetric(METRIC_NAMES.dryRunSemanticDriftTotal);
 };
 
 export const trackCommitAttemptMetrics = () => {
