@@ -19,6 +19,7 @@ import {
   extractPayrollSuggestion,
   extractEnergyBillSuggestion,
   extractWaterBillSuggestion,
+  extractTelecomBillSuggestion,
 } from "../domain/imports/statement-import.js";
 import { detectDocumentType } from "../domain/imports/document-classifier.js";
 import { applyTransactionImportCategoryRules } from "../domain/imports/transaction-import-rules.js";
@@ -634,6 +635,11 @@ const parseImportFileRows = async (importFile) => {
 
     if (documentType === "utility_bill_water") {
       const suggestion = extractWaterBillSuggestion(text);
+      return { rows: [], documentType, suggestion, suggestions: suggestion ? [suggestion] : [] };
+    }
+
+    if (documentType === "utility_bill_telecom") {
+      const suggestion = extractTelecomBillSuggestion(text);
       return { rows: [], documentType, suggestion, suggestions: suggestion ? [suggestion] : [] };
     }
 

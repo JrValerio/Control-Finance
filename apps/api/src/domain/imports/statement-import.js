@@ -712,6 +712,10 @@ const WATER_ISSUERS = [
   "saae", "sabesp", "sanepar", "copasa", "cagece", "caern", "casan", "embasa",
   "compesa", "agespisa", "caema", "cosanpa",
 ];
+const TELECOM_ISSUERS = [
+  "vivo", "claro", "tim", "oi", "sky", "algar telecom", "brisanet", "desktop",
+  "ligga", "unifique", "america net", "net claro", "nextel",
+];
 
 const detectIssuerFromText = (normalizedText, candidates) => {
   for (const candidate of candidates) {
@@ -740,6 +744,32 @@ const extractBillFields = (normalizedText) => {
   const amountDue = amountMatch ? parseSignedAmount(amountMatch[1]) : null;
 
   return { referenceMonth, dueDate, amountDue: amountDue !== null ? Math.abs(amountDue) : null };
+};
+
+const inferTelecomBillType = (normalizedText) => {
+  const tvSignals = ["tv por assinatura", "assinatura tv", "pacote tv", "tv hd", "sky"];
+  if (tvSignals.some((signal) => normalizedText.includes(signal))) {
+    return "tv";
+  }
+
+  const internetSignals = ["internet", "banda larga", "fibra", "wi-fi", "wifi"];
+  if (internetSignals.some((signal) => normalizedText.includes(signal))) {
+    return "internet";
+  }
+
+  const phoneSignals = [
+    "telefone",
+    "telefonia",
+    "linha movel",
+    "linha fixa",
+    "servico movel pessoal",
+    "celular",
+  ];
+  if (phoneSignals.some((signal) => normalizedText.includes(signal))) {
+    return "phone";
+  }
+
+  return "internet";
 };
 
 export const extractEnergyBillSuggestion = (text) => {
@@ -784,6 +814,31 @@ export const extractWaterBillSuggestion = (text) => {
   return {
     type: "bill",
     billType: "water",
+    issuer: issuerKey,
+    referenceMonth,
+    dueDate,
+    amountDue,
+    customerCode,
+  };
+};
+
+export const extractTelecomBillSuggestion = (text) => {
+  const normalized = normalizeForExtraction(text);
+
+  const issuerKey = detectIssuerFromText(normalized, TELECOM_ISSUERS);
+  const { referenceMonth, dueDate, amountDue } = extractBillFields(normalized);
+  const billType = inferTelecomBillType(normalized);
+
+  const codeMatch = normalized.match(
+    /(?:numero da linha|n[°o] da linha|linha|codigo do cliente|n[°o] cliente|assinante|contrato)[:\s#°]*([\d.\-/()\s]+)/i,
+  );
+  const customerCode = codeMatch ? collapseWhitespace(codeMatch[1]) : null;
+
+  if (!referenceMonth && !dueDate && amountDue === null) return null;
+
+  return {
+    type: "bill",
+    billType,
     issuer: issuerKey,
     referenceMonth,
     dueDate,
