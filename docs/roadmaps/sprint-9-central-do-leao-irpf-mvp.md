@@ -142,14 +142,22 @@ A Sprint 9 so fecha quando:
 - Endurecer evidencias operacionais de smoke para cenarios criticos do MVP fiscal.
 - Artefatos iniciais publicados: `scripts/smoke-tax-irpf-mvp.ps1` e `docs/runbooks/s9-5-smoke-irpf-mvp.md`.
 - Resultado esperado: frente IRPF MVP com pendencias explicitamente residualizadas e sem lacunas de rastreabilidade.
-- Status: em fechamento residual (aguardando smoke real + pacote de evidencias).
+- Status: concluida (smoke real executado no ambiente-alvo; runId 20260401-011715-8322).
+
+#### Evidencia operacional consolidada da S9.5
+
+- Ambiente-alvo: `https://control-finance-react-tailwind.onrender.com`.
+- RunId: `20260401-011715-8322`.
+- Pasta de evidencias: `tmp/smoke-irpf-mvp-20260401-011715-8322`.
+- Pacote documental: `docs/runbooks/s9-5-smoke-irpf-mvp-evidence-2026-04-01.md`.
+- Resultado do smoke: `PASS 14 / FAIL 0` com criterios `ingestao/revisao/resumo/exportJson/exportCsv` em `true`.
 
 ### Slice S9.6 - Gate formal de encerramento da Sprint 9
 
 - Executar o gate de saida da sprint e registrar decisao executiva de encerramento.
 - Atualizar roadmap executivo movendo Sprint 9 para concluida quando todos os criterios forem satisfeitos.
 - Resultado esperado: Sprint 9 encerrada formalmente com evidencias remotas e documentais.
-- Status: aguardando liberacao de gate (pre-abertura, sem inicio formal).
+- Status: liberada para inicio formal do gate (pre-abertura concluida).
 
 ### Trilha transversal da sprint
 
@@ -163,7 +171,7 @@ A Sprint 9 so fecha quando:
 - Pendencias manuais externas continuam rastreadas (PR #348 visual e OAuth E2E).
 - Mudancas devem respeitar guard rails fiscais da arquitetura v1.31.0.
 - Evitar acoplamento com Sprint 10 durante a Sprint 9.
-- Bloqueio conhecido atual: ausencia de evidencia operacional do smoke real no ambiente-alvo para liberar gate da S9.6.
+- Bloqueio conhecido atual: nenhum bloqueio tecnico de evidencia operacional aberto para iniciar o gate da S9.6.
 
 ---
 
