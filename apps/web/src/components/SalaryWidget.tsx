@@ -89,11 +89,13 @@ function SummaryMetric({
   value,
   tone = "default",
   helper,
+  emphasis = false,
 }: {
   label: string;
   value: number;
   tone?: "default" | "negative" | "highlight";
   helper?: string;
+  emphasis?: boolean;
 }) {
   const valueClass =
     tone === "highlight"
@@ -101,9 +103,12 @@ function SummaryMetric({
       : tone === "negative"
         ? "text-red-600"
         : "text-cf-text-primary";
+  const emphasisClass = emphasis
+    ? "border-brand-1/30 bg-brand-3/20 shadow-[inset_0_0_0_1px_rgba(76,113,255,0.16)]"
+    : "border-cf-border bg-cf-surface";
 
   return (
-    <div className="rounded border border-cf-border bg-cf-surface px-3 py-2.5">
+    <div className={`rounded border px-3 py-2.5 ${emphasisClass}`}>
       <p className="text-[11px] font-medium uppercase tracking-wide text-cf-text-secondary">{label}</p>
       <p className={`mt-1 text-base font-bold ${valueClass}`}>{formatCurrency(value)}</p>
       {helper ? <p className="mt-1 text-xs text-cf-text-secondary">{helper}</p> : null}
@@ -458,6 +463,7 @@ function BenefitProfileView({
           label="Benefício líquido"
           value={calculation.netMonthly}
           tone="highlight"
+          emphasis
           helper={
             calculation.netAnnual == null
               ? "Líquido anual: disponível no Pro"

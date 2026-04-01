@@ -31,10 +31,21 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
 
   if (!summary) return null;
 
+  const hasOverdueBills = summary.overdueCount > 0;
+  const cardToneClass = hasOverdueBills ? "border-red-300" : "border-cf-border";
+  const statusBadgeClass = hasOverdueBills
+    ? "border-red-200 bg-red-50 text-red-700"
+    : "border-emerald-200 bg-emerald-50 text-emerald-700";
+
   return (
-    <div className="rounded border border-cf-border bg-cf-surface p-4">
+    <div className={`rounded border bg-cf-surface p-4 ${cardToneClass}`}>
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
+          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
+            {hasOverdueBills ? "Ação imediata" : "Em dia"}
+          </span>
+        </div>
         {onOpenBills ? (
           <button
             type="button"
@@ -46,18 +57,12 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
         ) : null}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
-          <p className="text-xs font-medium uppercase text-cf-text-secondary">Pendentes</p>
-          <p className="text-sm font-semibold text-cf-text-primary">
-            {money(summary.pendingTotal)}
-          </p>
-          <p className="text-xs text-cf-text-secondary">
-            {summary.pendingCount} {summary.pendingCount === 1 ? "conta" : "contas"}
-          </p>
-        </div>
+      <p className="mb-3 text-xs text-cf-text-secondary">
+        Priorize contas vencidas para evitar juros e, depois, trate as próximas pendências.
+      </p>
 
-        <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+      <div className="grid grid-cols-2 gap-3">
+        <div className={`rounded border bg-cf-bg-subtle px-3 py-2.5 ${hasOverdueBills ? "border-red-200" : "border-cf-border"}`}>
           <p className="text-xs font-medium uppercase text-cf-text-secondary">Vencidas</p>
           <p
             className={`text-sm font-semibold ${summary.overdueCount > 0 ? "text-red-600" : "text-cf-text-primary"}`}
@@ -66,6 +71,16 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
           </p>
           <p className={`text-xs ${summary.overdueCount > 0 ? "text-red-500" : "text-cf-text-secondary"}`}>
             {summary.overdueCount} {summary.overdueCount === 1 ? "conta" : "contas"}
+          </p>
+        </div>
+
+        <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+          <p className="text-xs font-medium uppercase text-cf-text-secondary">Pendentes</p>
+          <p className="text-sm font-semibold text-cf-text-primary">
+            {money(summary.pendingTotal)}
+          </p>
+          <p className="text-xs text-cf-text-secondary">
+            {summary.pendingCount} {summary.pendingCount === 1 ? "conta" : "contas"}
           </p>
         </div>
       </div>

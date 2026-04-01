@@ -2458,13 +2458,25 @@ const App = ({
 
             <OperationalSummaryPanel onOpenDueSoonBills={handleOpenDueSoonBills} />
 
-            <div className="grid gap-4 xl:grid-cols-4">
-              <div className="xl:col-span-2">
-                <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+            <section className="space-y-3" aria-labelledby="critical-cards-title">
+              <div className="flex items-center justify-between gap-2">
+                <h4 id="critical-cards-title" className="text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
+                  Cards críticos
+                </h4>
+                <span className="text-xs text-cf-text-secondary">Prioridade de triagem</span>
               </div>
-              <BillsSummaryWidget onOpenBills={handleOpenBills} />
-              <CreditCardsSummaryWidget onOpenCreditCards={handleOpenCreditCards} />
-            </div>
+
+              <div className="grid gap-4 xl:grid-cols-12">
+                <div className="xl:col-span-7">
+                  <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+                </div>
+
+                <div className="space-y-4 xl:col-span-5">
+                  <BillsSummaryWidget onOpenBills={handleOpenBills} />
+                  <CreditCardsSummaryWidget onOpenCreditCards={handleOpenCreditCards} />
+                </div>
+              </div>
+            </section>
 
             <UtilityBillsWidget />
           </section>
