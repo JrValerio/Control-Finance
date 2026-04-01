@@ -396,8 +396,9 @@ Legenda de status:
 | Sprint | Foco | Status |
 |---|---|---|
 | Sprint 9 | Central do Leão (IRPF MVP) | 🟡 |
-| Sprint 10 | IA operacional por camadas | 🔵 |
-| Sprint 11 | Copiloto contextual ampliado | 🔵 |
+| Sprint 10 | CLT / Fundação de Holerite | ⚪ |
+| Sprint 11 | IA operacional por camadas | 🔵 |
+| Sprint 12 | Experiência avançada | 🔵 |
 
 ### Decisão executiva atual
 
@@ -421,7 +422,8 @@ Legenda de status:
 - Evidencias da Sprint 7: PR #364, PR #365, PR #366, PR #367.
 - Evidencias da Sprint 8: PR #369, PR #370, PR #371, PR #372.
 - Evidencias da Sprint 9: PR #374, PR #375, PR #376, PR #377, PR #378.
-- Proxima linha: continuar os proximos slices do IRPF MVP a partir da base fiscal ja conferivel e imprimivel.
+- Proxima linha: continuar os proximos slices do IRPF MVP a partir da base fiscal ja conferivel e imprimivel, ate gate formal de encerramento da Sprint 9.
+- Sprint 10 pode ser aberta em paralelo de forma nao bloqueante (discovery, contrato e DoD), sem misturar PRs com continuidade fiscal da Sprint 9.
 - Pendências manuais continuam rastreadas fora de CI (prova visual do PR #348 e validação E2E real do OAuth).
 
 ---
