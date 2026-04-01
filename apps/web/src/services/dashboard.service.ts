@@ -5,6 +5,8 @@ export interface DashboardBills {
   overdueTotal: number;
   dueSoonCount: number;
   dueSoonTotal: number;
+  upcomingCount: number;
+  upcomingTotal: number;
 }
 
 export interface DashboardCards {
@@ -43,6 +45,8 @@ const normalizeBills = (raw: Record<string, unknown>): DashboardBills => ({
   overdueTotal: Number(raw.overdueTotal) || 0,
   dueSoonCount: Number(raw.dueSoonCount) || 0,
   dueSoonTotal: Number(raw.dueSoonTotal) || 0,
+  upcomingCount: Number(raw.upcomingCount) || 0,
+  upcomingTotal: Number(raw.upcomingTotal) || 0,
 });
 
 const normalizeCards = (raw: Record<string, unknown>): DashboardCards => ({

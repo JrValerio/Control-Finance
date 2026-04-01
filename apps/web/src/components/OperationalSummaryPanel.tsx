@@ -141,23 +141,38 @@ const OperationalSummaryPanel = (): JSX.Element | null => {
   };
 
   // ── Tile 2: Bills ─────────────────────────────────────────────────────────
-  const totalBillsCount = bills.overdueCount + bills.dueSoonCount;
-  const totalBillsAmount = bills.overdueTotal + bills.dueSoonTotal;
+  const totalImmediateBillsCount = bills.overdueCount + bills.dueSoonCount;
+  const totalImmediateBillsAmount = bills.overdueTotal + bills.dueSoonTotal;
+  const hasUpcomingBills = bills.upcomingCount > 0;
+  const shouldHighlightImmediateBills = totalImmediateBillsCount > 0;
+  const billsPrimaryAmount = shouldHighlightImmediateBills
+    ? totalImmediateBillsAmount
+    : hasUpcomingBills
+      ? bills.upcomingTotal
+      : 0;
   const billsAccent: TileProps["accent"] =
     bills.overdueCount > 0 ? "danger" : bills.dueSoonCount > 0 ? "warning" : "muted";
+  const billsTertiaryTokens: string[] = [];
+  if (bills.overdueCount > 0 && bills.dueSoonCount > 0) {
+    billsTertiaryTokens.push(`${bills.dueSoonCount} a vencer`);
+  }
+  if (hasUpcomingBills) {
+    billsTertiaryTokens.push(
+      `${bills.upcomingCount} próxima${bills.upcomingCount > 1 ? "s" : ""}`,
+    );
+  }
   const billsTile: TileProps = {
     label: "Contas a pagar",
-    primary: totalBillsCount > 0 ? money(totalBillsAmount) : "—",
+    primary: shouldHighlightImmediateBills || hasUpcomingBills ? money(billsPrimaryAmount) : "—",
     secondary:
       bills.overdueCount > 0
         ? `${bills.overdueCount} vencida${bills.overdueCount > 1 ? "s" : ""}`
         : bills.dueSoonCount > 0
           ? `${bills.dueSoonCount} em 7 dias`
+          : hasUpcomingBills
+            ? `${bills.upcomingCount} próxima${bills.upcomingCount > 1 ? "s" : ""}`
           : "Nenhuma pendente",
-    tertiary:
-      bills.overdueCount > 0 && bills.dueSoonCount > 0
-        ? `+ ${bills.dueSoonCount} a vencer`
-        : undefined,
+    tertiary: billsTertiaryTokens.length > 0 ? `+ ${billsTertiaryTokens.join(" • ")}` : undefined,
     accent: billsAccent,
   };
 

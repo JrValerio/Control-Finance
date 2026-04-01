@@ -43,8 +43,10 @@ export const getDashboardSnapshot = async (userId) => {
       `SELECT
          COUNT(CASE WHEN due_date < $2 THEN 1 END) AS overdue_count,
          COALESCE(SUM(CASE WHEN due_date < $2 THEN amount ELSE 0 END), 0) AS overdue_total,
-         COUNT(CASE WHEN due_date >= $2 AND due_date < $3 THEN 1 END) AS due_soon_count,
-         COALESCE(SUM(CASE WHEN due_date >= $2 AND due_date < $3 THEN amount ELSE 0 END), 0) AS due_soon_total
+         COUNT(CASE WHEN due_date >= $2 AND due_date <= $3 THEN 1 END) AS due_soon_count,
+         COALESCE(SUM(CASE WHEN due_date >= $2 AND due_date <= $3 THEN amount ELSE 0 END), 0) AS due_soon_total,
+         COUNT(CASE WHEN due_date > $3 THEN 1 END) AS upcoming_count,
+         COALESCE(SUM(CASE WHEN due_date > $3 THEN amount ELSE 0 END), 0) AS upcoming_total
        FROM bills
        WHERE user_id = $1 AND status = 'pending'`,
       [uid, today, in7Days],
@@ -113,6 +115,8 @@ export const getDashboardSnapshot = async (userId) => {
       overdueTotal: toNum(bills.overdue_total),
       dueSoonCount: toInt(bills.due_soon_count),
       dueSoonTotal: toNum(bills.due_soon_total),
+      upcomingCount: toInt(bills.upcoming_count),
+      upcomingTotal: toNum(bills.upcoming_total),
     },
     cards: {
       openPurchasesTotal: toNum(cardPurchasesRes.rows[0]?.total),
