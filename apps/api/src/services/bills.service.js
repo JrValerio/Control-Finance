@@ -621,6 +621,8 @@ export const getUtilityBillsPanelForUser = async (userId) => {
       overdueAmount: toMoney2(overdue),
       dueSoonCount: dueSoon.length,
       dueSoonAmount: toMoney2(dueSoon),
+      upcomingCount: upcoming.length,
+      upcomingAmount: toMoney2(upcoming),
       paidCount: paid.length,
       paidAmount: toMoney2(paid),
     },
