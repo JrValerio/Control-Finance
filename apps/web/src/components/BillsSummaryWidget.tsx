@@ -29,7 +29,7 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
   const money = useMaskedCurrency();
   if (isLoading) {
     return (
-      <div className="rounded border border-cf-border bg-cf-surface p-4">
+      <div className="rounded-lg border border-cf-border bg-cf-surface p-4 md:p-5">
         <p className="text-xs text-cf-text-secondary">Carregando pendências...</p>
       </div>
     );
@@ -37,7 +37,7 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
 
   if (hasLoadError) {
     return (
-      <div className="rounded border border-red-300 bg-cf-surface p-4">
+      <div className="rounded-lg border border-red-300 bg-cf-surface p-4 md:p-5">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
           <OperationalSeverityBadge severity="risco" />
@@ -62,7 +62,7 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
 
   if (!summary) {
     return (
-      <div className="rounded border border-amber-300 bg-cf-surface p-4">
+      <div className="rounded-lg border border-amber-300 bg-cf-surface p-4 md:p-5">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
           <OperationalSeverityBadge severity="atencao" />
@@ -96,8 +96,8 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
       : "Sem pendências ou vencimentos no recorte atual.";
 
   return (
-    <div className={`rounded border bg-cf-surface p-4 ${cardToneClass}`}>
-      <div className="mb-2 flex items-center justify-between">
+    <div className={`rounded-lg border bg-cf-surface p-4 md:p-5 ${cardToneClass}`}>
+      <div className="mb-2 flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
           <OperationalSeverityBadge severity={severityLevel} />
@@ -113,29 +113,29 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
         ) : null}
       </div>
 
-      <p className="mb-3 text-xs text-cf-text-secondary">
+      <p className="mb-4 text-[11px] text-cf-text-secondary">
         {statusContext}
       </p>
 
-      <div className="grid grid-cols-2 gap-3">
-        <div className={`rounded border bg-cf-bg-subtle px-3 py-2.5 ${hasOverdueBills ? "border-red-200" : "border-cf-border"}`}>
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+        <div className={`rounded-lg border bg-cf-bg-subtle px-3 py-3 ${hasOverdueBills ? "border-red-200" : "border-cf-border"}`}>
           <p className="text-xs font-medium uppercase text-cf-text-secondary">Vencidas</p>
           <p
-            className={`text-sm font-semibold ${summary.overdueCount > 0 ? "text-red-600" : "text-cf-text-primary"}`}
+            className={`mt-1 text-lg font-semibold leading-none ${summary.overdueCount > 0 ? "text-red-600" : "text-cf-text-primary"}`}
           >
             {money(summary.overdueTotal)}
           </p>
-          <p className={`text-xs ${summary.overdueCount > 0 ? "text-red-500" : "text-cf-text-secondary"}`}>
+          <p className={`mt-1 text-[11px] ${summary.overdueCount > 0 ? "text-red-500" : "text-cf-text-secondary"}`}>
             {summary.overdueCount} {summary.overdueCount === 1 ? "conta" : "contas"}
           </p>
         </div>
 
-        <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+        <div className="rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-3">
           <p className="text-xs font-medium uppercase text-cf-text-secondary">Pendentes</p>
-          <p className="text-sm font-semibold text-cf-text-primary">
+          <p className="mt-1 text-lg font-semibold leading-none text-cf-text-primary">
             {money(summary.pendingTotal)}
           </p>
-          <p className="text-xs text-cf-text-secondary">
+          <p className="mt-1 text-[11px] text-cf-text-secondary">
             {summary.pendingCount} {summary.pendingCount === 1 ? "conta" : "contas"}
           </p>
         </div>

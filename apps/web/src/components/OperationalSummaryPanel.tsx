@@ -26,22 +26,22 @@ const ACCENT_CLASSES: Record<NonNullable<TileProps["accent"]>, string> = {
 };
 
 const Tile = ({ label, primary, secondary, tertiary, actionLabel, onActionClick, accent = "default" }: TileProps) => (
-  <div className="flex min-h-[132px] flex-col rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+  <div className="flex min-h-[124px] flex-col rounded-lg border border-cf-border bg-cf-bg-subtle px-3.5 py-3">
     <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-cf-text-secondary">
       {label}
     </p>
-    <p className={`text-sm font-semibold leading-tight ${ACCENT_CLASSES[accent]}`}>{primary}</p>
+    <p className={`text-base font-semibold leading-tight ${ACCENT_CLASSES[accent]}`}>{primary}</p>
     {secondary ? (
-      <p className="mt-0.5 text-xs text-cf-text-secondary">{secondary}</p>
+      <p className="mt-1 text-[11px] text-cf-text-secondary">{secondary}</p>
     ) : null}
     {tertiary ? (
-      <p className="text-xs text-cf-text-secondary">{tertiary}</p>
+      <p className="mt-0.5 text-[11px] text-cf-text-secondary">{tertiary}</p>
     ) : null}
     {actionLabel && onActionClick ? (
       <button
         type="button"
         onClick={onActionClick}
-        className="mt-auto pt-1 text-left text-xs font-semibold text-brand-1 hover:text-brand-2"
+        className="mt-auto pt-1.5 text-left text-xs font-semibold text-brand-1 hover:text-brand-2"
       >
         {actionLabel} →
       </button>
@@ -52,7 +52,7 @@ const Tile = ({ label, primary, secondary, tertiary, actionLabel, onActionClick,
 // ─── Loading skeleton ─────────────────────────────────────────────────────────
 
 const SkeletonTile = () => (
-  <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5 animate-pulse">
+  <div className="animate-pulse rounded-lg border border-cf-border bg-cf-bg-subtle px-3.5 py-3">
     <div className="mb-1.5 h-2 w-16 rounded bg-cf-border" />
     <div className="h-4 w-24 rounded bg-cf-border" />
     <div className="mt-1 h-3 w-20 rounded bg-cf-border" />
@@ -319,15 +319,15 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
         };
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-cf-text-secondary">Severidade</span>
         <OperationalSeverityBadge severity="normal" />
         <OperationalSeverityBadge severity="atencao" />
         <OperationalSeverityBadge severity="risco" />
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
         <Tile {...bankTile} />
         <Tile {...billsTile} />
         <Tile {...cardTile} />
