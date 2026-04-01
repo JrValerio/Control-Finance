@@ -396,7 +396,7 @@ Legenda de status:
 | Sprint | Foco | Status |
 |---|---|---|
 | Sprint 9 | Central do Leão (IRPF MVP) | ✅ |
-| Sprint 10 | CLT / Fundação de Holerite | ⚪ |
+| Sprint 10 | CLT / Fundação de Holerite | 🟡 |
 | Sprint 11 | IA operacional por camadas | 🔵 |
 | Sprint 12 | Experiência avançada | 🔵 |
 
@@ -408,6 +408,7 @@ Legenda de status:
 - Sprint 7 concluida.
 - Sprint 8 concluida.
 - Sprint 9 concluida com gate S9.6 executado formalmente.
+- Sprint 10 aberta formalmente em nivel de governanca (CLT / Fundacao de Holerite).
 - S9.1 concluida (contrato fiscal anual e bootstrap) no PR #375.
 - S9.2 backend concluida no PR #377 (preview pos-review, guard rail de taxYear e contrato anual consistente).
 - S9.2 frontend + S9.3 + S9.4 oficializadas no PR #378 (preview na TaxPage, resumo conferivel e modo imprimivel/PDF).
@@ -418,15 +419,17 @@ Legenda de status:
 - Documento operacional da Sprint 7: `docs/roadmaps/sprint-7-conta-corrente-operacional.md`.
 - Documento operacional da Sprint 8: `docs/roadmaps/sprint-8-cartao-ciclo-conciliacao.md`.
 - Documento operacional da Sprint 9: `docs/roadmaps/sprint-9-central-do-leao-irpf-mvp.md`.
+- Documento operacional da Sprint 10: `docs/roadmaps/sprint-10-clt-fundacao-holerite.md`.
 - Documento operacional da Sprint 5: `docs/roadmaps/sprint-5-renda-confirmada.md`.
+- Handoff-mestre da Sprint 10: `docs/runbooks/s10-kickoff-handoff-mestre-2026-04-01.md`.
 - Evidencias da Sprint 5: PR #355, PR #356, PR #357, PR #358.
 - Evidencias da Sprint 6: PR #359, PR #360, PR #361, PR #362.
 - Evidencias da Sprint 7: PR #364, PR #365, PR #366, PR #367.
 - Evidencias da Sprint 8: PR #369, PR #370, PR #371, PR #372.
-- Evidencias da Sprint 9: PR #374, PR #375, PR #376, PR #377, PR #378, PR #381, PR #382, PR #383.
-- Proxima linha: iniciar formalmente a Sprint 10 (CLT / Fundacao de Holerite), mantendo a mesma disciplina de gate por evidencia.
-- Bloqueio conhecido: nenhum bloqueio tecnico aberto para encerramento da Sprint 9.
-- Sprint 10 pode ser aberta em paralelo de forma nao bloqueante (discovery, contrato e DoD), sem misturar PRs com continuidade fiscal da Sprint 9.
+- Evidencias da Sprint 9: PR #374, PR #375, PR #376, PR #377, PR #378, PR #381, PR #382, PR #383, PR #384.
+- Proxima linha: iniciar execucao tecnica do Slice S10.1 (contrato CLT + classificacao base `clt_payslip`) mantendo disciplina de gate por evidencia.
+- Bloqueio conhecido: nenhum bloqueio tecnico critico aberto para kickoff da Sprint 10.
+- Sprint 11 permanece em pre-planejamento, sem execucao formal enquanto a fundacao da Sprint 10 nao estiver consolidada.
 - Pendências manuais continuam rastreadas fora de CI (prova visual do PR #348 e validação E2E real do OAuth).
 
 ---
