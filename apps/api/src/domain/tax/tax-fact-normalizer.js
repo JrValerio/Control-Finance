@@ -69,6 +69,16 @@ const parseReferenceMonthToIsoMonth = (value) => {
   return `${yearPart}-${monthPart}`;
 };
 
+const normalizeIsoReferenceMonth = (value) => {
+  const normalizedValue = normalizeTrimmedText(value);
+
+  if (/^20\d{2}-(0[1-9]|1[0-2])$/.test(normalizedValue)) {
+    return normalizedValue;
+  }
+
+  return parseReferenceMonthToIsoMonth(normalizedValue);
+};
+
 const resolveReportYear = (reportYear, taxYear) => {
   const parsedValue = Number(reportYear);
 
@@ -636,9 +646,125 @@ const normalizeInssReport = ({ userId, document, extraction, payload }) => {
   });
 };
 
+const normalizeCltPayslip = ({ userId, document, extraction, payload }) => {
+  const reportYear = resolveReportYear(payload.reportYear, document.taxYear);
+  const referencePeriod =
+    normalizeIsoReferenceMonth(payload.referenceMonth) || `${reportYear}-01`;
+  const payrollType = normalizeTrimmedText(payload.payrollType) || "monthly";
+  const payerName = payload.employerName || payload.payerName || "Empregador CLT";
+  const payerDocument = payload.employerDocument || payload.payerDocument;
+  const rubrics = Array.isArray(payload.rubrics)
+    ? payload.rubrics
+        .map((rubric) => ({
+          code: normalizeTrimmedText(rubric?.code),
+          description: normalizeTrimmedText(rubric?.description),
+          earningAmount: normalizeRoundedAmount(rubric?.earningAmount),
+          discountAmount: normalizeRoundedAmount(rubric?.discountAmount),
+        }))
+        .filter((rubric) => rubric.description)
+    : [];
+  const baseMetadata = compactObject({
+    reportYear,
+    payrollType,
+    employeeName: normalizeTrimmedText(payload.employeeName),
+    employeeDocument: normalizeDocumentNumber(payload.employeeDocument),
+    rubricsSummary:
+      payload.rubricsSummary && typeof payload.rubricsSummary === "object"
+        ? {
+            count: Number(payload.rubricsSummary.count || rubrics.length),
+            totalEarnings: normalizeRoundedAmount(payload.rubricsSummary.totalEarnings),
+            totalDiscounts: normalizeRoundedAmount(payload.rubricsSummary.totalDiscounts),
+          }
+        : undefined,
+    rubrics,
+  });
+
+  return [
+    buildNormalizedFact({
+      userId,
+      document,
+      extraction,
+      factType: "taxable_income",
+      subcategory: "clt_monthly_gross_income",
+      payerName,
+      payerDocument,
+      referencePeriod,
+      amount: payload.grossAmount,
+      dedupeDiscriminator: `${payrollType}|gross`,
+      metadata: baseMetadata,
+    }),
+    buildNormalizedFact({
+      userId,
+      document,
+      extraction,
+      factType: "withheld_tax",
+      subcategory: "clt_monthly_irrf_withheld",
+      payerName,
+      payerDocument,
+      referencePeriod,
+      amount: payload.irrfAmount,
+      dedupeDiscriminator: `${payrollType}|irrf`,
+      metadata: baseMetadata,
+    }),
+    buildNormalizedFact({
+      userId,
+      document,
+      extraction,
+      factType: "other",
+      subcategory: "clt_monthly_net_income",
+      payerName,
+      payerDocument,
+      referencePeriod,
+      amount: payload.netAmount,
+      dedupeDiscriminator: `${payrollType}|net`,
+      metadata: baseMetadata,
+    }),
+    buildNormalizedFact({
+      userId,
+      document,
+      extraction,
+      factType: "other",
+      subcategory: "clt_monthly_total_discounts",
+      payerName,
+      payerDocument,
+      referencePeriod,
+      amount: payload.totalDiscounts,
+      dedupeDiscriminator: `${payrollType}|discounts`,
+      metadata: baseMetadata,
+    }),
+    buildNormalizedFact({
+      userId,
+      document,
+      extraction,
+      factType: "other",
+      subcategory: "clt_monthly_inss_discount",
+      payerName,
+      payerDocument,
+      referencePeriod,
+      amount: payload.inssAmount,
+      dedupeDiscriminator: `${payrollType}|inss`,
+      metadata: baseMetadata,
+    }),
+    buildNormalizedFact({
+      userId,
+      document,
+      extraction,
+      factType: "other",
+      subcategory: "clt_monthly_fgts_base",
+      payerName,
+      payerDocument,
+      referencePeriod,
+      amount: payload.fgtsBase,
+      dedupeDiscriminator: `${payrollType}|fgts_base`,
+      metadata: baseMetadata,
+    }),
+  ].filter(Boolean);
+};
+
 const NORMALIZERS_BY_DOCUMENT_TYPE = Object.freeze({
   income_report_bank: normalizeBankIncomeReport,
   income_report_employer: normalizeEmployerExtraction,
+  clt_payslip: normalizeCltPayslip,
   income_report_inss: normalizeInssReport,
   medical_statement: normalizeMedicalStatement,
   education_receipt: normalizeEducationReceipt,

@@ -281,6 +281,93 @@ describe("tax fact normalizer", () => {
     );
   });
 
+  it("normaliza holerite CLT em fatos analiticos mensais", () => {
+    const facts = normalizeTaxExtractionToFacts({
+      userId: 7,
+      document: {
+        id: 33,
+        taxYear: 2026,
+        documentType: "clt_payslip",
+      },
+      extraction: {
+        id: 104,
+        extractorName: "clt-payslip",
+        classification: "clt_payslip",
+        confidenceScore: 0.97,
+        rawJson: {
+          extraction: {
+            reportYear: 2025,
+            referenceMonth: "2025-03",
+            payrollType: "monthly",
+            employerName: "ACME LTDA",
+            employerDocument: "12.345.678/0001-90",
+            employeeName: "Joao da Silva",
+            employeeDocument: "123.456.789-00",
+            grossAmount: 8500,
+            totalDiscounts: 1299.35,
+            netAmount: 7200.65,
+            inssAmount: 876,
+            irrfAmount: 423.35,
+            fgtsBase: 8500,
+            rubrics: [
+              {
+                code: "001",
+                description: "SALARIO BASE",
+                earningAmount: 8500,
+                discountAmount: 0,
+              },
+              {
+                code: "998",
+                description: "INSS",
+                earningAmount: 0,
+                discountAmount: 876,
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(facts).toHaveLength(6);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          factType: "taxable_income",
+          category: "clt_payslip",
+          subcategory: "clt_monthly_gross_income",
+          payerDocument: "12345678000190",
+          referencePeriod: "2025-03",
+          amount: 8500,
+        }),
+        expect.objectContaining({
+          factType: "withheld_tax",
+          subcategory: "clt_monthly_irrf_withheld",
+          amount: 423.35,
+        }),
+        expect.objectContaining({
+          factType: "other",
+          subcategory: "clt_monthly_net_income",
+          amount: 7200.65,
+        }),
+        expect.objectContaining({
+          factType: "other",
+          subcategory: "clt_monthly_total_discounts",
+          amount: 1299.35,
+        }),
+        expect.objectContaining({
+          factType: "other",
+          subcategory: "clt_monthly_inss_discount",
+          amount: 876,
+        }),
+        expect.objectContaining({
+          factType: "other",
+          subcategory: "clt_monthly_fgts_base",
+          amount: 8500,
+        }),
+      ]),
+    );
+  });
+
   it("gera dedupe key estavel para a mesma chave logica", () => {
     const keyA = generateTaxFactDedupeKey({
       userId: 7,
