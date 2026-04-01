@@ -2,7 +2,7 @@
 
 > Documento operacional para executar a Sprint 10 com foco em estruturar o dominio CLT com confiabilidade transacional e rastreabilidade analitica.
 
-Status: em andamento; slices S10.1-S10.5 implementados em desenvolvimento em 01/04/2026; gate remoto de S10.6 pendente de deploy.
+Status: concluida; slices S10.1-S10.6 entregues e validados em desenvolvimento e ambiente remoto em 01/04/2026.
 
 ---
 
@@ -101,7 +101,7 @@ Transformar holerite em renda CLT estruturada confiavel, sem contaminar o ledger
 - Executar smoke da trilha CLT de ponta a ponta.
 - Registrar gate formal de encerramento da Sprint 10 com evidencias.
 - Resultado esperado: encerramento da sprint sustentado por execucao real + trilha documental.
-- Status: em andamento (script de smoke criado; evidencias de desenvolvimento prontas; gate remoto pendente deploy).
+- Status: concluido (smoke remoto pos-merge executado com 9 PASS / 0 FAIL, runId 20260401-031639-5835).
 
 ---
 
@@ -116,20 +116,18 @@ Transformar holerite em renda CLT estruturada confiavel, sem contaminar o ledger
 
 ## 8. Pendencia operacional aberta
 
-- Acao pendente: publicar os commits da Sprint 10 e executar o smoke final no ambiente-alvo.
-- Criterio objetivo de conclusao: PR da Sprint 10 com CI verde, merge em `main` e rerun do smoke S10.6 sem bloqueios.
-- Evidencia esperada: branch + commits por slice + PR + CI verde + merge + artefatos do smoke remoto.
-- Status: aberta.
+- Nenhuma pendencia operacional aberta da Sprint 10.
+- Status: encerrada.
 
 ---
 
 ## 9. Proxima acao executavel
 
-- Comando/rotina: publicar branch da Sprint 10, abrir PR e executar gate remoto S10.6 apos merge.
+- Comando/rotina: iniciar kickoff operacional da Sprint 11 com backlog priorizado.
 - Ambiente-alvo: repositorio Control Finance / `main`.
 - Dono: execucao operacional do projeto.
-- Saida esperada: Sprint 10 com fechamento auditavel ponta a ponta (dev + remoto).
-- Bloqueios conhecidos: ambiente remoto ainda sem deploy das alteracoes locais da Sprint 10.
+- Saida esperada: transicao limpa para proxima frente sem passivo da Sprint 10.
+- Bloqueios conhecidos: nenhum bloqueio tecnico critico registrado ao final da Sprint 10.
 
 ---
 

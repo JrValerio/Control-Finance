@@ -1,6 +1,6 @@
 # S10.6 - Gate de Smoke CLT Foundation (2026-04-01)
 
-Status do gate: parcial (desenvolvimento validado; ambiente remoto pendente de deploy)
+Status do gate: concluido (desenvolvimento + ambiente remoto validados)
 
 ---
 
@@ -73,21 +73,43 @@ Artefatos:
 
 - `tmp/smoke-clt-foundation-20260401-023457-7246`
 
+### 2.4 Smoke script S10.6 (ambiente remoto - pos-merge, OK)
+
+Comando:
+
+```bash
+pwsh -NoProfile -File scripts/smoke-tax-clt-foundation.ps1
+```
+
+RunId:
+
+- 20260401-031639-5835
+
+Resultado:
+
+- fluxo completo executado com sucesso no ambiente-alvo
+- `GET /tax/facts` retornou 6 fatos pendentes para aprovacao
+- `POST /tax/facts/bulk-review` retornou 200
+- `GET /tax/income-statement-clt/2026` retornou 200
+- placar final do smoke: 9 PASS / 0 FAIL
+
+Artefatos:
+
+- `tmp/smoke-clt-foundation-20260401-031639-5835`
+- `tmp/smoke-clt-foundation-20260401-031639-5835/checklist-s10-6.json`
+
 ---
 
 ## 3. Decisao de gate
 
-Decisao atual: GO tecnico em desenvolvimento + NO-GO remoto ate deploy
+Decisao atual: GO final (gate S10.6 concluido)
 
-- GO (dev): implementacao e testes locais cobrem S10.1-S10.5 e smoke operacional scriptado
-- NO-GO (remoto): necessario publicar alteracoes e reexecutar smoke S10.6 no ambiente-alvo
+- GO (dev): implementacao e testes locais cobrem S10.1-S10.5
+- GO (remoto): smoke pos-merge executado com sucesso no ambiente-alvo (runId 20260401-031639-5835)
 
 ---
 
 ## 4. Proximos passos obrigatorios
 
-1. Publicar branch com os commits da Sprint 10 (S10.1-S10.5 + S10.6).
-2. Abrir PR e aguardar CI verde.
-3. Mergear em main.
-4. Reexecutar `scripts/smoke-tax-clt-foundation.ps1` no ambiente-alvo.
-5. Atualizar este runbook com evidencias finais e trocar status para gate concluido.
+1. Registrar no roadmap executivo o fechamento oficial da Sprint 10 com referencia ao runId remoto.
+2. Iniciar planejamento operacional da Sprint 11 sem carregar pendencias da Sprint 10.
