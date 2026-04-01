@@ -130,7 +130,7 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
               ? "Recarregue a página para realizar nova sincronização do resumo operacional."
               : "Use a nova tentativa para carregar os indicadores operacionais agora."
           }
-          ctaLabel={hasRetriedLoad ? "Nova tentativa indisponível" : "Tentar novamente"}
+          ctaLabel={hasRetriedLoad ? "Nova tentativa indisponível" : "Recarregar resumo operacional"}
           onCta={handleRetry}
           ctaDisabled={hasRetriedLoad}
           ctaDisabledLabel={hasRetriedLoad ? "Limite de 1 nova tentativa atingido." : undefined}

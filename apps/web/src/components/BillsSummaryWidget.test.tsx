@@ -81,10 +81,10 @@ describe("BillsSummaryWidget", () => {
     renderWidget(onOpenBills);
 
     await waitFor(() => {
-      expect(screen.getByText("Ver pendências →")).toBeInTheDocument();
+      expect(screen.getByText("Regularizar pendências →")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText("Ver pendências →"));
+    await user.click(screen.getByText("Regularizar pendências →"));
     expect(onOpenBills).toHaveBeenCalledOnce();
   });
 
@@ -95,7 +95,7 @@ describe("BillsSummaryWidget", () => {
       expect(screen.getByText(/450[,.]00/)).toBeInTheDocument();
     });
 
-    expect(screen.queryByText("Ver pendências →")).not.toBeInTheDocument();
+    expect(screen.queryByText("Regularizar pendências →")).not.toBeInTheDocument();
   });
 
   it("exibe estado de risco orientativo em caso de erro do getSummary", async () => {

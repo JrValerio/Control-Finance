@@ -317,15 +317,15 @@ const ForecastCard = ({
         <div className="mt-3">
           <OperationalStateBlock
             severity="risco"
-            title="Leitura parcial da projeção"
-            happened="Não foi possível carregar a projeção deste widget."
-            impact="A projeção pode ficar defasada e reduzir a confiança da triagem operacional."
+            title="Fallback da projeção em uso"
+            happened="Parte dos dados da projeção não carregou nesta tentativa."
+            impact="A leitura principal continua, mas pode estar incompleta para decisões de fechamento."
             nextStep={
               hasRetriedLoad
                 ? "Recarregue a página em instantes para tentar uma nova sincronização."
-                : "Use a ação de nova tentativa para buscar os dados atualizados agora."
+                : "Recarregue a projeção para tentar recuperar os dados faltantes agora."
             }
-            ctaLabel={hasRetriedLoad ? "Nova tentativa indisponível" : "Tentar novamente"}
+            ctaLabel={hasRetriedLoad ? "Nova tentativa indisponível" : "Recarregar projeção"}
             onCta={handleRetryLoad}
             ctaDisabled={hasRetriedLoad}
             ctaDisabledLabel={hasRetriedLoad ? "Limite de 1 nova tentativa atingido." : undefined}
@@ -339,6 +339,10 @@ const ForecastCard = ({
             happened={error}
             impact="A projeção continua visível, mas sem o recálculo solicitado agora."
             nextStep="Tente novamente em alguns segundos para atualizar o cenário do mês."
+            ctaLabel="Atualizar projeção"
+            onCta={() => {
+              void handleRecompute();
+            }}
           />
         </div>
       ) : forecast !== null ? (
