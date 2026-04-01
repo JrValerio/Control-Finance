@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import BillModal from "../components/BillModal";
 import { categoriesService } from "../services/categories.service";
 import {
@@ -13,6 +14,13 @@ import { getApiErrorMessage } from "../utils/apiError";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DEFAULT_LIMIT = 20;
+const STATUS_FILTER_VALUES: Array<Exclude<BillStatusFilter, undefined>> = [
+  "pending",
+  "paid",
+  "overdue",
+  "due_soon",
+  "future",
+];
 
 interface CategoryOption {
   id: number;
@@ -35,6 +43,13 @@ const formatReferenceMonth = (value: string | null): string => {
 };
 
 const isCreditCardInvoice = (bill: Bill) => bill.billType === "credit_card_invoice";
+
+const parseStatusFilter = (value: string | null): BillStatusFilter => {
+  if (!value) return undefined;
+  return STATUS_FILTER_VALUES.includes(value as Exclude<BillStatusFilter, undefined>)
+    ? (value as Exclude<BillStatusFilter, undefined>)
+    : undefined;
+};
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -79,7 +94,9 @@ interface BillsPageProps {
 const BillsPage = ({
   onBack = undefined,
 }: BillsPageProps): JSX.Element => {
-  const [statusFilter, setStatusFilter] = useState<BillStatusFilter>(undefined);
+  const location = useLocation();
+  const initialStatusFilter = parseStatusFilter(new URLSearchParams(location.search).get("status"));
+  const [statusFilter, setStatusFilter] = useState<BillStatusFilter>(() => initialStatusFilter);
   const [offset, setOffset] = useState(0);
   const [items, setItems] = useState<Bill[]>([]);
   const [paginationTotal, setPaginationTotal] = useState(0);
@@ -143,9 +160,9 @@ const BillsPage = ({
 
   useEffect(() => {
     void loadSummary();
-    void loadList(0, undefined);
+    void loadList(0, initialStatusFilter);
     void loadCategories();
-  }, [loadSummary, loadList, loadCategories]);
+  }, [loadSummary, loadList, loadCategories, initialStatusFilter]);
 
   // ─── Success message helper ─────────────────────────────────────────────────
 

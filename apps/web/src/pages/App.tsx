@@ -111,7 +111,7 @@ interface MonthOverMonthMetric {
 
 interface AppProps {
   onLogout?: () => void;
-  onOpenBills?: () => void;
+  onOpenBills?: (filter?: "due_soon") => void;
   onOpenCreditCards?: () => void;
   onOpenIncomeSources?: () => void;
   onOpenTax?: () => void;
@@ -1514,6 +1514,11 @@ const App = ({
     onOpenBills?.();
   };
 
+  const handleOpenDueSoonBills = () => {
+    closeMobileActionsMenu();
+    onOpenBills?.("due_soon");
+  };
+
   const handleOpenCreditCards = () => {
     closeMobileActionsMenu();
     onOpenCreditCards?.();
@@ -2451,7 +2456,7 @@ const App = ({
               </p>
             </div>
 
-            <OperationalSummaryPanel />
+            <OperationalSummaryPanel onOpenDueSoonBills={handleOpenDueSoonBills} />
 
             <div className="grid gap-4 xl:grid-cols-3">
               <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
