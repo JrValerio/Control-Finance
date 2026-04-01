@@ -302,7 +302,7 @@ const extractAmountFromMatchingLineEntries = (lineEntries, matcher) => {
 const extractReferenceMonth = (text) => {
   const normalizedText = normalizeText(text);
   const directMatch = normalizedText.match(
-    /(?:competencia|referencia|periodo(?:\s+de)?|mes(?:\s+de)?\s+referencia)[^\d]{0,12}(\d{2})[\/.\-](20\d{2})/i,
+    /(?:competencia|referencia|periodo(?:\s+de)?|mes(?:\s+de)?\s+referencia)[^\d]{0,12}(\d{2})[./-](20\d{2})/i,
   );
 
   if (directMatch) {
@@ -320,7 +320,7 @@ const extractReferenceMonth = (text) => {
       continue;
     }
 
-    const lineMatch = entry.normalized.match(/(\d{2})[\/.\-](20\d{2})/);
+    const lineMatch = entry.normalized.match(/(\d{2})[./-](20\d{2})/);
 
     if (lineMatch) {
       return `${lineMatch[2]}-${lineMatch[1]}`;
@@ -393,7 +393,7 @@ const parsePayslipRubrics = (lineEntries) => {
 
     const codeMatch = entry.raw.match(/^\s*(\d{2,5})\b/);
     const descriptionMatch = entry.raw.match(
-      /^\s*(?:\d{2,5}\s+)?([A-Za-zÀ-ÿ()\/.\-\s]{3,90}?)(?:\s+-?\d[\d.]*,\d{2}){1,3}\s*$/,
+      /^\s*(?:\d{2,5}\s+)?([A-Za-zÀ-ÿ()/.\s-]{3,90}?)(?:\s+-?\d[\d.]*,\d{2}){1,3}\s*$/,
     );
     const description = descriptionMatch?.[1]?.trim() || entry.raw.trim();
 
