@@ -396,7 +396,7 @@ Legenda de status:
 | Sprint | Foco | Status |
 |---|---|---|
 | Sprint 9 | Central do Leão (IRPF MVP) | ✅ |
-| Sprint 10 | CLT / Fundação de Holerite | 🟡 |
+| Sprint 10 | CLT / Fundação de Holerite | ✅ |
 | Sprint 11 | IA operacional por camadas | 🔵 |
 | Sprint 12 | Experiência avançada | 🔵 |
 
@@ -408,7 +408,7 @@ Legenda de status:
 - Sprint 7 concluida.
 - Sprint 8 concluida.
 - Sprint 9 concluida com gate S9.6 executado formalmente.
-- Sprint 10 em execucao tecnica (CLT / Fundacao de Holerite) com S10.1-S10.5 implementados em desenvolvimento.
+- Sprint 10 concluida com S10.1-S10.6 entregues, mergeados e validados no ambiente remoto.
 - S9.1 concluida (contrato fiscal anual e bootstrap) no PR #375.
 - S9.2 backend concluida no PR #377 (preview pos-review, guard rail de taxYear e contrato anual consistente).
 - S9.2 frontend + S9.3 + S9.4 oficializadas no PR #378 (preview na TaxPage, resumo conferivel e modo imprimivel/PDF).
@@ -422,15 +422,15 @@ Legenda de status:
 - Documento operacional da Sprint 10: `docs/roadmaps/sprint-10-clt-fundacao-holerite.md`.
 - Documento operacional da Sprint 5: `docs/roadmaps/sprint-5-renda-confirmada.md`.
 - Handoff-mestre da Sprint 10: `docs/runbooks/s10-kickoff-handoff-mestre-2026-04-01.md`.
-- Gate tecnico S10.6 em desenvolvimento: `docs/runbooks/s10-6-gate-clt-foundation-2026-04-01.md`.
+- Gate tecnico S10.6 concluido: `docs/runbooks/s10-6-gate-clt-foundation-2026-04-01.md`.
 - Evidencias da Sprint 5: PR #355, PR #356, PR #357, PR #358.
 - Evidencias da Sprint 6: PR #359, PR #360, PR #361, PR #362.
 - Evidencias da Sprint 7: PR #364, PR #365, PR #366, PR #367.
 - Evidencias da Sprint 8: PR #369, PR #370, PR #371, PR #372.
 - Evidencias da Sprint 9: PR #374, PR #375, PR #376, PR #377, PR #378, PR #381, PR #382, PR #383, PR #384.
-- Evidencias em desenvolvimento da Sprint 10: commits locais por slice S10.1-S10.5 + smoke script `scripts/smoke-tax-clt-foundation.ps1`.
-- Proxima linha: publicar PR da Sprint 10, obter CI verde e rerodar smoke S10.6 no ambiente-alvo apos merge.
-- Bloqueio conhecido: ambiente remoto ainda sem deploy das alteracoes locais da Sprint 10.
+- Evidencias da Sprint 10: PR #386 (mergeado), checks verdes, smoke remoto S10.6 runId 20260401-031639-5835 (9 PASS / 0 FAIL).
+- Proxima linha: iniciar planejamento e kickoff tecnico da Sprint 11.
+- Bloqueio conhecido: nenhum bloqueio tecnico critico aberto no fechamento da Sprint 10.
 - Sprint 11 permanece em pre-planejamento, sem execucao formal enquanto a fundacao da Sprint 10 nao estiver consolidada.
 - Pendências manuais continuam rastreadas fora de CI (prova visual do PR #348 e validação E2E real do OAuth).
 
