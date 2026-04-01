@@ -91,6 +91,7 @@ function Invoke-Api {
         [Parameter(Mandatory = $true)]
         [string]$Path,
         [hashtable]$Headers = @{},
+        [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession = $null,
         $BodyObject = $null,
         [hashtable]$Form = $null
     )
@@ -98,15 +99,28 @@ function Invoke-Api {
     $uri = "$BaseUrl$Path"
 
     try {
+        $invokeArgs = @{
+            Method  = $Method
+            Uri     = $uri
+            Headers = $Headers
+        }
+
+        if ($null -ne $WebSession) {
+            $invokeArgs.WebSession = $WebSession
+        }
+
         if ($null -ne $Form) {
-            $response = Invoke-WebRequest -Method $Method -Uri $uri -Headers $Headers -Form $Form
+            $invokeArgs.Form = $Form
+            $response = Invoke-WebRequest @invokeArgs
         }
         elseif ($null -ne $BodyObject) {
             $jsonBody = $BodyObject | ConvertTo-Json -Depth 20
-            $response = Invoke-WebRequest -Method $Method -Uri $uri -Headers $Headers -ContentType "application/json" -Body $jsonBody
+            $invokeArgs.ContentType = "application/json"
+            $invokeArgs.Body = $jsonBody
+            $response = Invoke-WebRequest @invokeArgs
         }
         else {
-            $response = Invoke-WebRequest -Method $Method -Uri $uri -Headers $Headers
+            $response = Invoke-WebRequest @invokeArgs
         }
 
         $json = $null
@@ -162,6 +176,7 @@ if (-not (Get-Command Invoke-WebRequest).Parameters.ContainsKey("Form")) {
 }
 
 New-Item -ItemType Directory -Path $artifactDir -Force | Out-Null
+$webSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 
 $sampleCsv = @(
     "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte"
@@ -187,7 +202,7 @@ if (-not $Token) {
     $registerResponse = Invoke-Api -Method "POST" -Path "/auth/register" -BodyObject @{
         email    = $Email
         password = $LoginSecret
-    }
+    } -WebSession $webSession
 
     if ($registerResponse.StatusCode -eq 201) {
         Pass "POST /auth/register -> 201"
@@ -200,7 +215,7 @@ if (-not $Token) {
     $loginResponse = Invoke-Api -Method "POST" -Path "/auth/login" -BodyObject @{
         email    = $Email
         password = $LoginSecret
-    }
+    } -WebSession $webSession
 
     $Token = [string]($loginResponse.Json.token)
     if (-not $Token) {
@@ -209,6 +224,9 @@ if (-not $Token) {
 
     if ($loginResponse.StatusCode -eq 200 -and $Token) {
         Pass "POST /auth/login -> 200 com token"
+    }
+    elseif ($loginResponse.StatusCode -eq 200) {
+        Pass "POST /auth/login -> 200 com sessao autenticada (cookie)"
     }
     else {
         Fail "POST /auth/login sem token valido"
@@ -219,9 +237,12 @@ else {
     Pass "Token informado manualmente"
 }
 
-$authHeaders = @{ Authorization = "Bearer $Token" }
+$authHeaders = @{}
+if ($Token) {
+    $authHeaders.Authorization = "Bearer $Token"
+}
 
-$bootstrapResponse = Invoke-Api -Method "GET" -Path "/tax" -Headers $authHeaders
+$bootstrapResponse = Invoke-Api -Method "GET" -Path "/tax" -Headers $authHeaders -WebSession $webSession
 if ($bootstrapResponse.StatusCode -eq 200) {
     Pass "GET /tax -> 200"
     Save-JsonArtifact -Name "01-bootstrap.json" -Payload $bootstrapResponse.Json
@@ -236,7 +257,7 @@ $uploadResponse = Invoke-Api -Method "POST" -Path "/tax/documents" -Headers $aut
     sourceLabel = "Smoke S9.5 $runId"
     sourceHint  = "Fluxo ponta a ponta IRPF MVP"
     file        = Get-Item $sampleCsvPath
-}
+} -WebSession $webSession
 
 $documentId = [int]($uploadResponse.Json.document.id)
 if ($uploadResponse.StatusCode -eq 201 -and $documentId -gt 0) {
@@ -248,7 +269,7 @@ else {
     exit 1
 }
 
-$reprocessResponse = Invoke-Api -Method "POST" -Path "/tax/documents/$documentId/reprocess" -Headers $authHeaders
+$reprocessResponse = Invoke-Api -Method "POST" -Path "/tax/documents/$documentId/reprocess" -Headers $authHeaders -WebSession $webSession
 if ($reprocessResponse.StatusCode -eq 200) {
     Pass "POST /tax/documents/$documentId/reprocess -> 200"
     Save-JsonArtifact -Name "03-reprocess-document.json" -Payload $reprocessResponse.Json
@@ -258,7 +279,7 @@ else {
     exit 1
 }
 
-$factsResponse = Invoke-Api -Method "GET" -Path "/tax/facts?taxYear=$TaxYear&reviewStatus=pending&pageSize=100" -Headers $authHeaders
+$factsResponse = Invoke-Api -Method "GET" -Path "/tax/facts?taxYear=$TaxYear&reviewStatus=pending&pageSize=100" -Headers $authHeaders -WebSession $webSession
 $factIds = @()
 if ($factsResponse.Json -and $factsResponse.Json.items) {
     $factIds = @($factsResponse.Json.items | ForEach-Object { [int]$_.id } | Where-Object { $_ -gt 0 })
@@ -277,7 +298,7 @@ $bulkReviewResponse = Invoke-Api -Method "POST" -Path "/tax/facts/bulk-review" -
     factIds = $factIds
     action  = "approve"
     note    = "Aprovacao em lote via smoke S9.5 ($runId)."
-}
+} -WebSession $webSession
 
 if ($bulkReviewResponse.StatusCode -eq 200) {
     Pass "POST /tax/facts/bulk-review -> 200"
@@ -288,8 +309,8 @@ else {
     exit 1
 }
 
-$summaryBeforeRebuild = Invoke-Api -Method "GET" -Path "/tax/summary/$TaxYear" -Headers $authHeaders
-$obligationResponse = Invoke-Api -Method "GET" -Path "/tax/obligation/$TaxYear" -Headers $authHeaders
+$summaryBeforeRebuild = Invoke-Api -Method "GET" -Path "/tax/summary/$TaxYear" -Headers $authHeaders -WebSession $webSession
+$obligationResponse = Invoke-Api -Method "GET" -Path "/tax/obligation/$TaxYear" -Headers $authHeaders -WebSession $webSession
 
 if ($summaryBeforeRebuild.StatusCode -eq 200) {
     Pass "GET /tax/summary/$TaxYear -> 200"
@@ -309,7 +330,7 @@ else {
     exit 1
 }
 
-$rebuildResponse = Invoke-Api -Method "POST" -Path "/tax/summary/$TaxYear/rebuild" -Headers $authHeaders
+$rebuildResponse = Invoke-Api -Method "POST" -Path "/tax/summary/$TaxYear/rebuild" -Headers $authHeaders -WebSession $webSession
 if ($rebuildResponse.StatusCode -eq 200) {
     Pass "POST /tax/summary/$TaxYear/rebuild -> 200"
     Save-JsonArtifact -Name "08-summary-rebuild.json" -Payload $rebuildResponse.Json
@@ -319,7 +340,7 @@ else {
     exit 1
 }
 
-$exportJsonResponse = Invoke-Api -Method "GET" -Path "/tax/export/$TaxYear?format=json" -Headers $authHeaders
+$exportJsonResponse = Invoke-Api -Method "GET" -Path "/tax/export/${TaxYear}?format=json" -Headers $authHeaders -WebSession $webSession
 $exportJsonPath = Join-Path $artifactDir "09-export-dossie.json"
 $exportJsonResponse.Raw | Out-File -FilePath $exportJsonPath -Encoding utf8
 
@@ -332,22 +353,22 @@ catch {
 }
 
 if ($exportJsonResponse.StatusCode -eq 200 -and $exportJsonPayload -and $exportJsonPayload.manifest) {
-    Pass "GET /tax/export/$TaxYear?format=json -> 200"
+    Pass "GET /tax/export/${TaxYear}?format=json -> 200"
 }
 else {
-    Fail "GET /tax/export/$TaxYear?format=json sem payload valido"
+    Fail "GET /tax/export/${TaxYear}?format=json sem payload valido"
     exit 1
 }
 
-$exportCsvResponse = Invoke-Api -Method "GET" -Path "/tax/export/$TaxYear?format=csv" -Headers $authHeaders
+$exportCsvResponse = Invoke-Api -Method "GET" -Path "/tax/export/${TaxYear}?format=csv" -Headers $authHeaders -WebSession $webSession
 $exportCsvPath = Join-Path $artifactDir "10-export-dossie.csv"
 $exportCsvResponse.Raw | Out-File -FilePath $exportCsvPath -Encoding utf8
 
 if ($exportCsvResponse.StatusCode -eq 200 -and $exportCsvResponse.Raw -match "factId,factType,category") {
-    Pass "GET /tax/export/$TaxYear?format=csv -> 200"
+    Pass "GET /tax/export/${TaxYear}?format=csv -> 200"
 }
 else {
-    Fail "GET /tax/export/$TaxYear?format=csv sem cabecalho esperado"
+    Fail "GET /tax/export/${TaxYear}?format=csv sem cabecalho esperado"
     exit 1
 }
 
