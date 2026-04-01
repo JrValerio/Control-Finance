@@ -411,6 +411,7 @@ Legenda de status:
 - S9.1 concluida (contrato fiscal anual e bootstrap) no PR #375.
 - S9.2 backend concluida no PR #377 (preview pos-review, guard rail de taxYear e contrato anual consistente).
 - S9.2 frontend + S9.3 + S9.4 oficializadas no PR #378 (preview na TaxPage, resumo conferivel e modo imprimivel/PDF).
+- S9.5 iniciada com smoke operacional ponta a ponta e checklist objetivo de prontidao (`scripts/smoke-tax-irpf-mvp.ps1` + `docs/runbooks/s9-5-smoke-irpf-mvp.md`).
 - Subfrente oficial da Sprint 9: UX fiscal + espelhamento frontend do dominio fiscal.
 - Documento operacional da Sprint 6: `docs/roadmaps/sprint-6-guard-rails-documentais.md`.
 - Documento operacional da Sprint 7: `docs/roadmaps/sprint-7-conta-corrente-operacional.md`.
@@ -422,7 +423,7 @@ Legenda de status:
 - Evidencias da Sprint 7: PR #364, PR #365, PR #366, PR #367.
 - Evidencias da Sprint 8: PR #369, PR #370, PR #371, PR #372.
 - Evidencias da Sprint 9: PR #374, PR #375, PR #376, PR #377, PR #378.
-- Proxima linha: continuar os proximos slices do IRPF MVP a partir da base fiscal ja conferivel e imprimivel, ate gate formal de encerramento da Sprint 9.
+- Proxima linha: executar ciclo de evidencias da S9.5 (smoke tecnico + conferencia manual) e fechar pendencias residualizadas antes do gate formal de encerramento da Sprint 9.
 - Sprint 10 pode ser aberta em paralelo de forma nao bloqueante (discovery, contrato e DoD), sem misturar PRs com continuidade fiscal da Sprint 9.
 - Pendências manuais continuam rastreadas fora de CI (prova visual do PR #348 e validação E2E real do OAuth).
 
