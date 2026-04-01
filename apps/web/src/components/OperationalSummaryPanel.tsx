@@ -185,8 +185,10 @@ const OperationalSummaryPanel = (): JSX.Element | null => {
   const billsAccent: TileProps["accent"] =
     bills.overdueCount > 0 ? "danger" : bills.dueSoonCount > 0 ? "warning" : "muted";
   const billsTertiaryTokens: string[] = [];
-  if (bills.overdueCount > 0 && bills.dueSoonCount > 0) {
-    billsTertiaryTokens.push(`${bills.dueSoonCount} a vencer`);
+  if (bills.dueSoonCount > 0) {
+    billsTertiaryTokens.push(
+      `Urgência 7d: ${bills.dueSoonCount} conta${bills.dueSoonCount > 1 ? "s" : ""} • ${money(bills.dueSoonTotal)}`,
+    );
   }
   if (hasUpcomingBills) {
     billsTertiaryTokens.push(
