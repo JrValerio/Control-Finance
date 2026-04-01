@@ -71,7 +71,7 @@ describe("OperationalSummaryPanel", () => {
     expect(screen.getByText("2 vencidas somam R$ 300,00")).toBeInTheDocument();
   });
 
-  it("mantem saldo disponivel quando nao ha vencidas", async () => {
+  it("exibe saldo em 7 dias quando ha contas a vencer e nenhuma vencida", async () => {
     vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
       buildSnapshot({
         bankBalance: 1000,
@@ -89,9 +89,35 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
+      expect(screen.getByText("Saldo em 7 dias: R$ 920,00")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("1 em 7 dias somam R$ 80,00")).toBeInTheDocument();
+    expect(screen.queryByText("Saldo disponível")).not.toBeInTheDocument();
+  });
+
+  it("mantem saldo disponivel quando nao ha vencidas nem contas em 7 dias", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        bankBalance: 1000,
+        bills: {
+          overdueCount: 0,
+          overdueTotal: 0,
+          dueSoonCount: 0,
+          dueSoonTotal: 0,
+          upcomingCount: 1,
+          upcomingTotal: 120,
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
       expect(screen.getByText("Saldo disponível")).toBeInTheDocument();
     });
 
+    expect(screen.queryByText(/Saldo em 7 dias:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Saldo técnico:/)).not.toBeInTheDocument();
   });
 

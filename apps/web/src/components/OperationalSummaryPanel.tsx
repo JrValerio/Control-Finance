@@ -134,15 +134,42 @@ const OperationalSummaryPanel = (): JSX.Element | null => {
 
   // ── Tile 1: Bank balance ──────────────────────────────────────────────────
   const hasOverdueBills = bills.overdueCount > 0;
+  const hasDueSoonBills = bills.dueSoonCount > 0;
   const technicalBalance = bankBalance - bills.overdueTotal;
+  const shortTermBalance = technicalBalance - bills.dueSoonTotal;
+  const shouldShowShortTermBalance = hasDueSoonBills && !hasOverdueBills;
+
+  const bankTileSecondary = hasOverdueBills
+    ? `Saldo técnico: ${money(technicalBalance)}`
+    : shouldShowShortTermBalance
+      ? `Saldo em 7 dias: ${money(shortTermBalance)}`
+      : "Saldo disponível";
+
+  const bankTileDetails: string[] = [];
+  if (hasOverdueBills) {
+    bankTileDetails.push(
+      `${bills.overdueCount} vencida${bills.overdueCount > 1 ? "s" : ""} somam ${money(bills.overdueTotal)}`,
+    );
+  }
+  if (hasDueSoonBills) {
+    bankTileDetails.push(
+      `${bills.dueSoonCount} em 7 dias somam ${money(bills.dueSoonTotal)}`,
+    );
+  }
+
   const bankTile: TileProps = {
     label: "Conta",
     primary: money(bankBalance),
-    secondary: hasOverdueBills ? `Saldo técnico: ${money(technicalBalance)}` : "Saldo disponível",
-    tertiary: hasOverdueBills
-      ? `${bills.overdueCount} vencida${bills.overdueCount > 1 ? "s" : ""} somam ${money(bills.overdueTotal)}`
-      : undefined,
-    accent: technicalBalance < 0 ? "danger" : hasOverdueBills ? "warning" : bankBalance < 0 ? "danger" : "default",
+    secondary: bankTileSecondary,
+    tertiary: bankTileDetails.length > 0 ? bankTileDetails.join(" • ") : undefined,
+    accent:
+      shortTermBalance < 0
+        ? "danger"
+        : hasOverdueBills || hasDueSoonBills
+          ? "warning"
+          : bankBalance < 0
+            ? "danger"
+            : "default",
   };
 
   // ── Tile 2: Bills ─────────────────────────────────────────────────────────
