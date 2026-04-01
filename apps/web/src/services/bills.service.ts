@@ -77,12 +77,15 @@ export interface UtilityPanelSummary {
   overdueAmount: number;
   dueSoonCount: number;
   dueSoonAmount: number;
+  paidCount: number;
+  paidAmount: number;
 }
 
 export interface UtilityPanel {
   overdue: Bill[];
   dueSoon: Bill[];
   upcoming: Bill[];
+  paid: Bill[];
   summary: UtilityPanelSummary;
 }
 
@@ -408,12 +411,14 @@ export const billsService = {
       overdue: BillApiPayload[];
       dueSoon: BillApiPayload[];
       upcoming: BillApiPayload[];
+      paid: BillApiPayload[];
       summary: UtilityPanelSummary;
     }>("/bills/utility-panel");
     return {
       overdue: (data.overdue ?? []).map(normalizeBill).filter(isValidBill),
       dueSoon: (data.dueSoon ?? []).map(normalizeBill).filter(isValidBill),
       upcoming: (data.upcoming ?? []).map(normalizeBill).filter(isValidBill),
+      paid: (data.paid ?? []).map(normalizeBill).filter(isValidBill),
       summary: {
         totalPending: Number(data.summary?.totalPending) || 0,
         totalAmount: Number(data.summary?.totalAmount) || 0,
@@ -421,6 +426,8 @@ export const billsService = {
         overdueAmount: Number(data.summary?.overdueAmount) || 0,
         dueSoonCount: Number(data.summary?.dueSoonCount) || 0,
         dueSoonAmount: Number(data.summary?.dueSoonAmount) || 0,
+        paidCount: Number(data.summary?.paidCount) || 0,
+        paidAmount: Number(data.summary?.paidAmount) || 0,
       },
     };
   },

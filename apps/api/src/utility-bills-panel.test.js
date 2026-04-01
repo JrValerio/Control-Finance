@@ -77,10 +77,13 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.overdue).toHaveLength(0);
     expect(res.body.dueSoon).toHaveLength(0);
     expect(res.body.upcoming).toHaveLength(0);
+    expect(res.body.paid).toHaveLength(0);
     expect(res.body.summary.totalPending).toBe(0);
     expect(res.body.summary.totalAmount).toBe(0);
     expect(res.body.summary.overdueCount).toBe(0);
     expect(res.body.summary.dueSoonCount).toBe(0);
+    expect(res.body.summary.paidCount).toBe(0);
+    expect(res.body.summary.paidAmount).toBe(0);
   });
 
   // ─── Bucket boundaries ────────────────────────────────────────────────────
@@ -96,6 +99,7 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.overdue[0].title).toBe("Energia vencida");
     expect(res.body.dueSoon).toHaveLength(0);
     expect(res.body.upcoming).toHaveLength(0);
+    expect(res.body.paid).toHaveLength(0);
   });
 
   it("conta com vencimento hoje vai para dueSoon", async () => {
@@ -108,6 +112,7 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.overdue).toHaveLength(0);
     expect(res.body.dueSoon).toHaveLength(1);
     expect(res.body.dueSoon[0].title).toBe("Água vence hoje");
+    expect(res.body.paid).toHaveLength(0);
   });
 
   it("conta com vencimento em 7 dias vai para dueSoon (limite inclusive)", async () => {
@@ -121,6 +126,7 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.dueSoon[0].title).toBe("Internet 7 dias");
     expect(res.body.overdue).toHaveLength(0);
     expect(res.body.upcoming).toHaveLength(0);
+    expect(res.body.paid).toHaveLength(0);
   });
 
   it("conta com vencimento em 8 dias vai para upcoming (fora da janela dueSoon)", async () => {
@@ -134,6 +140,7 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.upcoming[0].title).toBe("Gás próxima semana");
     expect(res.body.overdue).toHaveLength(0);
     expect(res.body.dueSoon).toHaveLength(0);
+    expect(res.body.paid).toHaveLength(0);
   });
 
   it("mistura de buckets: distribui corretamente e totaliza summary", async () => {
@@ -152,6 +159,7 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.overdue).toHaveLength(2);
     expect(res.body.dueSoon).toHaveLength(2);
     expect(res.body.upcoming).toHaveLength(2);
+    expect(res.body.paid).toHaveLength(0);
 
     expect(res.body.summary.overdueCount).toBe(2);
     expect(res.body.summary.overdueAmount).toBeCloseTo(200);
@@ -159,6 +167,8 @@ describe("GET /bills/utility-panel", () => {
     expect(res.body.summary.dueSoonAmount).toBeCloseTo(130);
     expect(res.body.summary.totalPending).toBe(6);
     expect(res.body.summary.totalAmount).toBeCloseTo(430);
+    expect(res.body.summary.paidCount).toBe(0);
+    expect(res.body.summary.paidAmount).toBe(0);
   });
 
   // ─── bill_type filter ─────────────────────────────────────────────────────
@@ -185,7 +195,7 @@ describe("GET /bills/utility-panel", () => {
     expect(titles).toContain("TV incluída");
   });
 
-  it("exclui contas ja pagas", async () => {
+  it("separa contas ja pagas no bucket paid sem afetar total pendente", async () => {
     const token = await registerAndLogin("util-paid@test.dev");
 
     // Create and pay one bill
@@ -202,6 +212,10 @@ describe("GET /bills/utility-panel", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.summary.totalPending).toBe(1);
+    expect(res.body.summary.paidCount).toBe(1);
+    expect(res.body.summary.paidAmount).toBeCloseTo(150);
+    expect(res.body.paid).toHaveLength(1);
+    expect(res.body.paid[0].title).toBe("Energia paga");
     const allBills = [...res.body.overdue, ...res.body.dueSoon, ...res.body.upcoming];
     expect(allBills[0].title).toBe("Água pendente");
   });

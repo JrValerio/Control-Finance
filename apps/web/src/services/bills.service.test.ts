@@ -156,4 +156,49 @@ describe("bills service billType normalization", () => {
       title: "Conta editada",
     });
   });
+
+  it("mapeia painel utilitario com bucket paid e resumo dedicado", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        overdue: [],
+        dueSoon: [],
+        upcoming: [],
+        paid: [
+          {
+            id: 16,
+            user_id: 7,
+            title: "Energia paga",
+            amount: 150,
+            due_date: "2026-06-10",
+            status: "paid",
+            paid_at: "2026-06-09T10:00:00.000Z",
+            bill_type: "energy",
+          },
+        ],
+        summary: {
+          totalPending: 0,
+          totalAmount: 0,
+          overdueCount: 0,
+          overdueAmount: 0,
+          dueSoonCount: 0,
+          dueSoonAmount: 0,
+          paidCount: 1,
+          paidAmount: 150,
+        },
+      },
+    });
+
+    const result = await billsService.getUtilityPanel();
+
+    expect(getMock).toHaveBeenCalledWith("/bills/utility-panel");
+    expect(result.paid).toHaveLength(1);
+    expect(result.paid[0]).toMatchObject({
+      title: "Energia paga",
+      status: "paid",
+      billType: "energy",
+      paidAt: "2026-06-09T10:00:00.000Z",
+    });
+    expect(result.summary.paidCount).toBe(1);
+    expect(result.summary.paidAmount).toBe(150);
+  });
 });

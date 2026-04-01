@@ -22,6 +22,12 @@ const formatDueDate = (iso: string): string => {
   return `${day}/${month}/${year}`;
 };
 
+const formatDisplayDate = (value: string | null): string => {
+  if (!value) return "";
+  const isoDate = value.includes("T") ? value.slice(0, 10) : value;
+  return formatDueDate(isoDate);
+};
+
 // ─── Reconciliation state per bill ───────────────────────────────────────────
 
 type ReconcilePhase =
@@ -260,6 +266,7 @@ const EMPTY_PANEL: UtilityPanel = {
   overdue: [],
   dueSoon: [],
   upcoming: [],
+  paid: [],
   summary: {
     totalPending: 0,
     totalAmount: 0,
@@ -267,6 +274,8 @@ const EMPTY_PANEL: UtilityPanel = {
     overdueAmount: 0,
     dueSoonCount: 0,
     dueSoonAmount: 0,
+    paidCount: 0,
+    paidAmount: 0,
   },
 };
 
@@ -371,8 +380,9 @@ const UtilityBillsWidget = (): JSX.Element => {
     );
   }
 
-  const { overdue, dueSoon, upcoming, summary } = panel;
-  const hasAny = summary.totalPending > 0;
+  const { overdue, dueSoon, upcoming, paid, summary } = panel;
+  const hasAnyPending = summary.totalPending > 0;
+  const hasAnyOperational = hasAnyPending || summary.paidCount > 0;
 
   const renderBillRow = (bill: Bill, urgency: "overdue" | "due_soon" | "upcoming") => (
     <BillRow
@@ -396,12 +406,14 @@ const UtilityBillsWidget = (): JSX.Element => {
         <div>
           <h3 className="text-sm font-medium text-cf-text-primary">Contas de consumo</h3>
           <p className="text-xs text-cf-text-secondary">
-            {hasAny
+            {hasAnyPending
               ? `${summary.totalPending} ${summary.totalPending === 1 ? "conta pendente" : "contas pendentes"}`
-              : "Nenhuma conta de consumo pendente."}
+              : summary.paidCount > 0
+                ? `${summary.paidCount} ${summary.paidCount === 1 ? "conta já paga" : "contas já pagas"}`
+                : "Nenhuma conta de consumo pendente."}
           </p>
         </div>
-        {hasAny ? (
+        {hasAnyPending ? (
           <div className="text-right">
             <p className="text-xs font-semibold text-cf-text-primary">{money(summary.totalAmount)}</p>
             <p className="text-[10px] text-cf-text-secondary">total pendente</p>
@@ -410,7 +422,7 @@ const UtilityBillsWidget = (): JSX.Element => {
       </div>
 
       {/* Empty state */}
-      {!hasAny ? (
+      {!hasAnyOperational ? (
         <div className="rounded border border-dashed border-cf-border bg-cf-bg-subtle px-3 py-3 text-sm text-cf-text-secondary">
           Cadastre suas contas de água, energia, internet, telefone e TV para acompanhar o vencimento aqui.
         </div>
@@ -479,6 +491,44 @@ const UtilityBillsWidget = (): JSX.Element => {
               </div>
               <div className="divide-y divide-cf-border rounded border border-cf-border bg-cf-bg-subtle px-3">
                 {upcoming.map((b) => renderBillRow(b, "upcoming"))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Já pagas */}
+          {paid.length > 0 ? (
+            <div className={upcoming.length > 0 ? "mt-3" : ""}>
+              <div className="mb-1 flex items-center justify-between">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
+                  Já pagas ({paid.length})
+                </p>
+                <p className="text-[10px] font-medium text-emerald-700">{money(summary.paidAmount)}</p>
+              </div>
+              <div className="divide-y divide-cf-border rounded border border-emerald-200 bg-emerald-50 px-3">
+                {paid.slice(0, 5).map((bill) => {
+                  const typeLabel = bill.billType
+                    ? (BILL_TYPE_LABELS[bill.billType] ?? bill.billType)
+                    : null;
+
+                  return (
+                    <div key={bill.id} className="flex items-center justify-between gap-2 py-1.5">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-xs text-cf-text-primary">{bill.title}</span>
+                          {typeLabel ? (
+                            <span className="flex-shrink-0 rounded bg-white/70 px-1 py-0.5 text-[10px] text-cf-text-secondary">
+                              {typeLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-[10px] text-emerald-700">
+                          pago em {formatDisplayDate(bill.paidAt) || formatDueDate(bill.dueDate)}
+                        </p>
+                      </div>
+                      <p className="text-xs font-medium text-emerald-700">{money(bill.amount)}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : null}
