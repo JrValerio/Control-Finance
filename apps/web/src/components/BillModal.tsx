@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { parseCurrencyInput, getTodayISODate, isValidISODate } from "./DatabaseUtils";
-import { billsService, type Bill, type CreateBillPayload } from "../services/bills.service";
+import {
+  billsService,
+  type Bill,
+  type BillType,
+  type CreateBillPayload,
+} from "../services/bills.service";
 
 interface CategoryOption {
   id: number;
@@ -13,7 +18,7 @@ export interface BillPrefill {
   dueDate?: string;
   provider?: string;
   referenceMonth?: string;
-  billType?: string;
+  billType?: BillType;
   sourceImportSessionId?: string;
 }
 
