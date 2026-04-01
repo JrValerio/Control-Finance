@@ -2454,6 +2454,9 @@ const App = ({
               <p className="mt-1 text-xs text-cf-text-secondary">
                 O que pede ação agora: projeção, pendências, cartões, renda principal e sinais de risco.
               </p>
+              <p className="mt-1 text-xs text-cf-text-secondary">
+                Níveis operacionais padronizados: normal, atenção e risco.
+              </p>
             </div>
 
             <OperationalSummaryPanel onOpenDueSoonBills={handleOpenDueSoonBills} />

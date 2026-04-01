@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { billsService, type BillsSummary } from "../services/bills.service";
 import { useMaskedCurrency } from "../context/DiscreetModeContext";
+import { OperationalSeverityBadge, OperationalStateBlock, type OperationalSeverity } from "./OperationalStateBlock";
 
 interface BillsSummaryWidgetProps {
   onOpenBills?: () => void;
@@ -9,13 +10,18 @@ interface BillsSummaryWidgetProps {
 const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Element | null => {
   const [summary, setSummary] = useState<BillsSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadError, setHasLoadError] = useState(false);
 
   useEffect(() => {
     billsService
       .getSummary()
-      .then(setSummary)
+      .then((data) => {
+        setSummary(data);
+        setHasLoadError(false);
+      })
       .catch(() => {
         setSummary(null);
+        setHasLoadError(true);
       })
       .finally(() => setIsLoading(false));
   }, []);
@@ -29,22 +35,66 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
     );
   }
 
-  if (!summary) return null;
+  if (hasLoadError) {
+    return (
+      <div className="rounded border border-red-300 bg-cf-surface p-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
+          <OperationalSeverityBadge severity="risco" />
+        </div>
+
+        <OperationalStateBlock
+          severity="risco"
+          title="Resumo de pendências indisponível"
+          happened="A consulta de contas pendentes e vencidas falhou nesta tentativa."
+          impact="Você pode perder visibilidade de cobrança imediata e risco de juros."
+          nextStep={
+            onOpenBills
+              ? "Abra o módulo de contas para revisar os lançamentos manualmente agora."
+              : "Atualize a página em instantes para tentar carregar o resumo novamente."
+          }
+          ctaLabel={onOpenBills ? "Ver pendências" : undefined}
+          onCta={onOpenBills}
+        />
+      </div>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <div className="rounded border border-amber-300 bg-cf-surface p-4">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
+          <OperationalSeverityBadge severity="atencao" />
+        </div>
+
+        <OperationalStateBlock
+          severity="atencao"
+          title="Sem base suficiente para o resumo"
+          happened="Ainda não há dados de pendências consolidados para este período."
+          impact="A triagem de contas pode ficar incompleta até que novas contas sejam registradas."
+          nextStep="Cadastre ou atualize contas para liberar esta leitura operacional."
+        />
+      </div>
+    );
+  }
 
   const hasOverdueBills = summary.overdueCount > 0;
-  const cardToneClass = hasOverdueBills ? "border-red-300" : "border-cf-border";
-  const statusBadgeClass = hasOverdueBills
-    ? "border-red-200 bg-red-50 text-red-700"
-    : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  const hasPendingBills = summary.pendingCount > 0;
+  const severityLevel: OperationalSeverity = hasOverdueBills ? "risco" : hasPendingBills ? "atencao" : "normal";
+  const cardToneClass = hasOverdueBills ? "border-red-300" : hasPendingBills ? "border-amber-300" : "border-cf-border";
+  const statusContext = hasOverdueBills
+    ? "Há contas vencidas exigindo ação imediata."
+    : hasPendingBills
+      ? "Há contas pendentes sem atraso no momento."
+      : "Sem pendências ou vencimentos no recorte atual.";
 
   return (
     <div className={`rounded border bg-cf-surface p-4 ${cardToneClass}`}>
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium text-cf-text-primary">Pendências</h3>
-          <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
-            {hasOverdueBills ? "Ação imediata" : "Em dia"}
-          </span>
+          <OperationalSeverityBadge severity={severityLevel} />
         </div>
         {onOpenBills ? (
           <button
@@ -58,7 +108,7 @@ const BillsSummaryWidget = ({ onOpenBills }: BillsSummaryWidgetProps): JSX.Eleme
       </div>
 
       <p className="mb-3 text-xs text-cf-text-secondary">
-        Priorize contas vencidas para evitar juros e, depois, trate as próximas pendências.
+        {statusContext}
       </p>
 
       <div className="grid grid-cols-2 gap-3">

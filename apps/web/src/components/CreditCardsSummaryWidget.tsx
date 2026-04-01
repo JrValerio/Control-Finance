@@ -5,6 +5,7 @@ import {
   type CreditCardItem,
   type CreditCardInvoicePdf,
 } from "../services/credit-cards.service";
+import { OperationalSeverityBadge, OperationalStateBlock, type OperationalSeverity } from "./OperationalStateBlock";
 
 interface CreditCardsSummaryWidgetProps {
   onOpenCreditCards?: () => void;
@@ -263,21 +264,12 @@ const CreditCardsSummaryWidget = ({
   const usageProgressWidthPct = Math.min(100, aggregate.usagePct);
   const hasCriticalInvoices = aggregate.pendingInvoicesCount > 0;
   const hasExceededLimit = aggregate.usageStatus === "exceeded";
+  const severityLevel: OperationalSeverity = hasExceededLimit ? "risco" : hasCriticalInvoices ? "atencao" : "normal";
   const cardToneClass = hasExceededLimit
     ? "border-red-300"
     : hasCriticalInvoices
       ? "border-amber-300"
       : "border-cf-border";
-  const statusBadgeClass = hasExceededLimit
-    ? "border-red-200 bg-red-50 text-red-700"
-    : hasCriticalInvoices
-      ? "border-amber-200 bg-amber-50 text-amber-700"
-      : "border-emerald-200 bg-emerald-50 text-emerald-700";
-  const statusBadgeLabel = hasExceededLimit
-    ? "Limite excedido"
-    : hasCriticalInvoices
-      ? "Atenção"
-      : "Estável";
 
   if (isLoading) {
     return (
@@ -289,22 +281,25 @@ const CreditCardsSummaryWidget = ({
 
   if (hasError) {
     return (
-      <div className="rounded border border-cf-border bg-cf-surface p-4">
+      <div className="rounded border border-red-300 bg-cf-surface p-4">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-cf-text-primary">Cartões</h3>
-          {onOpenCreditCards ? (
-            <button
-              type="button"
-              onClick={onOpenCreditCards}
-              className="text-xs text-brand-1 hover:underline"
-            >
-              Ver cartões →
-            </button>
-          ) : null}
+          <OperationalSeverityBadge severity="risco" />
         </div>
-        <p className="text-sm text-cf-text-secondary">
-          Não foi possível carregar o resumo de cartões agora.
-        </p>
+
+        <OperationalStateBlock
+          severity="risco"
+          title="Resumo de cartões indisponível"
+          happened="Não foi possível carregar o resumo de cartões agora."
+          impact="Você pode perder visibilidade de faturas pendentes e risco de limite no fechamento."
+          nextStep={
+            onOpenCreditCards
+              ? "Abra o módulo de cartões para verificar os itens manualmente nesta sessão."
+              : "Atualize a página em instantes para tentar novamente a leitura deste widget."
+          }
+          ctaLabel={onOpenCreditCards ? "Ver cartões" : undefined}
+          onCta={onOpenCreditCards}
+        />
       </div>
     );
   }
@@ -315,9 +310,7 @@ const CreditCardsSummaryWidget = ({
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-medium text-cf-text-primary">Cartões</h3>
-            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
-              {statusBadgeLabel}
-            </span>
+            <OperationalSeverityBadge severity={severityLevel} />
           </div>
           <p className="text-xs text-cf-text-secondary">
             {aggregate.cardsCount === 0
@@ -339,8 +332,16 @@ const CreditCardsSummaryWidget = ({
       </div>
 
       {aggregate.cardsCount === 0 ? (
-        <div className="rounded border border-dashed border-cf-border bg-cf-bg-subtle px-3 py-3 text-sm text-cf-text-secondary">
-          Cadastre um cartão para acompanhar limite disponível, compras abertas e faturas pendentes.
+        <div className="rounded border border-amber-200 bg-cf-bg-subtle px-3 py-3 text-sm text-cf-text-secondary">
+          <OperationalStateBlock
+            severity="atencao"
+            title="Sem cartões ativos no momento"
+            happened="Nenhum cartão cadastrado ainda."
+            impact="Sem cartões ativos, não há leitura de uso de limite nem de faturas pendentes."
+            nextStep="Cadastre ao menos um cartão para liberar a visão operacional desta área."
+            ctaLabel={onOpenCreditCards ? "Ver cartões" : undefined}
+            onCta={onOpenCreditCards}
+          />
         </div>
       ) : (
         <>

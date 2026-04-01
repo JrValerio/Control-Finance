@@ -7,6 +7,7 @@ import {
   type SalaryProfile,
 } from "../services/salary.service";
 import { formatCurrency } from "../utils/formatCurrency";
+import { OperationalSeverityBadge, OperationalStateBlock, type OperationalSeverity } from "./OperationalStateBlock";
 
 // ─── Form state types ──────────────────────────────────────────────────────────
 
@@ -382,6 +383,8 @@ function BenefitProfileView({
   const cardLimit = calculation.cardLimitAmount ?? 0;
   const loanTotal = calculation.loanTotal ?? 0;
   const cardTotal = calculation.cardTotal ?? 0;
+  const loanSeverity: OperationalSeverity = calculation.isOverLoanLimit ? "risco" : "normal";
+  const cardSeverity: OperationalSeverity = calculation.isOverCardLimit ? "risco" : "normal";
   const activeReferenceMonth = formatReferenceMonthLabel(profile.activeStatement?.referenceMonth);
   const activePaymentDate = formatDateLabel(profile.activeStatement?.paymentDate);
 
@@ -522,11 +525,14 @@ function BenefitProfileView({
             ? "border-red-200 bg-red-50 text-red-700"
             : "border-cf-border bg-cf-bg-subtle text-cf-text-secondary"
         }`}>
-          <span>Empréstimos</span>
+          <div className="flex items-center gap-2">
+            <span>Empréstimos</span>
+            <OperationalSeverityBadge severity={loanSeverity} />
+          </div>
           <span>
             {formatCurrency(loanTotal)} / {formatCurrency(loanLimit)}
             {calculation.isOverLoanLimit ? (
-              <span className="ml-1 font-semibold">⚠ acima do limite 35%</span>
+              <span className="ml-1 font-semibold">acima do limite 35%</span>
             ) : (
               <span className="ml-1 text-cf-text-secondary">máx 35%</span>
             )}
@@ -538,11 +544,14 @@ function BenefitProfileView({
             ? "border-red-200 bg-red-50 text-red-700"
             : "border-cf-border bg-cf-bg-subtle text-cf-text-secondary"
         }`}>
-          <span>Cartão consignado</span>
+          <div className="flex items-center gap-2">
+            <span>Cartão consignado</span>
+            <OperationalSeverityBadge severity={cardSeverity} />
+          </div>
           <span>
             {formatCurrency(cardTotal)} / {formatCurrency(cardLimit)}
             {calculation.isOverCardLimit ? (
-              <span className="ml-1 font-semibold">⚠ acima do limite 5%</span>
+              <span className="ml-1 font-semibold">acima do limite 5%</span>
             ) : (
               <span className="ml-1 text-cf-text-secondary">máx 5%</span>
             )}
@@ -570,7 +579,15 @@ function BenefitProfileView({
         </div>
 
         {consignacoes.length === 0 && !addingConsig ? (
-          <p className="text-xs text-cf-text-secondary">Nenhum desconto cadastrado.</p>
+          <OperationalStateBlock
+            severity="normal"
+            title="Sem descontos consignados cadastrados"
+            happened="Nenhum desconto cadastrado."
+            impact="A composição atual mostra o benefício sem abatimentos consignados recorrentes."
+            nextStep="Se houver desconto em folha, adicione a rubrica para manter a leitura auditável."
+            ctaLabel="Adicionar desconto"
+            onCta={() => setAddingConsig(true)}
+          />
         ) : null}
 
         {consignacoes.length > 0 ? (
