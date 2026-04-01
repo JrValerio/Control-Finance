@@ -6,6 +6,15 @@ export type BillStatus = "pending" | "paid";
 export type BillOperationalBucket = "paid" | "overdue" | "due_soon" | "future";
 export type BillStatusFilter = "pending" | "paid" | "overdue" | "due_soon" | "future" | undefined;
 export type MatchStatus = "unmatched" | "matched";
+export type BillType =
+  | "energy"
+  | "water"
+  | "internet"
+  | "phone"
+  | "tv"
+  | "gas"
+  | "rent"
+  | "other";
 
 export interface Bill {
   id: number;
@@ -22,7 +31,7 @@ export interface Bill {
   notes: string | null;
   provider: string | null;
   referenceMonth: string | null;
-  billType: string | null;
+  billType: BillType | null;
   sourceImportSessionId: string | null;
   matchStatus: MatchStatus;
   linkedTransactionId: number | null;
@@ -50,7 +59,7 @@ export interface CreateBillPayload {
   notes?: string | null;
   provider?: string | null;
   referenceMonth?: string | null;
-  billType?: string | null;
+  billType?: BillType | null;
   sourceImportSessionId?: string | null;
 }
 
@@ -180,6 +189,24 @@ const normalizeStringOrNull = (value: unknown): string | null => {
   return trimmed || null;
 };
 
+const BILL_TYPE_VALUES = new Set<BillType>([
+  "energy",
+  "water",
+  "internet",
+  "phone",
+  "tv",
+  "gas",
+  "rent",
+  "other",
+]);
+
+const normalizeBillType = (value: unknown): BillType | null => {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return null;
+  return BILL_TYPE_VALUES.has(normalized as BillType) ? (normalized as BillType) : null;
+};
+
 const normalizeISOString = (value: unknown): string => {
   if (typeof value === "string" && value.trim()) return value.trim();
   return "";
@@ -263,7 +290,7 @@ const normalizeBill = (raw: BillApiPayload): Bill => {
     notes: normalizeStringOrNull(raw.notes),
     provider: normalizeStringOrNull(raw.provider),
     referenceMonth: normalizeStringOrNull(raw.referenceMonth ?? raw.reference_month),
-    billType: normalizeStringOrNull(raw.billType ?? raw.bill_type),
+    billType: normalizeBillType(raw.billType ?? raw.bill_type),
     sourceImportSessionId: normalizeStringOrNull(raw.sourceImportSessionId ?? raw.source_import_session_id),
     matchStatus: raw.matchStatus === "matched" ? "matched" : "unmatched",
     linkedTransactionId: (() => {
