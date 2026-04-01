@@ -133,11 +133,16 @@ const OperationalSummaryPanel = (): JSX.Element | null => {
   const { bankBalance, bills, cards, income, forecast, consignado } = snapshot;
 
   // ── Tile 1: Bank balance ──────────────────────────────────────────────────
+  const hasOverdueBills = bills.overdueCount > 0;
+  const technicalBalance = bankBalance - bills.overdueTotal;
   const bankTile: TileProps = {
     label: "Conta",
     primary: money(bankBalance),
-    secondary: "Saldo disponível",
-    accent: bankBalance < 0 ? "danger" : "default",
+    secondary: hasOverdueBills ? `Saldo técnico: ${money(technicalBalance)}` : "Saldo disponível",
+    tertiary: hasOverdueBills
+      ? `${bills.overdueCount} vencida${bills.overdueCount > 1 ? "s" : ""} somam ${money(bills.overdueTotal)}`
+      : undefined,
+    accent: technicalBalance < 0 ? "danger" : hasOverdueBills ? "warning" : bankBalance < 0 ? "danger" : "default",
   };
 
   // ── Tile 2: Bills ─────────────────────────────────────────────────────────
