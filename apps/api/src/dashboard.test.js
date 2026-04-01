@@ -105,6 +105,8 @@ describe("dashboard snapshot", () => {
     expect(res.body.bills.overdueTotal).toBe(0);
     expect(res.body.bills.dueSoonCount).toBe(0);
     expect(res.body.bills.dueSoonTotal).toBe(0);
+    expect(res.body.bills.upcomingCount).toBe(0);
+    expect(res.body.bills.upcomingTotal).toBe(0);
     expect(res.body.cards.openPurchasesTotal).toBe(0);
     expect(res.body.cards.pendingInvoicesTotal).toBe(0);
     expect(res.body.income.receivedThisMonth).toBe(0);
@@ -165,13 +167,16 @@ describe("dashboard snapshot", () => {
 
     await createBill(token, { dueDate: isoDate(0), amount: 100 });  // today
     await createBill(token, { dueDate: isoDate(3), amount: 200 });  // in 3 days
+    await createBill(token, { dueDate: isoDate(7), amount: 50 });   // boundary day (inclusive)
     await createBill(token, { dueDate: isoDate(10), amount: 999 }); // beyond 7 days
 
     const res = await getSnapshot(token);
 
     expect(res.status).toBe(200);
-    expect(res.body.bills.dueSoonCount).toBe(2);
-    expect(res.body.bills.dueSoonTotal).toBe(300);
+    expect(res.body.bills.dueSoonCount).toBe(3);
+    expect(res.body.bills.dueSoonTotal).toBe(350);
+    expect(res.body.bills.upcomingCount).toBe(1);
+    expect(res.body.bills.upcomingTotal).toBe(999);
   });
 
   it("bills nao conta faturas pagas", async () => {
