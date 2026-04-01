@@ -130,6 +130,23 @@ describe("detectDocumentType", () => {
     });
   });
 
+  describe("utility_bill_gas", () => {
+    it("detecta conta de gas com comgas + gas canalizado", () => {
+      const text = "COMGAS\nFornecimento de gas canalizado\nTarifa de gas";
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("utility_bill_gas");
+    });
+
+    it("detecta conta de gas com naturgy + consumo m3", () => {
+      const text = "NATURGY\nConsumo m3: 12\nConta de gas";
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("utility_bill_gas");
+    });
+
+    it("NAO detecta gas com apenas 1 sinal", () => {
+      const text = "comgas somente";
+      expect(detectDocumentType({ text, extension: ".pdf" })).not.toBe("utility_bill_gas");
+    });
+  });
+
   describe("utility_bill_telecom", () => {
     it("detecta conta de internet com operadora + banda larga", () => {
       const text = "VIVO FIBRA\nInternet Fixa\nBanda larga";

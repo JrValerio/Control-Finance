@@ -712,6 +712,9 @@ const WATER_ISSUERS = [
   "saae", "sabesp", "sanepar", "copasa", "cagece", "caern", "casan", "embasa",
   "compesa", "agespisa", "caema", "cosanpa",
 ];
+const GAS_ISSUERS = [
+  "comgas", "naturgy", "gas natural", "ceg", "ceg rio",
+];
 const TELECOM_ISSUERS = [
   "vivo", "claro", "tim", "oi", "sky", "algar telecom", "brisanet", "desktop",
   "ligga", "unifique", "america net", "net claro", "nextel",
@@ -814,6 +817,31 @@ export const extractWaterBillSuggestion = (text) => {
   return {
     type: "bill",
     billType: "water",
+    issuer: issuerKey,
+    referenceMonth,
+    dueDate,
+    amountDue,
+    customerCode,
+  };
+};
+
+export const extractGasBillSuggestion = (text) => {
+  const normalized = normalizeForExtraction(text);
+
+  const issuerKey = detectIssuerFromText(normalized, GAS_ISSUERS);
+  const { referenceMonth, dueDate, amountDue } = extractBillFields(normalized);
+
+  // Customer code: "Código do cliente", "N° instalação", "Matrícula"
+  const codeMatch = normalized.match(
+    /(?:codigo do cliente|numero do cliente|n[°o] instalacao|instalacao|matricula)[:\s#°]*([\d.\-/]+)/i,
+  );
+  const customerCode = codeMatch ? codeMatch[1].trim() : null;
+
+  if (!referenceMonth && !dueDate && amountDue === null) return null;
+
+  return {
+    type: "bill",
+    billType: "gas",
     issuer: issuerKey,
     referenceMonth,
     dueDate,

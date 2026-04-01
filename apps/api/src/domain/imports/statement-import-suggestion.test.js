@@ -4,6 +4,7 @@ import {
   extractInssSuggestions,
   extractEnergyBillSuggestion,
   extractWaterBillSuggestion,
+  extractGasBillSuggestion,
   extractTelecomBillSuggestion,
 } from "./statement-import.js";
 
@@ -328,6 +329,52 @@ describe("extractWaterBillSuggestion", () => {
     expect(result.referenceMonth).toBe("2026-03");
     expect(result.dueDate).toBe("2026-04-12");
     expect(result.amountDue).toBeCloseTo(88.71);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractGasBillSuggestion
+// ---------------------------------------------------------------------------
+
+const GAS_SAMPLE = `
+COMGÁS
+Código do cliente: 778899
+Referência: 04/2026
+Vencimento: 12/05/2026
+TOTAL A PAGAR R$ 95,40
+`.trim();
+
+const GAS_NO_FIELDS = `
+Documento qualquer sem campos de boleto de gas.
+`.trim();
+
+describe("extractGasBillSuggestion", () => {
+  it("retorna null quando nenhum campo relevante esta presente", () => {
+    expect(extractGasBillSuggestion(GAS_NO_FIELDS)).toBeNull();
+  });
+
+  it("retorna type=bill e billType=gas", () => {
+    const result = extractGasBillSuggestion(GAS_SAMPLE);
+    expect(result).not.toBeNull();
+    expect(result.type).toBe("bill");
+    expect(result.billType).toBe("gas");
+  });
+
+  it("extrai issuer da lista de prestadoras conhecidas", () => {
+    const result = extractGasBillSuggestion(GAS_SAMPLE);
+    expect(result.issuer).toBe("comgas");
+  });
+
+  it("resolve referenceMonth e dueDate", () => {
+    const result = extractGasBillSuggestion(GAS_SAMPLE);
+    expect(result.referenceMonth).toBe("2026-04");
+    expect(result.dueDate).toBe("2026-05-12");
+  });
+
+  it("extrai amountDue e customerCode", () => {
+    const result = extractGasBillSuggestion(GAS_SAMPLE);
+    expect(result.amountDue).toBeCloseTo(95.4);
+    expect(result.customerCode).toBe("778899");
   });
 });
 

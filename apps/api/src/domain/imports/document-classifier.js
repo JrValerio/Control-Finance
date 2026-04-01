@@ -69,6 +69,19 @@ const WATER_SIGNALS = [
   "hidrometro",
 ];
 
+const GAS_SIGNALS = [
+  "comgas",
+  "naturgy",
+  "gas natural",
+  "gas canalizado",
+  "fornecimento de gas",
+  "tarifa de gas",
+  "conta de gas",
+  "leitura anterior",
+  "leitura atual",
+  "consumo m3",
+];
+
 const TELECOM_SIGNALS = [
   "vivo",
   "tim",
@@ -134,6 +147,11 @@ export const detectDocumentType = ({ text = "", extension = "" }) => {
   // Water bill — 2+ signals
   if (countMatches(normalized, WATER_SIGNALS) >= 2) {
     return "utility_bill_water";
+  }
+
+  // Gas bill — 2+ signals
+  if (countMatches(normalized, GAS_SIGNALS) >= 2) {
+    return "utility_bill_gas";
   }
 
   // Telecom bill (internet/phone/tv) — 2+ signals
