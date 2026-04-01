@@ -191,8 +191,8 @@ describe("transaction imports", () => {
             expense: 150.5,
           },
         }),
-        "2026-04-01T09:00:00.000Z",
-        "2026-04-01T09:30:00.000Z",
+        "2099-04-01T09:00:00.000Z",
+        "2099-04-01T09:30:00.000Z",
         null,
         newerImportId,
         userAId,
@@ -209,9 +209,9 @@ describe("transaction imports", () => {
             expense: 220.25,
           },
         }),
-        "2026-04-01T10:00:00.000Z",
-        "2026-04-01T10:30:00.000Z",
-        "2026-04-01T10:10:00.000Z",
+        "2099-04-01T10:00:00.000Z",
+        "2099-04-01T10:30:00.000Z",
+        "2099-04-01T10:10:00.000Z",
         otherUserImportId,
         userBId,
         JSON.stringify({
@@ -223,8 +223,8 @@ describe("transaction imports", () => {
             expense: 0,
           },
         }),
-        "2026-04-01T11:00:00.000Z",
-        "2026-04-01T11:30:00.000Z",
+        "2099-04-01T11:00:00.000Z",
+        "2099-04-01T11:30:00.000Z",
         null,
       ],
     );
@@ -268,9 +268,9 @@ describe("transaction imports", () => {
 
     expect(response.body.items[0]).toEqual({
       id: newerImportId,
-      createdAt: "2026-04-01T10:00:00.000Z",
-      expiresAt: "2026-04-01T10:30:00.000Z",
-      committedAt: "2026-04-01T10:10:00.000Z",
+      createdAt: "2099-04-01T10:00:00.000Z",
+      expiresAt: "2099-04-01T10:30:00.000Z",
+      committedAt: "2099-04-01T10:10:00.000Z",
       fileName: "newer.ofx",
       documentType: "bank_statement",
       state: "imported",
@@ -289,8 +289,8 @@ describe("transaction imports", () => {
     });
     expect(response.body.items[1]).toEqual({
       id: olderImportId,
-      createdAt: "2026-04-01T09:00:00.000Z",
-      expiresAt: "2026-04-01T09:30:00.000Z",
+      createdAt: "2099-04-01T09:00:00.000Z",
+      expiresAt: "2099-04-01T09:30:00.000Z",
       committedAt: null,
       fileName: "older.csv",
       documentType: "bank_statement",
