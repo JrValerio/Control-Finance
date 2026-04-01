@@ -279,7 +279,7 @@ const CreditCardsSummaryWidget = ({
 
   if (isLoading) {
     return (
-      <div className="rounded border border-cf-border bg-cf-surface p-4">
+      <div className="rounded-lg border border-cf-border bg-cf-surface p-4 md:p-5">
         <p className="text-xs text-cf-text-secondary">Carregando cartões...</p>
       </div>
     );
@@ -287,7 +287,7 @@ const CreditCardsSummaryWidget = ({
 
   if (hasError) {
     return (
-      <div className="rounded border border-red-300 bg-cf-surface p-4">
+      <div className="rounded-lg border border-red-300 bg-cf-surface p-4 md:p-5">
         <div className="mb-2 flex items-center justify-between gap-2">
           <h3 className="text-sm font-medium text-cf-text-primary">Cartões</h3>
           <OperationalSeverityBadge severity="risco" />
@@ -311,8 +311,8 @@ const CreditCardsSummaryWidget = ({
   }
 
   return (
-    <div className={`rounded border bg-cf-surface p-4 ${cardToneClass}`}>
-      <div className="mb-2 flex items-center justify-between gap-2">
+    <div className={`rounded-lg border bg-cf-surface p-4 md:p-5 ${cardToneClass}`}>
+      <div className="mb-2 flex items-start justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-medium text-cf-text-primary">Cartões</h3>
@@ -351,22 +351,22 @@ const CreditCardsSummaryWidget = ({
         </div>
       ) : (
         <>
-          <p className="mb-3 text-xs text-cf-text-secondary">
+          <p className="mb-4 text-[11px] text-cf-text-secondary">
             Priorize faturas pendentes e acompanhe o uso de limite para evitar estouro no fechamento.
           </p>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className={`rounded border bg-cf-bg-subtle px-3 py-2.5 ${hasCriticalInvoices ? "border-amber-200" : "border-cf-border"}`}>
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+            <div className={`rounded-lg border bg-cf-bg-subtle px-3 py-3 ${hasCriticalInvoices ? "border-amber-200" : "border-cf-border"}`}>
               <p className="text-xs font-medium uppercase text-cf-text-secondary">Faturas pendentes</p>
               <p
-                className={`text-sm font-semibold ${
+                className={`mt-1 text-lg font-semibold leading-none ${
                   aggregate.pendingInvoicesCount > 0 ? "text-amber-700" : "text-cf-text-primary"
                 }`}
               >
                 {money(aggregate.pendingInvoicesTotal)}
               </p>
               <p
-                className={`text-xs ${
+                className={`mt-1 text-[11px] ${
                   aggregate.pendingInvoicesCount > 0 ? "text-amber-700" : "text-cf-text-secondary"
                 }`}
               >
@@ -375,7 +375,7 @@ const CreditCardsSummaryWidget = ({
               </p>
             </div>
 
-            <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+            <div className="rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Limite em uso</p>
                 <span
@@ -384,7 +384,7 @@ const CreditCardsSummaryWidget = ({
                   {usageStatusLabel}
                 </span>
               </div>
-              <p className="mt-1 text-sm font-semibold text-cf-text-primary">
+              <p className="mt-1 text-lg font-semibold leading-none text-cf-text-primary">
                 {money(aggregate.limitUsed)}
               </p>
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-cf-border/60">
@@ -393,23 +393,23 @@ const CreditCardsSummaryWidget = ({
                   style={{ width: `${usageProgressWidthPct}%` }}
                 />
               </div>
-              <p className="mt-1 text-xs text-cf-text-secondary">{aggregate.usagePct.toFixed(2)}% do limite total</p>
+              <p className="mt-1 text-[11px] text-cf-text-secondary">{aggregate.usagePct.toFixed(2)}% do limite total</p>
             </div>
 
-            <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+            <div className="rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-3">
               <p className="text-xs font-medium uppercase text-cf-text-secondary">Disponível</p>
-              <p className="text-sm font-semibold text-cf-text-primary">
+              <p className="mt-1 text-lg font-semibold leading-none text-cf-text-primary">
                 {money(aggregate.availableTotal)}
               </p>
-              <p className="text-xs text-cf-text-secondary">Soma dos limites livres</p>
+              <p className="mt-1 text-[11px] text-cf-text-secondary">Soma dos limites livres</p>
             </div>
 
-            <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+            <div className="rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-3">
               <p className="text-xs font-medium uppercase text-cf-text-secondary">Compras abertas</p>
-              <p className="text-sm font-semibold text-cf-text-primary">
+              <p className="mt-1 text-lg font-semibold leading-none text-cf-text-primary">
                 {money(aggregate.openPurchasesTotal)}
               </p>
-              <p className="text-xs text-cf-text-secondary">Ainda não fechadas em fatura</p>
+              <p className="mt-1 text-[11px] text-cf-text-secondary">Ainda não fechadas em fatura</p>
             </div>
           </div>
 
