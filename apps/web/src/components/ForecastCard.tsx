@@ -277,11 +277,37 @@ const ForecastCard = ({
     );
   }
 
+  const hasNegativeProjection = forecast !== null && forecast.adjustedProjectedBalance < 0;
+  const hasPendingBills = forecast !== null && forecast.billsPendingCount > 0;
+  const cardToneClass = hasNegativeProjection
+    ? "border-red-300"
+    : hasPendingBills
+      ? "border-amber-300"
+      : "border-brand-1";
+  const statusBadgeClass = hasNegativeProjection
+    ? "border-red-200 bg-red-50 text-red-700"
+    : hasPendingBills
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  const statusLabel = hasNegativeProjection
+    ? "Risco de fechamento negativo"
+    : hasPendingBills
+      ? "Atenção às pendências"
+      : "Trajetória estável";
+
   // Active state
   return (
-    <div className="rounded border border-brand-1 bg-cf-surface p-4">
+    <div className={`rounded border bg-cf-surface p-4 ${cardToneClass}`}>
       <div className="flex items-start justify-between gap-3">
-        <h3 className="text-sm font-semibold text-cf-text-primary">Projeção de saldo</h3>
+        <div>
+          <h3 className="text-sm font-semibold text-cf-text-primary">Projeção de saldo</h3>
+          <p className="mt-1 text-xs text-cf-text-secondary">
+            Saldo estimado até o fim do mês com lançamentos e pendências atuais.
+          </p>
+        </div>
+        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
+          {statusLabel}
+        </span>
         <button
           type="button"
           onClick={handleRecompute}

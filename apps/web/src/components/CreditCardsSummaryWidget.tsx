@@ -261,6 +261,23 @@ const CreditCardsSummaryWidget = ({
   const usageStatusClassName = USAGE_STATUS_CLASSNAMES[aggregate.usageStatus];
   const usageProgressClassName = USAGE_PROGRESS_CLASSNAMES[aggregate.usageStatus];
   const usageProgressWidthPct = Math.min(100, aggregate.usagePct);
+  const hasCriticalInvoices = aggregate.pendingInvoicesCount > 0;
+  const hasExceededLimit = aggregate.usageStatus === "exceeded";
+  const cardToneClass = hasExceededLimit
+    ? "border-red-300"
+    : hasCriticalInvoices
+      ? "border-amber-300"
+      : "border-cf-border";
+  const statusBadgeClass = hasExceededLimit
+    ? "border-red-200 bg-red-50 text-red-700"
+    : hasCriticalInvoices
+      ? "border-amber-200 bg-amber-50 text-amber-700"
+      : "border-emerald-200 bg-emerald-50 text-emerald-700";
+  const statusBadgeLabel = hasExceededLimit
+    ? "Limite excedido"
+    : hasCriticalInvoices
+      ? "Atenção"
+      : "Estável";
 
   if (isLoading) {
     return (
@@ -293,10 +310,15 @@ const CreditCardsSummaryWidget = ({
   }
 
   return (
-    <div className="rounded border border-cf-border bg-cf-surface p-4">
+    <div className={`rounded border bg-cf-surface p-4 ${cardToneClass}`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-medium text-cf-text-primary">Cartões</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-medium text-cf-text-primary">Cartões</h3>
+            <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
+              {statusBadgeLabel}
+            </span>
+          </div>
           <p className="text-xs text-cf-text-secondary">
             {aggregate.cardsCount === 0
               ? "Nenhum cartão cadastrado ainda."
@@ -322,7 +344,30 @@ const CreditCardsSummaryWidget = ({
         </div>
       ) : (
         <>
+          <p className="mb-3 text-xs text-cf-text-secondary">
+            Priorize faturas pendentes e acompanhe o uso de limite para evitar estouro no fechamento.
+          </p>
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className={`rounded border bg-cf-bg-subtle px-3 py-2.5 ${hasCriticalInvoices ? "border-amber-200" : "border-cf-border"}`}>
+              <p className="text-xs font-medium uppercase text-cf-text-secondary">Faturas pendentes</p>
+              <p
+                className={`text-sm font-semibold ${
+                  aggregate.pendingInvoicesCount > 0 ? "text-amber-700" : "text-cf-text-primary"
+                }`}
+              >
+                {money(aggregate.pendingInvoicesTotal)}
+              </p>
+              <p
+                className={`text-xs ${
+                  aggregate.pendingInvoicesCount > 0 ? "text-amber-700" : "text-cf-text-secondary"
+                }`}
+              >
+                {aggregate.pendingInvoicesCount}{" "}
+                {aggregate.pendingInvoicesCount === 1 ? "fatura" : "faturas"}
+              </p>
+            </div>
+
             <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Limite em uso</p>
@@ -358,25 +403,6 @@ const CreditCardsSummaryWidget = ({
                 {money(aggregate.openPurchasesTotal)}
               </p>
               <p className="text-xs text-cf-text-secondary">Ainda não fechadas em fatura</p>
-            </div>
-
-            <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
-              <p className="text-xs font-medium uppercase text-cf-text-secondary">Faturas pendentes</p>
-              <p
-                className={`text-sm font-semibold ${
-                  aggregate.pendingInvoicesCount > 0 ? "text-amber-700" : "text-cf-text-primary"
-                }`}
-              >
-                {money(aggregate.pendingInvoicesTotal)}
-              </p>
-              <p
-                className={`text-xs ${
-                  aggregate.pendingInvoicesCount > 0 ? "text-amber-700" : "text-cf-text-secondary"
-                }`}
-              >
-                {aggregate.pendingInvoicesCount}{" "}
-                {aggregate.pendingInvoicesCount === 1 ? "fatura" : "faturas"}
-              </p>
             </div>
           </div>
 
