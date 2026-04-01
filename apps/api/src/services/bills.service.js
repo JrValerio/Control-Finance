@@ -570,8 +570,8 @@ const UTILITY_TYPES_PLACEHOLDER = UTILITY_BILL_TYPES.map((_, i) => `$${i + 2}`).
 
 /**
  * Returns utility bills (energy/water/internet/phone/tv/gas) grouped by urgency.
- * Buckets: overdue (past due), dueSoon (within 7 days), upcoming (beyond 7 days).
- * Paid bills are excluded.
+ * Buckets: overdue (past due), dueSoon (within 7 days), upcoming (beyond 7 days), paid.
+ * `status` remains the source of truth for liquidation; operational buckets only triage UI.
  *
  * @param {number} userId
  */
@@ -584,16 +584,28 @@ export const getUtilityBillsPanelForUser = async (userId) => {
     `SELECT * FROM bills
      WHERE user_id = $1
        AND bill_type IN (${UTILITY_TYPES_PLACEHOLDER})
-       AND status = 'pending'
-     ORDER BY due_date ASC`,
+     ORDER BY due_date ASC, id ASC`,
     [uid, ...UTILITY_BILL_TYPES],
   );
 
   const bills = rows.map(mapBillRow);
+  const pendingBills = bills.filter((b) => b.status === "pending");
+  const paid = bills
+    .filter((b) => b.status === "paid")
+    .sort((left, right) => {
+      const leftTs = Date.parse(String(left.paidAt || left.updatedAt || ""));
+      const rightTs = Date.parse(String(right.paidAt || right.updatedAt || ""));
 
-  const overdue = bills.filter((b) => b.dueDate < today);
-  const dueSoon = bills.filter((b) => b.dueDate >= today && b.dueDate <= in7Days);
-  const upcoming = bills.filter((b) => b.dueDate > in7Days);
+      if (Number.isFinite(leftTs) && Number.isFinite(rightTs)) {
+        return rightTs - leftTs;
+      }
+
+      return String(right.dueDate || "").localeCompare(String(left.dueDate || ""));
+    });
+
+  const overdue = pendingBills.filter((b) => b.dueDate < today);
+  const dueSoon = pendingBills.filter((b) => b.dueDate >= today && b.dueDate <= in7Days);
+  const upcoming = pendingBills.filter((b) => b.dueDate > in7Days);
 
   const toMoney2 = (arr) => Number(arr.reduce((s, b) => s + b.amount, 0).toFixed(2));
 
@@ -601,13 +613,16 @@ export const getUtilityBillsPanelForUser = async (userId) => {
     overdue,
     dueSoon,
     upcoming,
+    paid,
     summary: {
-      totalPending: bills.length,
-      totalAmount: toMoney2(bills),
+      totalPending: pendingBills.length,
+      totalAmount: toMoney2(pendingBills),
       overdueCount: overdue.length,
       overdueAmount: toMoney2(overdue),
       dueSoonCount: dueSoon.length,
       dueSoonAmount: toMoney2(dueSoon),
+      paidCount: paid.length,
+      paidAmount: toMoney2(paid),
     },
   };
 };
