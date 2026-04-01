@@ -38,6 +38,10 @@ import {
 } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 import {
+  getImportMetricsSnapshot,
+  resetImportObservabilityForTests,
+} from "./observability/import-observability.js";
+import {
   makeProUser,
   registerAndLogin,
   setupTestDb,
@@ -57,6 +61,7 @@ describe("transaction imports utility bills dry-run", () => {
     resetImportRateLimiterState();
     resetWriteRateLimiterState();
     resetHttpMetricsForTests();
+    resetImportObservabilityForTests();
     vi.clearAllMocks();
 
     await dbQuery("DELETE FROM transactions");
@@ -116,6 +121,9 @@ describe("transaction imports utility bills dry-run", () => {
         billType: "internet",
       }),
     ]);
+
+    const metrics = getImportMetricsSnapshot();
+    expect(metrics.import_dry_run_semantic_drift_total).toBe(0);
   });
 
   it("POST /transactions/import/dry-run retorna documentType e suggestion para utility_bill_gas", async () => {
@@ -167,5 +175,42 @@ describe("transaction imports utility bills dry-run", () => {
         billType: "gas",
       }),
     ]);
+
+    const metrics = getImportMetricsSnapshot();
+    expect(metrics.import_dry_run_semantic_drift_total).toBe(0);
+  });
+
+  it("POST /transactions/import/dry-run incrementa metrica quando suggestion diverge do documentType utilitario", async () => {
+    const token = await registerAndLogin("import-doctype-drift@controlfinance.dev");
+    await makeProUser("import-doctype-drift@controlfinance.dev");
+
+    vi.mocked(detectDocumentType).mockReturnValue("utility_bill_gas");
+    vi.mocked(extractGasBillSuggestion).mockReturnValue({
+      type: "bill",
+      billType: "water",
+      issuer: "COMGAS",
+      referenceMonth: "2026-04",
+      dueDate: "2026-05-15",
+      amountDue: 95.4,
+      customerCode: "778899",
+    });
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", Buffer.from("%PDF-1.4 gas drift"), {
+        filename: "gas-drift.pdf",
+        contentType: "application/pdf",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.documentType).toBe("utility_bill_gas");
+    expect(response.body.suggestion).toMatchObject({
+      billType: "water",
+    });
+
+    const metrics = getImportMetricsSnapshot();
+    expect(metrics.import_dry_run_total).toBe(1);
+    expect(metrics.import_dry_run_semantic_drift_total).toBe(1);
   });
 });
