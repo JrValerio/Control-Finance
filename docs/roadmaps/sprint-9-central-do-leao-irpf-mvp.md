@@ -136,6 +136,20 @@ A Sprint 9 so fecha quando:
 - Resultado esperado: PR final da Sprint 9 pronto para merge com CI verde.
 - Status: concluida (PR #378).
 
+### Slice S9.5 - Fechamento operacional do IRPF MVP
+
+- Consolidar o fluxo fim a fim com checklist objetivo de prontidao (ingestao -> revisao -> resumo -> export -> conferencia).
+- Endurecer evidencias operacionais de smoke para cenarios criticos do MVP fiscal.
+- Resultado esperado: frente IRPF MVP com pendencias explicitamente residualizadas e sem lacunas de rastreabilidade.
+- Status: pendente (proximo slice).
+
+### Slice S9.6 - Gate formal de encerramento da Sprint 9
+
+- Executar o gate de saida da sprint e registrar decisao executiva de encerramento.
+- Atualizar roadmap executivo movendo Sprint 9 para concluida quando todos os criterios forem satisfeitos.
+- Resultado esperado: Sprint 9 encerrada formalmente com evidencias remotas e documentais.
+- Status: pendente (slice de fechamento).
+
 ### Trilha transversal da sprint
 
 - Copy semantica correta por tipo documental no modulo fiscal.
@@ -169,3 +183,11 @@ O resumo deve apresentar minimamente:
 - CI dos PRs da Sprint 9 fechado em verde.
 - Evidencias de testes e smoke anexadas nos PRs.
 - Roadmap executivo atualizado movendo Sprint 9 para concluida e Sprint 10 para proximo alvo.
+
+### Gate formal de encerramento (criterios objetivos)
+
+1. Fluxo fiscal MVP validado ponta a ponta em smoke controlado: ingestao, revisao, resumo, export e conferencia.
+2. Semantica fiscal anual consistente em API e UI para `taxYear`, `exerciseYear` e `calendarYear` sem regressao aberta.
+3. Export oficial `JSON/CSV` e modo imprimivel/PDF conferidos com rastreabilidade explicita para revisao humana.
+4. Todos os PRs de fechamento da Sprint 9 com CI verde e mergeados na `main`.
+5. Roadmap executivo e operacional atualizados com decisao de encerramento e abertura da proxima frente ativa.
