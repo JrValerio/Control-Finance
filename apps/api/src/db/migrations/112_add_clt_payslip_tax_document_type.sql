@@ -1,4 +1,7 @@
 ALTER TABLE tax_documents
+  DROP CONSTRAINT IF EXISTS tax_documents_constraint_3;
+
+ALTER TABLE tax_documents
   DROP CONSTRAINT IF EXISTS tax_documents_document_type_check;
 
 ALTER TABLE tax_documents

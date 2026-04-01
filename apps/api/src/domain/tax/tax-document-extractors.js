@@ -3,7 +3,7 @@ import {
   parseInssCreditHistoryPdfText,
 } from "../imports/statement-import.js";
 
-const EXTRACTOR_VERSION = "1.1.0";
+const EXTRACTOR_VERSION = "1.2.0";
 const MAX_PREVIEW_LINES = 8;
 
 const normalizeText = (text) =>
@@ -78,6 +78,27 @@ const extractAmountByPatterns = (text, patterns) => {
 
     if (parsedAmount !== null) {
       return Math.abs(parsedAmount);
+    }
+  }
+
+  return null;
+};
+
+const extractTrailingAmountByPatterns = (text, patterns) => {
+  for (const pattern of patterns) {
+    const match = String(text || "").match(pattern);
+
+    if (!match) {
+      continue;
+    }
+
+    const amounts = (match[0].match(/-?\d[\d.]*,\d{2}/g) || [])
+      .map((value) => parseSignedAmount(value))
+      .filter((value) => value !== null)
+      .map((value) => Math.abs(value));
+
+    if (amounts.length > 0) {
+      return amounts[amounts.length - 1];
     }
   }
 
@@ -276,6 +297,131 @@ const extractAmountFromMatchingLineEntries = (lineEntries, matcher) => {
   }
 
   return null;
+};
+
+const extractReferenceMonth = (text) => {
+  const normalizedText = normalizeText(text);
+  const directMatch = normalizedText.match(
+    /(?:competencia|referencia|periodo(?:\s+de)?|mes(?:\s+de)?\s+referencia)[^\d]{0,12}(\d{2})[\/.\-](20\d{2})/i,
+  );
+
+  if (directMatch) {
+    return `${directMatch[2]}-${directMatch[1]}`;
+  }
+
+  const lineEntries = getLineEntries(text);
+
+  for (const entry of lineEntries) {
+    if (
+      !entry.normalized.includes("competencia") &&
+      !entry.normalized.includes("referencia") &&
+      !entry.normalized.includes("periodo")
+    ) {
+      continue;
+    }
+
+    const lineMatch = entry.normalized.match(/(\d{2})[\/.\-](20\d{2})/);
+
+    if (lineMatch) {
+      return `${lineMatch[2]}-${lineMatch[1]}`;
+    }
+  }
+
+  return null;
+};
+
+const extractPayrollType = (normalizedText) => {
+  if (normalizedText.includes("adiantamento")) {
+    return "advance";
+  }
+
+  if (
+    normalizedText.includes("13o") ||
+    normalizedText.includes("decimo terceiro") ||
+    normalizedText.includes("13 salario")
+  ) {
+    return "thirteenth";
+  }
+
+  if (normalizedText.includes("ferias")) {
+    return "vacation";
+  }
+
+  return "monthly";
+};
+
+const isLikelyRubricLine = (entry) => {
+  if (!entry || !entry.raw) {
+    return false;
+  }
+
+  if (!/[a-z]/i.test(entry.raw)) {
+    return false;
+  }
+
+  if (!/\d[\d.]*,\d{2}/.test(entry.raw)) {
+    return false;
+  }
+
+  return !(
+    entry.normalized.includes("total de proventos") ||
+    entry.normalized.includes("total proventos") ||
+    entry.normalized.includes("total de descontos") ||
+    entry.normalized.includes("liquido a receber") ||
+    entry.normalized.includes("valor liquido") ||
+    entry.normalized.includes("base fgts") ||
+    entry.normalized.includes("competencia")
+  );
+};
+
+const parsePayslipRubrics = (lineEntries) => {
+  const rubrics = [];
+
+  for (const entry of lineEntries) {
+    if (!isLikelyRubricLine(entry)) {
+      continue;
+    }
+
+    const amounts = (entry.raw.match(/-?\d[\d.]*,\d{2}/g) || [])
+      .map((value) => parseSignedAmount(value))
+      .filter((value) => value !== null)
+      .map((value) => Math.abs(value));
+
+    if (amounts.length === 0) {
+      continue;
+    }
+
+    const codeMatch = entry.raw.match(/^\s*(\d{2,5})\b/);
+    const descriptionMatch = entry.raw.match(
+      /^\s*(?:\d{2,5}\s+)?([A-Za-zÀ-ÿ()\/.\-\s]{3,90}?)(?:\s+-?\d[\d.]*,\d{2}){1,3}\s*$/,
+    );
+    const description = descriptionMatch?.[1]?.trim() || entry.raw.trim();
+
+    let earningAmount = null;
+    let discountAmount = null;
+
+    if (amounts.length >= 2) {
+      earningAmount = amounts[0];
+      discountAmount = amounts[1];
+    } else {
+      const singleAmount = amounts[0];
+
+      if (/desconto|inss|irrf|falt|adiant|pensao|vale|contribuicao/i.test(entry.normalized)) {
+        discountAmount = singleAmount;
+      } else {
+        earningAmount = singleAmount;
+      }
+    }
+
+    rubrics.push({
+      code: codeMatch?.[1] || null,
+      description,
+      earningAmount,
+      discountAmount,
+    });
+  }
+
+  return rubrics.slice(0, 120);
 };
 
 const findNextValueAfterLabel = (lineEntries, startIndex, matcher) => {
@@ -923,6 +1069,93 @@ const extractEmployerIncomeReport = (text) => {
   };
 };
 
+const extractCltPayslip = (text) => {
+  const normalizedText = normalizeText(text);
+  const lineEntries = getLineEntries(text);
+  const referenceMonth = extractReferenceMonth(text);
+  const inferredYear = Number(referenceMonth?.slice(0, 4));
+  const rubrics = parsePayslipRubrics(lineEntries);
+  const warnings = [];
+
+  if (!referenceMonth) {
+    warnings.push("reference_month_unavailable");
+  }
+
+  const grossAmount =
+    extractAmountByPatterns(normalizedText, [
+      /total de proventos(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      /total proventos(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      /total de vencimentos(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+    ]) ?? extractAmountFromMatchingLineEntries(lineEntries, /total de proventos|total proventos/i);
+  const totalDiscounts =
+    extractAmountByPatterns(normalizedText, [
+      /total de descontos(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      /descontos totais(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+    ]) ?? extractAmountFromMatchingLineEntries(lineEntries, /total de descontos|descontos totais/i);
+  const netAmount =
+    extractAmountByPatterns(normalizedText, [
+      /liquido a receber(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      /valor liquido(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+      /liquido do mes(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+    ]) ?? extractAmountFromMatchingLineEntries(lineEntries, /liquido a receber|valor liquido|liquido do mes/i);
+  const inssAmount =
+    extractTrailingAmountByPatterns(normalizedText, [
+      /[^\n\r]*\binss\b[^\n\r]*/i,
+      /[^\n\r]*desconto inss[^\n\r]*/i,
+    ]) ?? extractAmountFromMatchingLineEntries(lineEntries, /\binss\b|desconto inss/i);
+  const irrfAmount =
+    extractTrailingAmountByPatterns(normalizedText, [
+      /[^\n\r]*\birrf\b[^\n\r]*/i,
+      /[^\n\r]*imposto de renda retido[^\n\r]*/i,
+    ]) ?? extractAmountFromMatchingLineEntries(lineEntries, /\birrf\b|imposto de renda retido/i);
+  const fgtsBase =
+    extractAmountByPatterns(normalizedText, [
+      /base(?:\s+de)?\s+fgts(?:[^\n\r]{0,80}?)r?\$?\s*([\d.,]+)/i,
+    ]) ?? extractAmountFromMatchingLineEntries(lineEntries, /base(?:\s+de)?\s+fgts/i);
+
+  const totalRubricsEarnings = Number(
+    rubrics.reduce((sum, item) => sum + Number(item.earningAmount || 0), 0).toFixed(2),
+  );
+  const totalRubricsDiscounts = Number(
+    rubrics.reduce((sum, item) => sum + Number(item.discountAmount || 0), 0).toFixed(2),
+  );
+
+  return {
+    extractorName: "clt-payslip",
+    extractorVersion: EXTRACTOR_VERSION,
+    payload: {
+      reportYear:
+        Number.isInteger(inferredYear) && inferredYear >= 2000 && inferredYear <= 2100
+          ? inferredYear
+          : extractCalendarYear(text),
+      referenceMonth,
+      payrollType: extractPayrollType(normalizedText),
+      employerName:
+        extractFirstMatch(text, /(?:empresa|empregador|fonte pagadora|razao social)[:\s]+([^\n\r]{3,120})/i) ||
+        null,
+      employerDocument: extractFirstMatch(text, /\b(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})\b/),
+      employeeName:
+        extractFirstMatch(text, /(?:funcionario|colaborador|empregado|beneficiario)[:\s]+([^\n\r]{3,120})/i) ||
+        null,
+      employeeDocument: extractFirstMatch(text, /\b(\d{3}\.?\d{3}\.?\d{3}-?\d{2})\b/),
+      grossAmount,
+      totalDiscounts,
+      netAmount,
+      inssAmount,
+      irrfAmount,
+      fgtsBase,
+      rubrics,
+      rubricsSummary: {
+        count: rubrics.length,
+        totalEarnings: totalRubricsEarnings,
+        totalDiscounts: totalRubricsDiscounts,
+      },
+      previewLines: getPreviewLines(text),
+    },
+    warnings,
+  };
+};
+
 const extractMedicalStatement = (text, classification) => {
   const normalizedText = normalizeText(text);
   const totalAmount = extractFirstMatch(
@@ -975,6 +1208,7 @@ const extractEducationReceipt = (text) => {
 const EXTRACTORS_BY_TYPE = Object.freeze({
   income_report_bank: extractBankIncomeReport,
   income_report_employer: extractEmployerIncomeReport,
+  clt_payslip: extractCltPayslip,
   income_report_inss: extractIncomeReportInss,
   medical_statement: extractMedicalStatement,
   education_receipt: extractEducationReceipt,

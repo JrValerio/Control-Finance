@@ -944,6 +944,78 @@ describe("Tax API foundation", () => {
     });
   });
 
+  it("POST /tax/documents/:id/reprocess classifica e extrai resumo estruturado de holerite CLT", async () => {
+    const token = await registerAndLogin("tax-reprocess-clt-payslip@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Holerite",
+            "Demonstrativo de Pagamento de Salario",
+            "Empresa ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Funcionario Joao da Silva",
+            "CPF 123.456.789-00",
+            "Competencia 03/2025",
+            "001 SALARIO BASE 8.500,00 0,00",
+            "998 INSS 0,00 876,00",
+            "999 IRRF 0,00 423,35",
+            "Total de Proventos 8.500,00",
+            "Total de Descontos 1.299,35",
+            "Liquido a Receber 7.200,65",
+            "Base FGTS 8.500,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "holerite-marco.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+    expect(reprocessResponse.body.document).toMatchObject({
+      id: uploadResponse.body.document.id,
+      documentType: "clt_payslip",
+      processingStatus: "normalized",
+    });
+    expect(reprocessResponse.body.document.latestExtraction).toMatchObject({
+      extractorName: "clt-payslip",
+      classification: "clt_payslip",
+    });
+
+    const extractionResult = await dbQuery(
+      `SELECT raw_json
+       FROM tax_document_extractions
+       WHERE document_id = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [uploadResponse.body.document.id],
+    );
+
+    expect(extractionResult.rows[0]?.raw_json?.extraction).toMatchObject({
+      referenceMonth: "2025-03",
+      payrollType: "monthly",
+      grossAmount: 8500,
+      totalDiscounts: 1299.35,
+      netAmount: 7200.65,
+      inssAmount: 876,
+      irrfAmount: 423.35,
+      fgtsBase: 8500,
+    });
+    expect(Array.isArray(extractionResult.rows[0]?.raw_json?.extraction?.rubrics)).toBe(true);
+  });
+
   it("POST /tax/documents/:id/reprocess normaliza informe bancario anual itemizado", async () => {
     const token = await registerAndLogin("tax-reprocess-bank-annual@test.dev");
     const uploadResponse = await request(app)
