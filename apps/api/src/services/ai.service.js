@@ -234,7 +234,7 @@ export const generateBankAccountInsight = async (userId, { anthropicClient } = {
 // ─── Utility Bills Insight ──────────────────────────────────────────────────
 
 const UTILITY_INSIGHT_SYSTEM =
-  "Você é o Especialista Financeiro do app Control Finance. Analise o painel de contas de consumo (água, energia, internet, telefone, gás) e retorne UMA frase de no máximo 160 caracteres dizendo o que o usuário deve fazer agora. Priorize o que está vencido. Seja direto. Retorne APENAS o texto, sem formatação, sem aspas, sem JSON.";
+  "Você é o Especialista Financeiro do app Control Finance. Analise o painel de contas de consumo (água, energia, internet, telefone, TV, gás) e retorne UMA frase de no máximo 160 caracteres dizendo o que o usuário deve fazer agora. Priorize o que está vencido. Seja direto. Retorne APENAS o texto, sem formatação, sem aspas, sem JSON.";
 
 const classifyUtilityRisk = (summary) => {
   if (summary.overdueCount > 0) return "critical";

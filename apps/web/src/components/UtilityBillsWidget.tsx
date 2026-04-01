@@ -13,6 +13,7 @@ const BILL_TYPE_LABELS: Record<string, string> = {
   water: "Água",
   internet: "Internet",
   phone: "Telefone",
+  tv: "TV",
   gas: "Gás",
 };
 
@@ -411,7 +412,7 @@ const UtilityBillsWidget = (): JSX.Element => {
       {/* Empty state */}
       {!hasAny ? (
         <div className="rounded border border-dashed border-cf-border bg-cf-bg-subtle px-3 py-3 text-sm text-cf-text-secondary">
-          Cadastre suas contas de água, energia e internet para acompanhar o vencimento aqui.
+          Cadastre suas contas de água, energia, internet, telefone e TV para acompanhar o vencimento aqui.
         </div>
       ) : (
         <>

@@ -8,7 +8,7 @@ const MAX_LIMIT = 100;
 const TITLE_MAX_LENGTH = 200;
 const VALID_STATUS_FILTERS = new Set(["pending", "paid", "overdue"]);
 const VALID_BUCKET_FILTERS = new Set(["paid", "overdue", "due_soon", "future"]);
-const VALID_BILL_TYPES = new Set(["energy", "water", "rent", "internet", "phone", "gas", "other"]);
+const VALID_BILL_TYPES = new Set(["energy", "water", "rent", "internet", "phone", "tv", "gas", "other"]);
 const DUE_SOON_DAYS = 7;
 
 const createError = (status, message) => {
@@ -565,11 +565,11 @@ export const createBillsBatchForUser = async (userId, payloads) => {
   });
 };
 
-const UTILITY_BILL_TYPES = ["energy", "water", "internet", "phone", "gas"];
+const UTILITY_BILL_TYPES = ["energy", "water", "internet", "phone", "tv", "gas"];
 const UTILITY_TYPES_PLACEHOLDER = UTILITY_BILL_TYPES.map((_, i) => `$${i + 2}`).join(", ");
 
 /**
- * Returns utility bills (energy/water/internet/phone/gas) grouped by urgency.
+ * Returns utility bills (energy/water/internet/phone/tv/gas) grouped by urgency.
  * Buckets: overdue (past due), dueSoon (within 7 days), upcoming (beyond 7 days).
  * Paid bills are excluded.
  *

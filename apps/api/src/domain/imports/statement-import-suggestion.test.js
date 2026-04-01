@@ -4,6 +4,7 @@ import {
   extractInssSuggestions,
   extractEnergyBillSuggestion,
   extractWaterBillSuggestion,
+  extractTelecomBillSuggestion,
 } from "./statement-import.js";
 
 // ---------------------------------------------------------------------------
@@ -327,5 +328,79 @@ describe("extractWaterBillSuggestion", () => {
     expect(result.referenceMonth).toBe("2026-03");
     expect(result.dueDate).toBe("2026-04-12");
     expect(result.amountDue).toBeCloseTo(88.71);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractTelecomBillSuggestion
+// ---------------------------------------------------------------------------
+
+const TELECOM_INTERNET_SAMPLE = `
+VIVO FIBRA
+Codigo do cliente: 1234567
+Referência: 03/2026
+Vencimento: 15/04/2026
+TOTAL A PAGAR R$ 129,90
+`.trim();
+
+const TELECOM_PHONE_SAMPLE = `
+TIM
+Numero da linha: (11) 99999-9999
+Ref.: abr./2026
+Data de vencimento: 22/05/2026
+Valor do documento R$ 89,50
+Servico Movel Pessoal
+`.trim();
+
+const TELECOM_TV_SAMPLE = `
+SKY
+Assinatura TV
+Contrato: 887766
+Referência: 05/2026
+Vencimento: 10/06/2026
+Total com impostos R$ 159,00
+`.trim();
+
+const TELECOM_NO_FIELDS = `
+Documento telecom sem dados de cobranca.
+`.trim();
+
+describe("extractTelecomBillSuggestion", () => {
+  it("retorna null quando nenhum campo relevante esta presente", () => {
+    expect(extractTelecomBillSuggestion(TELECOM_NO_FIELDS)).toBeNull();
+  });
+
+  it("extrai billType=internet quando sinais de internet estao presentes", () => {
+    const result = extractTelecomBillSuggestion(TELECOM_INTERNET_SAMPLE);
+    expect(result).not.toBeNull();
+    expect(result.type).toBe("bill");
+    expect(result.billType).toBe("internet");
+    expect(result.issuer).toBe("vivo");
+    expect(result.referenceMonth).toBe("2026-03");
+    expect(result.dueDate).toBe("2026-04-15");
+    expect(result.amountDue).toBeCloseTo(129.9);
+    expect(result.customerCode).toMatch(/1234567/);
+  });
+
+  it("extrai billType=phone quando sinais de telefonia estao presentes", () => {
+    const result = extractTelecomBillSuggestion(TELECOM_PHONE_SAMPLE);
+    expect(result).not.toBeNull();
+    expect(result.billType).toBe("phone");
+    expect(result.issuer).toBe("tim");
+    expect(result.referenceMonth).toBe("2026-04");
+    expect(result.dueDate).toBe("2026-05-22");
+    expect(result.amountDue).toBeCloseTo(89.5);
+    expect(result.customerCode).toMatch(/99999/);
+  });
+
+  it("extrai billType=tv quando sinais de TV por assinatura estao presentes", () => {
+    const result = extractTelecomBillSuggestion(TELECOM_TV_SAMPLE);
+    expect(result).not.toBeNull();
+    expect(result.billType).toBe("tv");
+    expect(result.issuer).toBe("sky");
+    expect(result.referenceMonth).toBe("2026-05");
+    expect(result.dueDate).toBe("2026-06-10");
+    expect(result.amountDue).toBeCloseTo(159);
+    expect(result.customerCode).toBe("887766");
   });
 });

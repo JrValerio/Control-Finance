@@ -173,13 +173,16 @@ describe("GET /bills/utility-panel", () => {
 
     // This should be included
     await createBill(token, { billType: "energy", title: "Energia incluída", dueDate: IN_30_DAYS });
+    await createBill(token, { billType: "tv", title: "TV incluída", dueDate: IN_30_DAYS });
 
     const res = await getPanel(token);
 
     expect(res.status).toBe(200);
-    expect(res.body.summary.totalPending).toBe(1);
+    expect(res.body.summary.totalPending).toBe(2);
     const allBills = [...res.body.overdue, ...res.body.dueSoon, ...res.body.upcoming];
-    expect(allBills[0].title).toBe("Energia incluída");
+    const titles = allBills.map((bill) => bill.title);
+    expect(titles).toContain("Energia incluída");
+    expect(titles).toContain("TV incluída");
   });
 
   it("exclui contas ja pagas", async () => {

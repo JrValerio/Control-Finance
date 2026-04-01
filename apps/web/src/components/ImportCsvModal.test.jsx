@@ -175,6 +175,96 @@ describe("ImportCsvModal", () => {
     expect(invalidRowsCard).toHaveTextContent("1");
   });
 
+  it("exibe badge e aviso para conta de telecom detectada", async () => {
+    const file = new File(["dummy"], "telecom.pdf", { type: "application/pdf" });
+    transactionsService.dryRunImportCsv.mockResolvedValueOnce(
+      buildDryRunResponse({
+        documentType: "utility_bill_telecom",
+        summary: {
+          totalRows: 0,
+          validRows: 0,
+          invalidRows: 0,
+          duplicateRows: 0,
+          conflictRows: 0,
+          income: 0,
+          expense: 0,
+        },
+        rows: [],
+        suggestion: {
+          type: "bill",
+          billType: "tv",
+          issuer: "VIVO",
+          referenceMonth: "2026-03",
+          dueDate: "2026-03-18",
+          amountDue: 189.9,
+          customerCode: "12345",
+        },
+      }),
+    );
+
+    render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Conta de internet/telefone/TV")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/energia, água, internet, telefone e TV/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Criar pendência" })).toBeInTheDocument();
+  });
+
+  it("prefill da pendência usa o tipo telecom extraído", async () => {
+    const file = new File(["dummy"], "telecom.pdf", { type: "application/pdf" });
+    transactionsService.dryRunImportCsv.mockResolvedValueOnce(
+      buildDryRunResponse({
+        documentType: "utility_bill_telecom",
+        summary: {
+          totalRows: 0,
+          validRows: 0,
+          invalidRows: 0,
+          duplicateRows: 0,
+          conflictRows: 0,
+          income: 0,
+          expense: 0,
+        },
+        rows: [],
+        suggestion: {
+          type: "bill",
+          billType: "tv",
+          issuer: "VIVO",
+          referenceMonth: "2026-03",
+          dueDate: "2026-03-18",
+          amountDue: 189.9,
+          customerCode: "12345",
+        },
+      }),
+    );
+
+    render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Criar pendência" })).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: "Criar pendência" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Nova pendência")).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText(/título/i)).toHaveValue("Conta de TV — VIVO");
+    expect(screen.getByLabelText(/valor/i)).toHaveValue("189,90");
+    expect(screen.getByLabelText(/vencimento/i)).toHaveValue("2026-03-18");
+    expect(screen.getByLabelText(/mês de referência/i)).toHaveValue("2026-03");
+  });
+
   it("renders conflict rows with visible reason and blocks import when there are no valid rows", async () => {
     const file = new File(["date,type,value"], "import.csv", { type: "text/csv" });
     transactionsService.dryRunImportCsv.mockResolvedValueOnce(
