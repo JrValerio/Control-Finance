@@ -205,13 +205,22 @@ export interface ImportDryRunProfileSuggestion {
 
 export interface ImportDryRunBillSuggestion {
   type: "bill";
-  billType?: "energy" | "water" | null;
+  billType?: "energy" | "water" | "internet" | "phone" | "tv" | "gas" | null;
   issuer?: string | null;
   referenceMonth?: string | null;
   dueDate?: string | null;
   amountDue?: number | null;
   customerCode?: string | null;
 }
+
+const IMPORT_DRY_RUN_BILL_TYPES = new Set([
+  "energy",
+  "water",
+  "internet",
+  "phone",
+  "tv",
+  "gas",
+] as const);
 
 export type ImportDryRunSuggestion = ImportDryRunProfileSuggestion | ImportDryRunBillSuggestion;
 
@@ -613,10 +622,9 @@ const normalizeImportDryRunSuggestion = (
     const normalizedBillType = String(parsed.billType || "").trim();
     return {
       type: "bill",
-      billType:
-        normalizedBillType === "energy" || normalizedBillType === "water"
-          ? normalizedBillType
-          : null,
+      billType: IMPORT_DRY_RUN_BILL_TYPES.has(normalizedBillType as never)
+        ? (normalizedBillType as "energy" | "water" | "internet" | "phone" | "tv" | "gas")
+        : null,
       issuer:
         typeof parsed.issuer === "string" && parsed.issuer.trim() ? parsed.issuer.trim() : null,
       referenceMonth:
