@@ -25,7 +25,7 @@ const ACCENT_CLASSES: Record<NonNullable<TileProps["accent"]>, string> = {
 };
 
 const Tile = ({ label, primary, secondary, tertiary, actionLabel, onActionClick, accent = "default" }: TileProps) => (
-  <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+  <div className="flex min-h-[132px] flex-col rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
     <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-cf-text-secondary">
       {label}
     </p>
@@ -40,7 +40,7 @@ const Tile = ({ label, primary, secondary, tertiary, actionLabel, onActionClick,
       <button
         type="button"
         onClick={onActionClick}
-        className="mt-1 text-xs font-semibold text-brand-1 hover:text-brand-2"
+        className="mt-auto pt-1 text-left text-xs font-semibold text-brand-1 hover:text-brand-2"
       >
         {actionLabel} →
       </button>
@@ -108,7 +108,7 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 6 }).map((_, i) => (
           <SkeletonTile key={i} />
         ))}
@@ -311,7 +311,7 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
         };
 
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
       <Tile {...bankTile} />
       <Tile {...billsTile} />
       <Tile {...cardTile} />
