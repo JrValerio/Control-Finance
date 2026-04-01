@@ -98,14 +98,15 @@ describe("BillsSummaryWidget", () => {
     expect(screen.queryByText("Ver pendências →")).not.toBeInTheDocument();
   });
 
-  it("retorna null silenciosamente em caso de erro do getSummary", async () => {
+  it("exibe estado de risco orientativo em caso de erro do getSummary", async () => {
     vi.mocked(billsService.getSummary).mockRejectedValue(new Error("Falha de rede"));
-    const { container } = renderWidget();
+    renderWidget();
 
     await waitFor(() => {
       expect(screen.queryByText("Carregando pendências...")).not.toBeInTheDocument();
     });
 
-    expect(container.firstChild).toBeNull();
+    expect(screen.getByText("Resumo de pendências indisponível")).toBeInTheDocument();
+    expect(screen.getByText(/A consulta de contas pendentes e vencidas falhou/i)).toBeInTheDocument();
   });
 });

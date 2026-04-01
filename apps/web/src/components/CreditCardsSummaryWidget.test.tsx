@@ -97,11 +97,11 @@ describe("CreditCardsSummaryWidget", () => {
     renderWidget();
 
     await waitFor(() => {
-      expect(screen.getByText("Nenhum cartão cadastrado ainda.")).toBeInTheDocument();
+      expect(screen.getAllByText("Nenhum cartão cadastrado ainda.").length).toBeGreaterThan(0);
     });
 
     expect(
-      screen.getByText(/Cadastre um cartão para acompanhar limite disponível/i),
+      screen.getByText(/Cadastre ao menos um cartão para liberar a visão operacional/i),
     ).toBeInTheDocument();
   });
 

@@ -3,6 +3,7 @@ import { forecastService, type Forecast } from "../services/forecast.service";
 import { profileService } from "../services/profile.service";
 import { useMaskedCurrency } from "../context/DiscreetModeContext";
 import { logWidgetFallbackError } from "../utils/widgetFallbackTelemetry";
+import { OperationalSeverityBadge, OperationalStateBlock, type OperationalSeverity } from "./OperationalStateBlock";
 
 interface ForecastCardProps {
   onOpenProfileSettings?: () => void;
@@ -279,21 +280,17 @@ const ForecastCard = ({
 
   const hasNegativeProjection = forecast !== null && forecast.adjustedProjectedBalance < 0;
   const hasPendingBills = forecast !== null && forecast.billsPendingCount > 0;
-  const cardToneClass = hasNegativeProjection
-    ? "border-red-300"
+  const severityLevel: OperationalSeverity = hasNegativeProjection
+    ? "risco"
     : hasPendingBills
-      ? "border-amber-300"
-      : "border-brand-1";
-  const statusBadgeClass = hasNegativeProjection
-    ? "border-red-200 bg-red-50 text-red-700"
-    : hasPendingBills
-      ? "border-amber-200 bg-amber-50 text-amber-700"
-      : "border-emerald-200 bg-emerald-50 text-emerald-700";
-  const statusLabel = hasNegativeProjection
-    ? "Risco de fechamento negativo"
-    : hasPendingBills
-      ? "Atenção às pendências"
-      : "Trajetória estável";
+      ? "atencao"
+      : "normal";
+  const cardToneClass =
+    severityLevel === "risco"
+      ? "border-red-300"
+      : severityLevel === "atencao"
+        ? "border-amber-300"
+        : "border-brand-1";
 
   // Active state
   return (
@@ -305,9 +302,7 @@ const ForecastCard = ({
             Saldo estimado até o fim do mês com lançamentos e pendências atuais.
           </p>
         </div>
-        <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadgeClass}`}>
-          {statusLabel}
-        </span>
+        <OperationalSeverityBadge severity={severityLevel} />
         <button
           type="button"
           onClick={handleRecompute}
@@ -319,24 +314,33 @@ const ForecastCard = ({
       </div>
 
       {hasLoadError ? (
-        <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
-          <p>Não foi possível carregar a projeção deste widget.</p>
-          <div className="mt-2 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleRetryLoad}
-              disabled={hasRetriedLoad}
-              className="rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {hasRetriedLoad ? "Nova tentativa indisponível" : "Tentar novamente"}
-            </button>
-            {hasRetriedLoad ? (
-              <span className="text-xs text-red-600">Limite de 1 nova tentativa atingido.</span>
-            ) : null}
-          </div>
+        <div className="mt-3">
+          <OperationalStateBlock
+            severity="risco"
+            title="Leitura parcial da projeção"
+            happened="Não foi possível carregar a projeção deste widget."
+            impact="A projeção pode ficar defasada e reduzir a confiança da triagem operacional."
+            nextStep={
+              hasRetriedLoad
+                ? "Recarregue a página em instantes para tentar uma nova sincronização."
+                : "Use a ação de nova tentativa para buscar os dados atualizados agora."
+            }
+            ctaLabel={hasRetriedLoad ? "Nova tentativa indisponível" : "Tentar novamente"}
+            onCta={handleRetryLoad}
+            ctaDisabled={hasRetriedLoad}
+            ctaDisabledLabel={hasRetriedLoad ? "Limite de 1 nova tentativa atingido." : undefined}
+          />
         </div>
       ) : error ? (
-        <p className="mt-2 text-xs text-red-600">{error}</p>
+        <div className="mt-3">
+          <OperationalStateBlock
+            severity="atencao"
+            title="Atualização manual não concluída"
+            happened={error}
+            impact="A projeção continua visível, mas sem o recálculo solicitado agora."
+            nextStep="Tente novamente em alguns segundos para atualizar o cenário do mês."
+          />
+        </div>
       ) : forecast !== null ? (
         <>
           <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -406,7 +410,15 @@ const ForecastCard = ({
           <BankLimitPanel forecast={forecast} money={money} />
         </>
       ) : (
-        <p className="mt-3 text-xs text-cf-text-secondary">Sem dados de projeção para exibir neste momento.</p>
+        <div className="mt-3">
+          <OperationalStateBlock
+            severity="atencao"
+            title="Projeção ainda indisponível"
+            happened="Ainda não há dados suficientes para montar a projeção do mês."
+            impact="Sem essa leitura, fica mais difícil antecipar risco de fechamento negativo."
+            nextStep="Registre lançamentos e contas do mês para liberar o cálculo desta projeção."
+          />
+        </div>
       )}
     </div>
   );

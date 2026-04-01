@@ -3,6 +3,7 @@ import { useMaskedCurrency } from "../context/DiscreetModeContext";
 import { dashboardService, type DashboardSnapshot } from "../services/dashboard.service";
 import { getApiErrorMessage } from "../utils/apiError";
 import { logWidgetFallbackError } from "../utils/widgetFallbackTelemetry";
+import { OperationalSeverityBadge, OperationalStateBlock } from "./OperationalStateBlock";
 
 // ─── Tile ─────────────────────────────────────────────────────────────────────
 
@@ -118,29 +119,36 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
 
   if (loadError) {
     return (
-      <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
-        <p>{loadError}</p>
-        <div className="mt-2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleRetry}
-            disabled={hasRetriedLoad}
-            className="rounded border border-red-300 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {hasRetriedLoad ? "Nova tentativa indisponível" : "Tentar novamente"}
-          </button>
-          {hasRetriedLoad ? (
-            <span className="text-xs text-red-600">Limite de 1 nova tentativa atingido.</span>
-          ) : null}
-        </div>
+      <div className="rounded border border-red-200 bg-cf-surface p-3">
+        <OperationalStateBlock
+          severity="risco"
+          title="Resumo operacional com falha de carregamento"
+          happened={loadError}
+          impact="A triagem inicial perde parte dos sinais de risco e prioridade do mês."
+          nextStep={
+            hasRetriedLoad
+              ? "Recarregue a página para realizar nova sincronização do resumo operacional."
+              : "Use a nova tentativa para carregar os indicadores operacionais agora."
+          }
+          ctaLabel={hasRetriedLoad ? "Nova tentativa indisponível" : "Tentar novamente"}
+          onCta={handleRetry}
+          ctaDisabled={hasRetriedLoad}
+          ctaDisabledLabel={hasRetriedLoad ? "Limite de 1 nova tentativa atingido." : undefined}
+        />
       </div>
     );
   }
 
   if (!snapshot) {
     return (
-      <div className="rounded border border-cf-border bg-cf-surface px-4 py-3 text-sm text-cf-text-secondary">
-        Resumo operacional indisponível no momento.
+      <div className="rounded border border-amber-200 bg-cf-surface p-3">
+        <OperationalStateBlock
+          severity="atencao"
+          title="Resumo operacional sem base suficiente"
+          happened="Resumo operacional indisponível no momento."
+          impact="Os blocos críticos podem não refletir o cenário completo desta competência."
+          nextStep="Registre movimentações e contas do mês para liberar a leitura consolidada."
+        />
       </div>
     );
   }
@@ -311,13 +319,22 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
         };
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      <Tile {...bankTile} />
-      <Tile {...billsTile} />
-      <Tile {...cardTile} />
-      <Tile {...incomeTile} />
-      <Tile {...forecastTile} />
-      <Tile {...consignadoTile} />
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-cf-text-secondary">Severidade</span>
+        <OperationalSeverityBadge severity="normal" />
+        <OperationalSeverityBadge severity="atencao" />
+        <OperationalSeverityBadge severity="risco" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <Tile {...bankTile} />
+        <Tile {...billsTile} />
+        <Tile {...cardTile} />
+        <Tile {...incomeTile} />
+        <Tile {...forecastTile} />
+        <Tile {...consignadoTile} />
+      </div>
     </div>
   );
 };
