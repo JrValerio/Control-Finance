@@ -1,7 +1,7 @@
 # Sprint B - PR M - Plano cirurgico (validacoes e alertas de obrigatoriedade)
 
 Data: 2026-04-02  
-Status: em execucao (slice 1)
+Status: em execucao (slice 2)
 
 ## Objetivo
 
@@ -72,3 +72,32 @@ Roadmap:
 - Diff pequeno e escopo unico por slice.
 - Sem merge sem diff completo e aprovacao explicita.
 - Sem alterar contratos estaveis do PR L sem necessidade objetiva.
+
+## Slice 2 (este PR)
+
+Escopo:
+- detalhar o motivo `EXEMPT_AND_EXCLUSIVE_INCOME_LIMIT` com total, limite e composicao (isentos e exclusivos);
+- validar via teste de integracao de `/tax/obligation/:taxYear` para o gatilho de isentos/exclusivos.
+
+Fora de escopo:
+- alteracao de thresholds oficiais;
+- mudanca de semantica dos codigos de gatilho;
+- mudancas de UX na TaxPage.
+
+## Criterios de aceite (slice 2)
+
+1. Quando `EXEMPT_AND_EXCLUSIVE_INCOME_LIMIT` disparar, a mensagem deve incluir:
+- total combinado;
+- limite aplicavel;
+- composicao entre rendimentos isentos e exclusivos.
+
+2. Endpoint `/tax/obligation/:taxYear` continua deterministico:
+- codigo do gatilho preservado;
+- `mustDeclare` sem regressao.
+
+3. Suite focada verde.
+
+## Validacao (slice 2)
+
+- npm -w apps/api run test -- src/tax.test.js -t "explica composicao CLT e INSS no gatilho tributavel"
+- npm -w apps/api run test -- src/tax.test.js -t "explica total e composicao no gatilho de isentos/exclusivos"

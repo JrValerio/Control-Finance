@@ -65,6 +65,20 @@ const buildTaxableIncomeLimitMessage = ({
   )}; limite: ${formatMoneyForMessage(taxableIncomeThreshold)}.${compositionMessage}`;
 };
 
+const buildExemptAndExclusiveIncomeLimitMessage = ({
+  annualCombinedExemptAndExclusiveIncome,
+  exemptAndExclusiveIncomeThreshold,
+  annualExemptIncome,
+  annualExclusiveIncome,
+}) =>
+  `Rendimentos isentos ou tributados exclusivamente na fonte acima do limite. Total: ${formatMoneyForMessage(
+    annualCombinedExemptAndExclusiveIncome,
+  )}; limite: ${formatMoneyForMessage(
+    exemptAndExclusiveIncomeThreshold,
+  )}. Composicao: ISENTOS ${formatMoneyForMessage(annualExemptIncome)}, EXCLUSIVOS ${formatMoneyForMessage(
+    annualExclusiveIncome,
+  )}.`;
+
 export const summarizeReviewedTaxFacts = (facts = []) => {
   const totals = {
     annualTaxableIncome: 0,
@@ -198,6 +212,9 @@ export const calculateTaxObligation = ({
   const reasons = [];
 
   const taxableIncomeThreshold = Number(obligationRules.taxableIncomeThreshold || 0);
+  const exemptAndExclusiveIncomeThreshold = Number(
+    obligationRules.exemptAndExclusiveIncomeThreshold || 0,
+  );
 
   if (annualTaxableIncome > taxableIncomeThreshold) {
     reasons.push({
@@ -212,13 +229,15 @@ export const calculateTaxObligation = ({
     });
   }
 
-  if (
-    annualCombinedExemptAndExclusiveIncome >
-    Number(obligationRules.exemptAndExclusiveIncomeThreshold || 0)
-  ) {
+  if (annualCombinedExemptAndExclusiveIncome > exemptAndExclusiveIncomeThreshold) {
     reasons.push({
       code: "EXEMPT_AND_EXCLUSIVE_INCOME_LIMIT",
-      message: "Rendimentos isentos ou tributados exclusivamente na fonte acima do limite.",
+      message: buildExemptAndExclusiveIncomeLimitMessage({
+        annualCombinedExemptAndExclusiveIncome,
+        exemptAndExclusiveIncomeThreshold,
+        annualExemptIncome,
+        annualExclusiveIncome,
+      }),
     });
   }
 

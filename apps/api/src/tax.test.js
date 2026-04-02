@@ -2326,6 +2326,61 @@ describe("Tax API foundation", () => {
     });
   });
 
+  it("GET /tax/obligation/:taxYear explica total e composicao no gatilho de isentos/exclusivos", async () => {
+    const email = "tax-obligation-exempt-exclusive@test.dev";
+    const token = await registerAndLogin(email);
+    const userResult = await dbQuery(
+      `SELECT id
+       FROM users
+       WHERE email = $1`,
+      [email],
+    );
+    const userId = Number(userResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO tax_facts (
+         user_id,
+         tax_year,
+         fact_type,
+         category,
+         subcategory,
+         reference_period,
+         currency,
+         amount,
+         metadata_json,
+         review_status
+       )
+       VALUES
+       ($1, 2026, 'exempt_income', 'income_report_inss', 'inss_retirement_65_plus_exempt', '2025-annual', 'BRL', 150000, '{}'::jsonb, 'approved'),
+       ($1, 2026, 'exclusive_tax_income', 'income_report_employer', 'thirteenth_salary', '2025-annual', 'BRL', 70000, '{}'::jsonb, 'approved')`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/tax/obligation/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.mustDeclare).toBe(true);
+    expect(response.body.reasons).toHaveLength(1);
+    expect(response.body.reasons[0]).toMatchObject({
+      code: "EXEMPT_AND_EXCLUSIVE_INCOME_LIMIT",
+    });
+    expect(response.body.reasons[0].message).toContain(
+      "Rendimentos isentos ou tributados exclusivamente na fonte acima do limite.",
+    );
+    expect(response.body.reasons[0].message).toContain("Total: 220000.00");
+    expect(response.body.reasons[0].message).toContain("limite: 200000.00");
+    expect(response.body.reasons[0].message).toContain("ISENTOS 150000.00");
+    expect(response.body.reasons[0].message).toContain("EXCLUSIVOS 70000.00");
+    expect(response.body.totals).toMatchObject({
+      annualTaxableIncome: 0,
+      annualExemptIncome: 150000,
+      annualExclusiveIncome: 70000,
+      annualCombinedExemptAndExclusiveIncome: 220000,
+    });
+  });
+
   it("exclui do calculo oficial fatos revisados com CPF divergente do titular cadastrado", async () => {
     const email = "tax-obligation-taxpayer-filter@test.dev";
     const token = await registerAndLogin(email);
