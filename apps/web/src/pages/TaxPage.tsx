@@ -880,6 +880,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
 
     try {
       const result = await taxService.bulkApproveFacts(factIds, "Aprovação em lote pela Central do Leão.");
+      const approvedCount = result.updatedCount || factIds.length;
 
       applyReviewPreview(result.preview);
       setFactsPage((currentPage) => ({
@@ -892,7 +893,11 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
         await loadPageData();
       }
 
-      showSuccess("Fatos pendentes aprovados em lote.");
+      showSuccess(
+        approvedCount === 1
+          ? "1 fato pendente visível foi aprovado em lote."
+          : `${approvedCount} fatos pendentes visíveis foram aprovados em lote.`,
+      );
     } catch (error) {
       setPageError(getApiErrorMessage(error, "Não foi possível aprovar os fatos em lote."));
     } finally {
@@ -1030,6 +1035,14 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     .filter((fact) => fact.factType === "debt_balance")
     .reduce((sum, fact) => sum + fact.amount, 0);
   const pendingFactsInView = factsPage.items.filter((fact) => fact.reviewStatus === "pending").length;
+  const selectedReviewFilterLabel =
+    REVIEW_FILTER_OPTIONS.find((option) => option.value === reviewStatusFilter)?.label || "Pendentes";
+  const selectedFactTypeFilterLabel =
+    FACT_TYPE_FILTER_OPTIONS.find((option) => option.value === factTypeFilter)?.label ||
+    "Todos os tipos";
+  const selectedSourceFilterLabel =
+    SOURCE_FILTER_OPTIONS.find((option) => option.value === sourceFilter)?.label ||
+    "Todas as fontes";
   const reviewStatusLabel = showLoadingPlaceholders
     ? "Revisão fiscal em carregamento"
     : summary.sourceCounts.factsPending > 0
@@ -1676,14 +1689,19 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
                 Fatos pendentes ainda fora do cálculo. Aprovar ou corrigir aqui atualiza a obrigatoriedade na hora.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleBulkApprove}
-              disabled={isBulkApproving || pendingFactsInView === 0}
-              className="rounded border border-brand-1 px-3 py-2 text-sm font-semibold text-brand-1 hover:bg-brand-1/10 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isBulkApproving ? "Aprovando..." : "Aprovar todos pendentes"}
-            </button>
+            <div className="flex flex-col items-start gap-1 md:items-end">
+              <button
+                type="button"
+                onClick={handleBulkApprove}
+                disabled={isBulkApproving || pendingFactsInView === 0}
+                className="rounded border border-brand-1 px-3 py-2 text-sm font-semibold text-brand-1 hover:bg-brand-1/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBulkApproving ? "Aprovando..." : "Aprovar todos pendentes"}
+              </button>
+              <p className="text-right text-xs text-cf-text-secondary" aria-live="polite">
+                Escopo do lote: {pendingFactsInView} pendente(s) visível(is). Filtros atuais: {selectedReviewFilterLabel} | {selectedFactTypeFilterLabel} | {selectedSourceFilterLabel}.
+              </p>
+            </div>
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-3">
