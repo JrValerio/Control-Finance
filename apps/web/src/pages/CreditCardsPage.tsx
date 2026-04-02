@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import ImportCsvModal from "../components/ImportCsvModal";
 import CreditCardModal from "../components/CreditCardModal";
 import CreditCardPurchaseModal from "../components/CreditCardPurchaseModal";
 import { billsService } from "../services/bills.service";
@@ -110,6 +111,7 @@ const getInvoiceBadge = (invoice: CreditCardItem["invoices"][number]) => {
 const CreditCardsPage = ({
   onBack = undefined,
 }: CreditCardsPageProps): JSX.Element => {
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [cards, setCards] = useState<CreditCardItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [pageError, setPageError] = useState("");
@@ -267,16 +269,25 @@ const CreditCardsPage = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingCard(null);
-              setIsCardModalOpen(true);
-            }}
-            className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2"
-          >
-            + Novo cartão
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsImportOpen(true)}
+              className="rounded border border-cf-border px-4 py-2 text-sm font-semibold text-cf-text-secondary hover:bg-cf-bg-subtle hover:text-cf-text-primary"
+            >
+              Importar fatura
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingCard(null);
+                setIsCardModalOpen(true);
+              }}
+              className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2"
+            >
+              + Novo cartão
+            </button>
+          </div>
         </div>
 
         {pageError ? (
@@ -572,6 +583,10 @@ const CreditCardsPage = ({
         cardName={purchaseCard?.name || ""}
         onClose={() => setPurchaseCard(null)}
         onSave={handleSavePurchase}
+      />
+      <ImportCsvModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
       />
     </div>
   );

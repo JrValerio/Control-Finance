@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import ImportCsvModal from "../components/ImportCsvModal";
 import IncomeSourceModal from "../components/IncomeSourceModal";
 import IncomeDeductionModal from "../components/IncomeDeductionModal";
 import IncomeStatementModal from "../components/IncomeStatementModal";
@@ -70,6 +71,7 @@ const getStatementStatusBadge = (status: "draft" | "posted") => {
 const IncomeSourcesPage = ({
   onBack = undefined,
 }: IncomeSourcesPageProps): JSX.Element => {
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [sources, setSources] = useState<IncomeSourceWithDeductions[]>([]);
   const [statementsBySource, setStatementsBySource] = useState<Record<number, IncomeStatement[]>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -303,13 +305,22 @@ const IncomeSourcesPage = ({
             ) : null}
             <h1 className="text-xl font-bold text-cf-text-primary">Fontes de Renda</h1>
           </div>
-          <button
-            type="button"
-            onClick={openCreateSourceModal}
-            className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2"
-          >
-            + Nova fonte
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsImportOpen(true)}
+              className="rounded border border-cf-border px-4 py-2 text-sm font-semibold text-cf-text-secondary hover:bg-cf-bg-subtle hover:text-cf-text-primary"
+            >
+              Importar extrato
+            </button>
+            <button
+              type="button"
+              onClick={openCreateSourceModal}
+              className="rounded bg-brand-1 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-2"
+            >
+              + Nova fonte
+            </button>
+          </div>
         </div>
 
         {/* Feedback */}
@@ -609,6 +620,10 @@ const IncomeSourcesPage = ({
           onPosted={handlePosted}
         />
       ) : null}
+      <ImportCsvModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+      />
     </div>
   );
 };
