@@ -349,7 +349,7 @@ const ForecastCard = ({
         </div>
       ) : forecast !== null ? (
         <>
-          <div className="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-3">
               <p className="text-xs font-medium uppercase text-cf-text-secondary">Projeção ajustada</p>
               <p

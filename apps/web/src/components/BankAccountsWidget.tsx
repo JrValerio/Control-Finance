@@ -242,7 +242,7 @@ const BankAccountsWidget = (): JSX.Element => {
               <div className="rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-3">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Saldo em conta</p>
                 <p
-                  className={`mt-1 text-lg font-semibold leading-none ${
+                  className={`mt-1 whitespace-nowrap text-base font-semibold leading-none ${
                     summary.totalBalance < 0 ? "text-red-600" : "text-cf-text-primary"
                   }`}
                 >
@@ -256,7 +256,7 @@ const BankAccountsWidget = (): JSX.Element => {
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">
                   Limite disponível
                 </p>
-                <p className={`mt-1 text-lg font-semibold leading-none ${limitTone}`}>
+                <p className={`mt-1 whitespace-nowrap text-base font-semibold leading-none ${limitTone}`}>
                   {money(summary.totalLimitAvailable)}
                 </p>
                 <p className={`mt-1 text-[11px] ${limitSupportTone}`}>
@@ -274,7 +274,7 @@ const BankAccountsWidget = (): JSX.Element => {
               <div className="rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-3">
                 <p className="text-xs font-medium uppercase text-cf-text-secondary">Posição real</p>
                 <p
-                  className={`mt-1 text-lg font-semibold leading-none ${
+                  className={`mt-1 whitespace-nowrap text-base font-semibold leading-none ${
                     summary.totalBalance + summary.totalLimitAvailable <= 0
                       ? "text-red-600"
                       : "text-cf-text-primary"
