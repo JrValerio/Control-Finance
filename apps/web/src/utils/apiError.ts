@@ -2,6 +2,7 @@ interface ApiLikeError {
   response?: {
     data?: {
       message?: string;
+      code?: string;
     };
     status?: number;
   };
@@ -20,4 +21,14 @@ export const getApiErrorMessage = (error: unknown, fallbackMessage: string): str
 export const getApiErrorStatus = (error: unknown): number | undefined => {
   if (!error || typeof error !== "object") return undefined;
   return (error as ApiLikeError).response?.status;
+};
+
+export const getApiErrorCode = (error: unknown): string | undefined => {
+  if (!error || typeof error !== "object") return undefined;
+
+  const code = (error as ApiLikeError).response?.data?.code;
+  if (typeof code !== "string") return undefined;
+
+  const normalized = code.trim();
+  return normalized ? normalized : undefined;
 };

@@ -175,6 +175,32 @@ describe("ImportCsvModal", () => {
     expect(invalidRowsCard).toHaveTextContent("1");
   });
 
+  it("exibe feedback visual quando OCR de PDF está desativado", async () => {
+    const file = new File(["dummy"], "extrato-escaneado.pdf", { type: "application/pdf" });
+    transactionsService.dryRunImportCsv.mockRejectedValueOnce({
+      response: {
+        data: {
+          message: "PDF sem texto reconhecivel. Tente OFX ou CSV.",
+          code: "IMPORT_PDF_OCR_DISABLED",
+        },
+      },
+    });
+
+    render(<ImportCsvModal isOpen onClose={vi.fn()} />);
+
+    await userEvent.upload(screen.getByLabelText("Arquivo do extrato"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Pré-visualizar" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("OCR para PDF está desativado neste ambiente.")).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/este arquivo parece escaneado e não possui texto nativo suficiente/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/para continuar agora, use o extrato em OFX ou CSV/i)).toBeInTheDocument();
+  });
+
   it("exibe badge e aviso para conta de telecom detectada", async () => {
     const file = new File(["dummy"], "telecom.pdf", { type: "application/pdf" });
     transactionsService.dryRunImportCsv.mockResolvedValueOnce(

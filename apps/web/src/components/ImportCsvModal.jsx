@@ -6,13 +6,25 @@ import { salaryService } from "../services/salary.service";
 import { forecastService } from "../services/forecast.service";
 import { categoriesService } from "../services/categories.service";
 import { formatCurrency } from "../utils/formatCurrency";
-import { getApiErrorMessage } from "../utils/apiError";
+import { getApiErrorCode, getApiErrorMessage } from "../utils/apiError";
 import BillModal from "./BillModal";
 import IncomeStatementQuickModal from "./IncomeStatementQuickModal";
 import ConfirmDialog from "./ConfirmDialog";
 
 const PREVIEW_PAGE_SIZE = 100;
 const SALARY_PROFILE_UPDATED_EVENT = "salary-profile-updated";
+const PDF_OCR_DISABLED_CODE = "IMPORT_PDF_OCR_DISABLED";
+const PDF_OCR_GUIDANCE_MESSAGE = "PDF sem texto reconhecivel. Tente OFX ou CSV.";
+
+const isOcrDisabledFeedbackError = (error, apiMessage) => {
+  const apiCode = getApiErrorCode(error);
+  if (apiCode === PDF_OCR_DISABLED_CODE) {
+    return true;
+  }
+
+  return String(apiMessage || "").trim().toLowerCase() === PDF_OCR_GUIDANCE_MESSAGE.toLowerCase();
+};
+
 const buildProfileSuggestionKey = (suggestion) =>
   [
     suggestion?.line ?? "",
@@ -133,6 +145,7 @@ const ImportCsvModal = ({
   const [isCommitting, setIsCommitting] = useState(false);
   const [dryRunResult, setDryRunResult] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
+  const [showOcrDisabledFeedback, setShowOcrDisabledFeedback] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [showProfileConfirm, setShowProfileConfirm] = useState(false);
   const [isApplyingProfile, setIsApplyingProfile] = useState(false);
@@ -181,6 +194,7 @@ const ImportCsvModal = ({
     setIsCommitting(false);
     setDryRunResult(null);
     setErrorMessage("");
+    setShowOcrDisabledFeedback(false);
     setSuccessMessage("");
     setShowProfileConfirm(false);
     setIsApplyingProfile(false);
@@ -790,14 +804,17 @@ const ImportCsvModal = ({
 
     setIsDryRunning(true);
     setErrorMessage("");
+    setShowOcrDisabledFeedback(false);
     setSuccessMessage("");
 
     try {
       const result = await transactionsService.dryRunImportCsv(selectedFile);
       setDryRunResult(result);
     } catch (error) {
+      const apiMessage = getApiErrorMessage(error, "Não foi possível processar o arquivo do extrato.");
       setDryRunResult(null);
-      setErrorMessage(getApiErrorMessage(error, "Não foi possível processar o arquivo do extrato."));
+      setErrorMessage(apiMessage);
+      setShowOcrDisabledFeedback(isOcrDisabledFeedbackError(error, apiMessage));
     } finally {
       setIsDryRunning(false);
     }
@@ -943,6 +960,7 @@ const ImportCsvModal = ({
                 setSelectedFile(nextFile);
                 setDryRunResult(null);
                 setErrorMessage("");
+                setShowOcrDisabledFeedback(false);
                 setSuccessMessage("");
                 setProfileApplied(false);
                 setShowProfileConfirm(false);
@@ -993,6 +1011,16 @@ const ImportCsvModal = ({
           {errorMessage ? (
             <div className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {errorMessage}
+            </div>
+          ) : null}
+
+          {showOcrDisabledFeedback ? (
+            <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <p className="font-semibold">OCR para PDF está desativado neste ambiente.</p>
+              <p className="mt-1">
+                Este arquivo parece escaneado e não possui texto nativo suficiente para leitura automática.
+              </p>
+              <p className="mt-1">Para continuar agora, use o extrato em OFX ou CSV.</p>
             </div>
           ) : null}
 
