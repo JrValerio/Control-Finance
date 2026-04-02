@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import TaxUploadModal, { type TaxUploadStage } from "../components/TaxUploadModal";
 import TaxManualFactModal from "../components/TaxManualFactModal";
 import { profileService } from "../services/profile.service";
@@ -144,6 +144,46 @@ const FACT_TYPE_FILTER_OPTIONS: Array<{
   { value: "all", label: "Todos os tipos" },
   ...Object.entries(FACT_TYPE_LABELS).map(([value, label]) => ({ value, label })),
 ];
+
+const DEFAULT_REVIEW_STATUS_FILTER: TaxFactReviewStatus | "all" = "pending";
+const DEFAULT_FACT_TYPE_FILTER = "all";
+const DEFAULT_SOURCE_FILTER: TaxFactSourceFilter | "all" = "all";
+
+const normalizeReviewStatusFilterParam = (value: string | null): TaxFactReviewStatus | "all" => {
+  const normalizedValue = String(value || "").trim();
+
+  if (!normalizedValue) {
+    return DEFAULT_REVIEW_STATUS_FILTER;
+  }
+
+  return REVIEW_FILTER_OPTIONS.some((option) => option.value === normalizedValue)
+    ? (normalizedValue as TaxFactReviewStatus | "all")
+    : DEFAULT_REVIEW_STATUS_FILTER;
+};
+
+const normalizeFactTypeFilterParam = (value: string | null): string => {
+  const normalizedValue = String(value || "").trim();
+
+  if (!normalizedValue) {
+    return DEFAULT_FACT_TYPE_FILTER;
+  }
+
+  return FACT_TYPE_FILTER_OPTIONS.some((option) => option.value === normalizedValue)
+    ? normalizedValue
+    : DEFAULT_FACT_TYPE_FILTER;
+};
+
+const normalizeSourceFilterParam = (value: string | null): TaxFactSourceFilter | "all" => {
+  const normalizedValue = String(value || "").trim();
+
+  if (!normalizedValue) {
+    return DEFAULT_SOURCE_FILTER;
+  }
+
+  return SOURCE_FILTER_OPTIONS.some((option) => option.value === normalizedValue)
+    ? (normalizedValue as TaxFactSourceFilter | "all")
+    : DEFAULT_SOURCE_FILTER;
+};
 
 const METHOD_LABELS: Record<string, string> = {
   legal_deductions: "Deduções legais",
@@ -385,6 +425,7 @@ const FactSummaryCard = ({
 
 const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxPageProps): JSX.Element => {
   const params = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const taxYear = useMemo(() => normalizeRouteTaxYear(params.taxYear), [params.taxYear]);
 
   const [summary, setSummary] = useState<TaxSummary>({
@@ -407,10 +448,14 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     total: 0,
   });
   const [reviewStatusFilter, setReviewStatusFilter] = useState<TaxFactReviewStatus | "all">(
-    "pending",
+    () => normalizeReviewStatusFilterParam(searchParams.get("reviewStatus")),
   );
-  const [factTypeFilter, setFactTypeFilter] = useState<string>("all");
-  const [sourceFilter, setSourceFilter] = useState<TaxFactSourceFilter | "all">("all");
+  const [factTypeFilter, setFactTypeFilter] = useState<string>(() =>
+    normalizeFactTypeFilterParam(searchParams.get("factType")),
+  );
+  const [sourceFilter, setSourceFilter] = useState<TaxFactSourceFilter | "all">(() =>
+    normalizeSourceFilterParam(searchParams.get("sourceFilter")),
+  );
   const [taxpayerCpf, setTaxpayerCpf] = useState<string | null>(null);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [isRebuildingSummary, setIsRebuildingSummary] = useState(false);
@@ -457,6 +502,36 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     },
     [],
   );
+
+  useEffect(() => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    let changed = false;
+
+    const setFilterParam = (key: string, value: string, defaultValue: string) => {
+      const currentValue = nextSearchParams.get(key);
+
+      if (value === defaultValue) {
+        if (currentValue !== null) {
+          nextSearchParams.delete(key);
+          changed = true;
+        }
+        return;
+      }
+
+      if (currentValue !== value) {
+        nextSearchParams.set(key, value);
+        changed = true;
+      }
+    };
+
+    setFilterParam("reviewStatus", reviewStatusFilter, DEFAULT_REVIEW_STATUS_FILTER);
+    setFilterParam("factType", factTypeFilter, DEFAULT_FACT_TYPE_FILTER);
+    setFilterParam("sourceFilter", sourceFilter, DEFAULT_SOURCE_FILTER);
+
+    if (changed) {
+      setSearchParams(nextSearchParams, { replace: true });
+    }
+  }, [factTypeFilter, reviewStatusFilter, searchParams, setSearchParams, sourceFilter]);
 
   const loadPageData = useCallback(async (): Promise<TaxFactsListResult> => {
     const EMPTY_FACTS: TaxFactsListResult = { items: [], page: 1, pageSize: DEFAULT_FACTS_PAGE_SIZE, total: 0 };
