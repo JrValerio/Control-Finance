@@ -461,6 +461,12 @@ describe("TaxPage", () => {
 
       expect(calledWithFilters).toBe(true);
     });
+
+    expect(
+      screen.getByText(
+        "Escopo do lote: 1 pendente(s) visível(is). Filtros atuais: Aprovados | IR retido na fonte | Com documento.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("consome preview do bulk-review sem recarregar summary snapshotado", async () => {
