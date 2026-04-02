@@ -14,6 +14,7 @@
   --cf-text-secondary: #495057;
   --cf-border:         #ADB5BD;
   --cf-border-input:   #E9ECEF;
+  --cf-warning:        #FCD34D;
 }
 
 .dark {
@@ -25,6 +26,7 @@
   --cf-text-secondary: #888888;
   --cf-border:         #2e2e2e;
   --cf-border-input:   #3a3a3a;
+  --cf-warning:        #D97706;
 }
 
 

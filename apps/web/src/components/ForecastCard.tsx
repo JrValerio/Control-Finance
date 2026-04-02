@@ -13,7 +13,7 @@ interface ForecastCardProps {
 
 type CardState = "loading" | "awaiting-profile" | "active" | "frozen";
 
-const FORECAST_CACHE_KEY = "cf.forecast.last";
+export const FORECAST_CACHE_KEY = "cf.forecast.last";
 
 const loadCachedForecast = (): Forecast | null => {
   try {
@@ -240,7 +240,7 @@ const ForecastCard = ({
         : "Novas transações podem não estar refletidas nesta leitura.";
 
     return (
-      <div className="rounded border border-amber-300 bg-cf-surface p-4">
+      <div className="rounded border border-cf-warning bg-cf-surface p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
