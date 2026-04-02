@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import TaxPage from "./TaxPage";
 import { profileService } from "../services/profile.service";
 import {
@@ -145,14 +145,38 @@ const buildDocumentDetail = (overrides: Partial<TaxDocumentDetail> = {}): TaxDoc
   ...overrides,
 });
 
-const renderPage = (props: { onOpenProfileSettings?: () => void } = {}) =>
-  render(
-    <MemoryRouter initialEntries={["/app/tax/2026"]}>
+const LocationProbe = () => {
+  const location = useLocation();
+
+  return <span data-testid="tax-location-search">{location.search}</span>;
+};
+
+const renderPage = (
+  props: { onOpenProfileSettings?: () => void } = {},
+  options: {
+    initialEntry?: string;
+    showLocationProbe?: boolean;
+  } = {},
+) => {
+  const initialEntry = options.initialEntry || "/app/tax/2026";
+  const showLocationProbe = options.showLocationProbe || false;
+
+  return render(
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
-        <Route path="/app/tax/:taxYear" element={<TaxPage onBack={vi.fn()} {...props} />} />
+        <Route
+          path="/app/tax/:taxYear"
+          element={
+            <>
+              <TaxPage onBack={vi.fn()} {...props} />
+              {showLocationProbe ? <LocationProbe /> : null}
+            </>
+          }
+        />
       </Routes>
     </MemoryRouter>,
   );
+};
 
 describe("TaxPage", () => {
   beforeEach(() => {
@@ -467,6 +491,67 @@ describe("TaxPage", () => {
         "Escopo do lote: 1 pendente(s) visível(is). Filtros atuais: Aprovados | IR retido na fonte | Com documento.",
       ),
     ).toBeInTheDocument();
+  });
+
+  it("hidrata filtros iniciais a partir dos query params", async () => {
+    renderPage(
+      {},
+      {
+        initialEntry:
+          "/app/tax/2026?reviewStatus=approved&factType=withheld_tax&sourceFilter=with_document",
+      },
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Central do Leão" })).toBeInTheDocument();
+    });
+
+    expect(screen.getByLabelText("Status de revisão")).toHaveValue("approved");
+    expect(screen.getByLabelText("Tipo de fato")).toHaveValue("withheld_tax");
+    expect(screen.getByLabelText("Fonte do fato")).toHaveValue("with_document");
+
+    await waitFor(() => {
+      const calledWithHydratedFilters = vi
+        .mocked(taxService.listFacts)
+        .mock.calls.some(
+          ([params]) =>
+            params.taxYear === 2026 &&
+            params.reviewStatus === "approved" &&
+            params.factType === "withheld_tax" &&
+            params.sourceFilter === "with_document",
+        );
+
+      expect(calledWithHydratedFilters).toBe(true);
+    });
+  });
+
+  it("persiste filtros na URL ao alterar selecao", async () => {
+    const user = userEvent.setup();
+
+    renderPage({}, { showLocationProbe: true });
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Central do Leão" })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText("Status de revisão"), "approved");
+    await user.selectOptions(screen.getByLabelText("Tipo de fato"), "withheld_tax");
+    await user.selectOptions(screen.getByLabelText("Fonte do fato"), "with_document");
+
+    await waitFor(() => {
+      const query = screen.getByTestId("tax-location-search").textContent || "";
+      expect(query).toContain("reviewStatus=approved");
+      expect(query).toContain("factType=withheld_tax");
+      expect(query).toContain("sourceFilter=with_document");
+    });
+
+    await user.selectOptions(screen.getByLabelText("Status de revisão"), "pending");
+    await user.selectOptions(screen.getByLabelText("Tipo de fato"), "all");
+    await user.selectOptions(screen.getByLabelText("Fonte do fato"), "all");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("tax-location-search")).toHaveTextContent("");
+    });
   });
 
   it("consome preview do bulk-review sem recarregar summary snapshotado", async () => {
