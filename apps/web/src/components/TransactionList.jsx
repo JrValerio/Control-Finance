@@ -136,7 +136,7 @@ const TransactionList = ({ transactions, onDelete, onEdit, onBulkDelete }) => {
                 <button
                   type="button"
                   onClick={() => onEdit(transaction)}
-                  className="whitespace-nowrap text-[11px] font-semibold text-cf-text-secondary transition-colors hover:text-cf-text-primary"
+                  className="rounded border border-cf-border px-2 py-0.5 text-xs font-medium text-cf-text-secondary transition-colors hover:bg-cf-bg-subtle hover:text-cf-text-primary"
                   aria-label={`Editar transação ${transaction.id}`}
                 >
                   Editar
@@ -144,7 +144,7 @@ const TransactionList = ({ transactions, onDelete, onEdit, onBulkDelete }) => {
                 <button
                   type="button"
                   onClick={() => onDelete(transaction.id)}
-                  className="whitespace-nowrap text-[11px] font-semibold text-cf-text-secondary transition-colors hover:text-cf-text-primary"
+                  className="rounded border border-red-200 px-2 py-0.5 text-xs font-medium text-red-500 transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
                   aria-label={`Excluir transação ${transaction.id}`}
                 >
                   Excluir

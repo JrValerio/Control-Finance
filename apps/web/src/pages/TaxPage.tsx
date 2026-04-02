@@ -1395,7 +1395,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
             Blocos fiscais conferíveis para apoiar a decisão antes do snapshot e da exportação oficial.
           </p>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <FactSummaryCard
               title="Rendimentos Tributáveis"
               value={showLoadingPlaceholders ? "Carregando..." : formatCurrency(displayAnnualTaxableIncome)}

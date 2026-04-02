@@ -593,7 +593,7 @@ function BenefitProfileView({
 
         {consignacoes.length > 0 ? (
           <>
-            <ul className="max-h-72 space-y-1.5 overflow-auto pr-1">
+            <ul className="space-y-1.5 pr-1">
               {consignacoes.map((c) => (
               <li
                 key={c.id}

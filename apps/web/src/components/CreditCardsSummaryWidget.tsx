@@ -355,7 +355,7 @@ const CreditCardsSummaryWidget = ({
             Priorize faturas pendentes e acompanhe o uso de limite para evitar estouro no fechamento.
           </p>
 
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
             <div className={`rounded-lg border bg-cf-bg-subtle px-3 py-3 ${hasCriticalInvoices ? "border-amber-200" : "border-cf-border"}`}>
               <p className="text-xs font-medium uppercase text-cf-text-secondary">Faturas pendentes</p>
               <p
