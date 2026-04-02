@@ -2489,14 +2489,10 @@ const App = ({
               </p>
             </div>
 
-            <div className="grid gap-5 xl:grid-cols-3">
-              <div className="xl:col-span-2">
-                <SalaryWidget />
-              </div>
-              <div className="space-y-5">
-                <BankAccountsWidget />
-                <ConsignadoOverviewWidget />
-              </div>
+            <div className="flex flex-col gap-5">
+              <BankAccountsWidget />
+              <SalaryWidget />
+              <ConsignadoOverviewWidget onOpenIncomeSources={handleOpenIncomeSources} />
             </div>
           </section>
 

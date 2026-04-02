@@ -2,18 +2,11 @@ import { useEffect, useState } from "react";
 import {
   salaryService,
   type ConsignadoOverview,
-  type ConsignacaoType,
   type MarginStatus,
 } from "../services/salary.service";
 import { formatCurrency } from "../utils/formatCurrency";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const CONSIGNACAO_TYPE_LABEL: Record<ConsignacaoType, string> = {
-  loan:  "Empréstimo",
-  card:  "Cartão",
-  other: "Outro",
-};
 
 const MARGIN_COLORS: Record<MarginStatus, string> = {
   safe:     "bg-emerald-500",
@@ -33,16 +26,13 @@ const MARGIN_LABEL: Record<MarginStatus, string> = {
   exceeded: "Limite ultrapassado",
 };
 
-const formatEndDate = (value: string | null): string | null => {
-  if (!value) return null;
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) return value;
-  return `${match[3]}/${match[2]}/${match[1]}`;
-};
-
 // ─── Widget ───────────────────────────────────────────────────────────────────
 
-const ConsignadoOverviewWidget = (): JSX.Element | null => {
+interface ConsignadoOverviewWidgetProps {
+  onOpenIncomeSources?: () => void;
+}
+
+const ConsignadoOverviewWidget = ({ onOpenIncomeSources }: ConsignadoOverviewWidgetProps): JSX.Element | null => {
   const [overview, setOverview] = useState<ConsignadoOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -124,44 +114,15 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
         </p>
       )}
 
-      {/* Contract list */}
-      {isLoading ? (
-        <div className="space-y-2 animate-pulse">
-          {[1, 2].map((i) => (
-            <div key={i} className="flex items-center justify-between rounded-lg bg-cf-bg-subtle px-3 py-2.5">
-              <div className="space-y-1">
-                <div className="h-3 w-32 rounded bg-cf-border" />
-                <div className="h-2.5 w-20 rounded bg-cf-border" />
-              </div>
-              <div className="h-4 w-16 rounded bg-cf-border" />
-            </div>
-          ))}
-        </div>
-      ) : (
-        <ul className="space-y-1.5">
-          {(overview?.contracts ?? []).map((c) => {
-            const endLabel = formatEndDate(c.endDate);
-            return (
-              <li
-                key={c.id}
-                className="flex items-center justify-between rounded-lg border border-cf-border/70 bg-cf-bg-subtle px-3 py-2.5"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-medium text-cf-text-primary">
-                    {c.description}
-                  </p>
-                  <p className="text-[10px] text-cf-text-secondary">
-                    {CONSIGNACAO_TYPE_LABEL[c.consignacaoType]}
-                    {endLabel ? ` · até ${endLabel}` : ""}
-                  </p>
-                </div>
-                <span className="ml-3 shrink-0 text-xs font-semibold text-cf-text-primary">
-                  {formatCurrency(c.amount)}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
+      {/* Link to full detail */}
+      {onOpenIncomeSources && (
+        <button
+          type="button"
+          onClick={onOpenIncomeSources}
+          className="mt-1 text-xs font-medium text-brand-1 hover:text-brand-2"
+        >
+          Ver contratos detalhados →
+        </button>
       )}
     </section>
   );
