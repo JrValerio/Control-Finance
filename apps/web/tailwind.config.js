@@ -28,6 +28,7 @@ export default {
         'cf-text-secondary': 'var(--cf-text-secondary)',
         'cf-border':         'var(--cf-border)',
         'cf-border-input':   'var(--cf-border-input)',
+        'cf-warning':        'var(--cf-warning)',
         brand: {
           1: '#6741D9',
           2: '#4C3299',
