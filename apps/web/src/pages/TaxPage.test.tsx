@@ -409,7 +409,7 @@ describe("TaxPage", () => {
       expect(screen.getByText("CPF divergente")).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/Titular do informe: 111.111.111-11/)).toBeInTheDocument();
+    expect(await screen.findByText(/Titular do informe: 111.111.111-11/)).toBeInTheDocument();
     expect(screen.getByText(/fica fora do cálculo oficial do IRPF/i)).toBeInTheDocument();
   });
 
