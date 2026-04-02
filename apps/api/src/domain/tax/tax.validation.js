@@ -1,6 +1,7 @@
 import {
   TAX_DEFAULT_PAGE_SIZE,
   TAX_DOCUMENT_PROCESSING_STATUSES,
+  TAX_FACT_SOURCE_FILTERS,
   TAX_FACT_REVIEW_STATUSES,
   TAX_FACT_TYPES,
   TAX_MAX_PAGE_SIZE,
@@ -78,6 +79,20 @@ export const normalizeOptionalTaxFactReviewStatus = (value) => {
 
   if (!TAX_FACT_REVIEW_STATUSES.includes(normalizedValue)) {
     throw createTaxError(400, "reviewStatus invalido.");
+  }
+
+  return normalizedValue;
+};
+
+export const normalizeOptionalTaxFactSourceFilter = (value) => {
+  if (typeof value === "undefined" || value === null || value === "") {
+    return undefined;
+  }
+
+  const normalizedValue = String(value).trim();
+
+  if (!TAX_FACT_SOURCE_FILTERS.includes(normalizedValue)) {
+    throw createTaxError(400, "sourceFilter invalido.");
   }
 
   return normalizedValue;

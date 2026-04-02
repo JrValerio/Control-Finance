@@ -435,6 +435,34 @@ describe("TaxPage", () => {
     });
   });
 
+  it("aplica filtros da fila e recarrega listagem com os parametros selecionados", async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Central do Leão" })).toBeInTheDocument();
+    });
+
+    await user.selectOptions(screen.getByLabelText("Status de revisão"), "approved");
+    await user.selectOptions(screen.getByLabelText("Tipo de fato"), "withheld_tax");
+    await user.selectOptions(screen.getByLabelText("Fonte do fato"), "with_document");
+
+    await waitFor(() => {
+      const calledWithFilters = vi
+        .mocked(taxService.listFacts)
+        .mock.calls.some(
+          ([params]) =>
+            params.taxYear === 2026 &&
+            params.reviewStatus === "approved" &&
+            params.factType === "withheld_tax" &&
+            params.sourceFilter === "with_document",
+        );
+
+      expect(calledWithFilters).toBe(true);
+    });
+  });
+
   it("consome preview do bulk-review sem recarregar summary snapshotado", async () => {
     const user = userEvent.setup();
 

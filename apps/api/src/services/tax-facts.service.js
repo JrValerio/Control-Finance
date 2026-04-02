@@ -2,6 +2,7 @@ import { dbQuery, withDbTransaction } from "../db/index.js";
 import { generateTaxFactDedupeKey } from "../domain/tax/tax-fact-normalizer.js";
 import {
   createTaxError,
+  normalizeOptionalTaxFactSourceFilter,
   normalizeOptionalTaxFactReviewStatus,
   normalizePagination,
   normalizeTaxFactType,
@@ -169,6 +170,11 @@ export const listTaxFactsByUser = async (userId, query = {}) => {
   const normalizedUserId = normalizeTaxUserId(userId);
   const taxYear = normalizeTaxYear(query.taxYear);
   const reviewStatus = normalizeOptionalTaxFactReviewStatus(query.reviewStatus);
+  const factType =
+    typeof query.factType === "undefined" || query.factType === null || query.factType === ""
+      ? undefined
+      : normalizeTaxFactType(query.factType, "factType");
+  const sourceFilter = normalizeOptionalTaxFactSourceFilter(query.sourceFilter);
   const pagination = normalizePagination(query);
   const whereClauses = ["tf.user_id = $1", "tf.tax_year = $2"];
   const params = [normalizedUserId, taxYear];
@@ -176,6 +182,17 @@ export const listTaxFactsByUser = async (userId, query = {}) => {
   if (reviewStatus) {
     params.push(reviewStatus);
     whereClauses.push(`tf.review_status = $${params.length}`);
+  }
+
+  if (factType) {
+    params.push(factType);
+    whereClauses.push(`tf.fact_type = $${params.length}`);
+  }
+
+  if (sourceFilter === "with_document") {
+    whereClauses.push("tf.source_document_id IS NOT NULL");
+  } else if (sourceFilter === "without_document") {
+    whereClauses.push("tf.source_document_id IS NULL");
   }
 
   const whereSql = whereClauses.join(" AND ");
