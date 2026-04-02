@@ -3,6 +3,7 @@ import { api } from "./api";
 export type TaxFactReviewStatus = "pending" | "approved" | "corrected" | "rejected";
 export type TaxFactReviewAction = "approve" | "correct" | "reject";
 export type TaxExportFormat = "json" | "csv";
+export type TaxFactSourceFilter = "with_document" | "without_document";
 export type TaxDocumentProcessingStatus =
   | "uploaded"
   | "classified"
@@ -821,6 +822,8 @@ export const taxService = {
   listFacts: async (params: {
     taxYear: number;
     reviewStatus?: TaxFactReviewStatus;
+    factType?: string;
+    sourceFilter?: TaxFactSourceFilter;
     page?: number;
     pageSize?: number;
   }): Promise<TaxFactsListResult> => {
@@ -828,6 +831,8 @@ export const taxService = {
       params: {
         taxYear: params.taxYear,
         reviewStatus: params.reviewStatus,
+        factType: params.factType,
+        sourceFilter: params.sourceFilter,
         page: params.page,
         pageSize: params.pageSize,
       },

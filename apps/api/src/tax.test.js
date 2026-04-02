@@ -1585,6 +1585,105 @@ describe("Tax API foundation", () => {
     ]);
   });
 
+  it("GET /tax/facts aplica filtros por status, tipo e origem", async () => {
+    const token = await registerAndLogin("tax-facts-filters@test.dev");
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .field("sourceLabel", "ACME")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "facts-filters.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(uploadResponse.status).toBe(201);
+
+    const reprocessResponse = await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(reprocessResponse.status).toBe(200);
+
+    const taxableFactResult = await dbQuery(
+      `SELECT id
+       FROM tax_facts
+       WHERE source_document_id = $1
+         AND fact_type = 'taxable_income'
+       LIMIT 1`,
+      [uploadResponse.body.document.id],
+    );
+    const taxableFactId = Number(taxableFactResult.rows[0].id);
+
+    const approveResponse = await request(app)
+      .patch(`/tax/facts/${taxableFactId}/review`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        action: "approve",
+        note: "Aprovado para validar filtros.",
+      });
+
+    expect(approveResponse.status).toBe(200);
+
+    const createManualResponse = await request(app)
+      .post("/tax/facts")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        taxYear: 2026,
+        factType: "other",
+        subcategory: "Fato manual sem documento",
+        payerName: "Manual",
+        referencePeriod: "2025-12",
+        amount: 100,
+      });
+
+    expect(createManualResponse.status).toBe(201);
+
+    const approvedWithDocumentResponse = await request(app)
+      .get("/tax/facts?taxYear=2026&reviewStatus=approved&factType=taxable_income&sourceFilter=with_document")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(approvedWithDocumentResponse.status).toBe(200);
+    expect(approvedWithDocumentResponse.body.total).toBe(1);
+    expect(approvedWithDocumentResponse.body.items).toEqual([
+      expect.objectContaining({
+        factType: "taxable_income",
+        reviewStatus: "approved",
+        sourceDocument: expect.objectContaining({
+          id: uploadResponse.body.document.id,
+        }),
+      }),
+    ]);
+
+    const pendingWithoutDocumentResponse = await request(app)
+      .get("/tax/facts?taxYear=2026&reviewStatus=pending&sourceFilter=without_document")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(pendingWithoutDocumentResponse.status).toBe(200);
+    expect(pendingWithoutDocumentResponse.body.total).toBe(1);
+    expect(pendingWithoutDocumentResponse.body.items).toEqual([
+      expect.objectContaining({
+        factType: "other",
+        reviewStatus: "pending",
+        sourceDocumentId: null,
+        sourceDocument: null,
+      }),
+    ]);
+  });
+
   it("POST /tax/facts cria fato manual pendente para a fila de revisao", async () => {
     const token = await registerAndLogin("tax-facts-manual@test.dev");
     const userResult = await dbQuery(

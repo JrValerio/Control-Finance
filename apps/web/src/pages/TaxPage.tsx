@@ -10,6 +10,8 @@ import {
   type TaxDocumentsListResult,
   type TaxFact,
   type TaxFactsListResult,
+  type TaxFactReviewStatus,
+  type TaxFactSourceFilter,
   type TaxObligation,
   type TaxSummary,
 } from "../services/tax.service";
@@ -100,6 +102,48 @@ const FACT_TYPE_LABELS: Record<string, string> = {
   education_deduction: "Dedução de instrução",
   other: "Outro fato fiscal",
 };
+
+const REVIEW_STATUS_LABELS: Record<TaxFactReviewStatus, string> = {
+  pending: "Pendente",
+  approved: "Aprovado",
+  corrected: "Corrigido",
+  rejected: "Rejeitado",
+};
+
+const REVIEW_STATUS_CLASSNAMES: Record<TaxFactReviewStatus, string> = {
+  pending: "border-amber-300 bg-amber-100 text-amber-800",
+  approved: "border-green-300 bg-green-100 text-green-800",
+  corrected: "border-blue-300 bg-blue-100 text-blue-800",
+  rejected: "border-red-300 bg-red-100 text-red-800",
+};
+
+const REVIEW_FILTER_OPTIONS: Array<{
+  value: TaxFactReviewStatus | "all";
+  label: string;
+}> = [
+  { value: "pending", label: "Pendentes" },
+  { value: "approved", label: "Aprovados" },
+  { value: "corrected", label: "Corrigidos" },
+  { value: "rejected", label: "Rejeitados" },
+  { value: "all", label: "Todos" },
+];
+
+const SOURCE_FILTER_OPTIONS: Array<{
+  value: TaxFactSourceFilter | "all";
+  label: string;
+}> = [
+  { value: "all", label: "Todas as fontes" },
+  { value: "with_document", label: "Com documento" },
+  { value: "without_document", label: "Sem documento" },
+];
+
+const FACT_TYPE_FILTER_OPTIONS: Array<{
+  value: string;
+  label: string;
+}> = [
+  { value: "all", label: "Todos os tipos" },
+  ...Object.entries(FACT_TYPE_LABELS).map(([value, label]) => ({ value, label })),
+];
 
 const METHOD_LABELS: Record<string, string> = {
   legal_deductions: "Deduções legais",
@@ -362,6 +406,11 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     pageSize: DEFAULT_FACTS_PAGE_SIZE,
     total: 0,
   });
+  const [reviewStatusFilter, setReviewStatusFilter] = useState<TaxFactReviewStatus | "all">(
+    "pending",
+  );
+  const [factTypeFilter, setFactTypeFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<TaxFactSourceFilter | "all">("all");
   const [taxpayerCpf, setTaxpayerCpf] = useState<string | null>(null);
   const [isLoadingPage, setIsLoadingPage] = useState(true);
   const [isRebuildingSummary, setIsRebuildingSummary] = useState(false);
@@ -424,7 +473,9 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
       }),
       taxService.listFacts({
         taxYear,
-        reviewStatus: "pending",
+        reviewStatus: reviewStatusFilter === "all" ? undefined : reviewStatusFilter,
+        factType: factTypeFilter === "all" ? undefined : factTypeFilter,
+        sourceFilter: sourceFilter === "all" ? undefined : sourceFilter,
         pageSize: DEFAULT_FACTS_PAGE_SIZE,
       }),
       profileService.getMe(),
@@ -474,7 +525,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     setPageError(nextErrors[0] || "");
     setIsLoadingPage(false);
     return freshFacts;
-  }, [taxYear]);
+  }, [factTypeFilter, reviewStatusFilter, sourceFilter, taxYear]);
 
   useEffect(() => {
     void loadPageData();
@@ -816,11 +867,13 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
   };
 
   const handleBulkApprove = async () => {
-    if (factsPage.items.length === 0) {
+    const factIds = factsPage.items
+      .filter((fact) => fact.reviewStatus === "pending")
+      .map((fact) => fact.id);
+
+    if (factIds.length === 0) {
       return;
     }
-
-    const factIds = factsPage.items.map((fact) => fact.id);
 
     setIsBulkApproving(true);
     setPageError("");
@@ -976,6 +1029,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
   const pendingDebtBalanceAmount = factsPage.items
     .filter((fact) => fact.factType === "debt_balance")
     .reduce((sum, fact) => sum + fact.amount, 0);
+  const pendingFactsInView = factsPage.items.filter((fact) => fact.reviewStatus === "pending").length;
   const reviewStatusLabel = showLoadingPlaceholders
     ? "Revisão fiscal em carregamento"
     : summary.sourceCounts.factsPending > 0
@@ -1625,11 +1679,66 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
             <button
               type="button"
               onClick={handleBulkApprove}
-              disabled={isBulkApproving || factsPage.items.length === 0}
+              disabled={isBulkApproving || pendingFactsInView === 0}
               className="rounded border border-brand-1 px-3 py-2 text-sm font-semibold text-brand-1 hover:bg-brand-1/10 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isBulkApproving ? "Aprovando..." : "Aprovar todos pendentes"}
             </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
+                Status de revisão
+              </span>
+              <select
+                value={reviewStatusFilter}
+                onChange={(event) =>
+                  setReviewStatusFilter(event.target.value as TaxFactReviewStatus | "all")
+                }
+                className="w-full rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-primary outline-none focus:border-brand-1"
+              >
+                {REVIEW_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
+                Tipo de fato
+              </span>
+              <select
+                value={factTypeFilter}
+                onChange={(event) => setFactTypeFilter(event.target.value)}
+                className="w-full rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-primary outline-none focus:border-brand-1"
+              >
+                {FACT_TYPE_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
+                Fonte do fato
+              </span>
+              <select
+                value={sourceFilter}
+                onChange={(event) => setSourceFilter(event.target.value as TaxFactSourceFilter | "all")}
+                className="w-full rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-primary outline-none focus:border-brand-1"
+              >
+                {SOURCE_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -1653,11 +1762,11 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
           <div className="mt-4 space-y-3">
             {isLoadingPage ? (
               <p className="py-6 text-center text-sm text-cf-text-secondary">
-                Carregando fatos pendentes...
+                Carregando fatos da revisão...
               </p>
             ) : factsPage.items.length === 0 ? (
               <p className="py-6 text-center text-sm text-cf-text-secondary">
-                Nenhum fato pendente neste exercício.
+                Nenhum fato encontrado com os filtros selecionados.
               </p>
             ) : (
               factsPage.items.map((fact) => (
@@ -1665,10 +1774,16 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
                   const ownerDocument = resolveFactOwnerDocument(fact);
                   const hasTaxpayerCpf = Boolean(taxpayerCpf);
                   const hasOwnerDocument = Boolean(ownerDocument);
+                  const isPendingFact = fact.reviewStatus === "pending";
                   const ownershipMismatch =
                     hasTaxpayerCpf &&
                     hasOwnerDocument &&
                     normalizeDocumentNumber(taxpayerCpf) !== ownerDocument;
+                  const reviewStatusLabel =
+                    REVIEW_STATUS_LABELS[fact.reviewStatus] || humanizeTaxIdentifier(fact.reviewStatus);
+                  const reviewStatusClassName =
+                    REVIEW_STATUS_CLASSNAMES[fact.reviewStatus] ||
+                    "border-cf-border bg-cf-bg-subtle text-cf-text-secondary";
 
                   return (
                     <div key={fact.id} className="rounded border border-cf-border bg-cf-bg-subtle p-4">
@@ -1679,6 +1794,9 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
                               {FACT_TYPE_LABELS[fact.factType] || fact.factType}
                             </span>
                             <span className="text-xs text-cf-text-secondary">#{fact.id}</span>
+                            <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${reviewStatusClassName}`}>
+                              {reviewStatusLabel}
+                            </span>
                             {fact.conflictCode ? (
                               <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
                                 {formatFactConflictLabel(fact.conflictCode)}
@@ -1724,50 +1842,56 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
                           ) : null}
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void reviewFact(
-                                fact.id,
-                                {
-                                  action: "approve",
-                                  note: "Aprovado pela Central do Leão.",
-                                },
-                                "Fato fiscal aprovado.",
-                              )
-                            }
-                            disabled={processingFactId === fact.id}
-                            className="rounded border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Aprovar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleOpenCorrection(fact)}
-                            disabled={processingFactId === fact.id}
-                            className="rounded border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Corrigir
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              void reviewFact(
-                                fact.id,
-                                {
-                                  action: "reject",
-                                  note: "Rejeitado pela Central do Leão.",
-                                },
-                                "Fato fiscal rejeitado.",
-                              )
-                            }
-                            disabled={processingFactId === fact.id}
-                            className="rounded border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            Rejeitar
-                          </button>
-                        </div>
+                        {isPendingFact ? (
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void reviewFact(
+                                  fact.id,
+                                  {
+                                    action: "approve",
+                                    note: "Aprovado pela Central do Leão.",
+                                  },
+                                  "Fato fiscal aprovado.",
+                                )
+                              }
+                              disabled={processingFactId === fact.id}
+                              className="rounded border border-green-300 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Aprovar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCorrection(fact)}
+                              disabled={processingFactId === fact.id}
+                              className="rounded border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Corrigir
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void reviewFact(
+                                  fact.id,
+                                  {
+                                    action: "reject",
+                                    note: "Rejeitado pela Central do Leão.",
+                                  },
+                                  "Fato fiscal rejeitado.",
+                                )
+                              }
+                              disabled={processingFactId === fact.id}
+                              className="rounded border border-red-300 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Rejeitar
+                            </button>
+                          </div>
+                        ) : (
+                          <p className="text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
+                            Fato já revisado
+                          </p>
+                        )}
                       </div>
                     </div>
                   );

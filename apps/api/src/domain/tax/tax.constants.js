@@ -37,6 +37,8 @@ export const TAX_FACT_REVIEW_STATUSES = Object.freeze([
   "rejected",
 ]);
 
+export const TAX_FACT_SOURCE_FILTERS = Object.freeze(["with_document", "without_document"]);
+
 export const TAX_RULE_FAMILIES = Object.freeze([
   "obligation",
   "annual_table",

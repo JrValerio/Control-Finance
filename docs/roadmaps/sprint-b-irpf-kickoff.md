@@ -49,6 +49,10 @@ Escopo:
 - filtros por status/tipo/fonte
 - status visível por fato na fila
 
+Plano cirúrgico detalhado:
+
+- `docs/roadmaps/sprint-b-pr-l-plano-cirurgico.md`
+
 Critério de aceite:
 
 - revisar lotes sem operação manual linha a linha
