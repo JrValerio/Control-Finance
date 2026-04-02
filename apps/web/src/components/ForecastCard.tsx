@@ -232,8 +232,15 @@ const ForecastCard = ({
   }
 
   if (cardState === "frozen") {
+    const staleDataSignal =
+      txCountSinceFreeze > 0
+        ? `${txCountSinceFreeze} ${
+            txCountSinceFreeze === 1 ? "transação registrada" : "transações registradas"
+          } desde o congelamento.`
+        : "Novas transações podem não estar refletidas nesta leitura.";
+
     return (
-      <div className="rounded border border-cf-border bg-cf-surface p-4 opacity-80">
+      <div className="rounded border border-amber-300 bg-cf-surface p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
@@ -248,21 +255,15 @@ const ForecastCard = ({
                   {money(forecast.projectedBalance)}
                 </p>
                 <p className="mt-1 text-xs text-cf-text-secondary">
-                  Projeção do mês {forecast.month} - congelada no fim do período de teste.
+                  Última projeção disponível do mês {forecast.month}. Este valor não está mais sendo
+                  recalculado automaticamente.
                 </p>
               </>
             ) : (
               <p className="mt-2 text-sm text-cf-text-secondary">
-                Sua última projeção está congelada no plano free. Assine para continuar atualizando.
+                Não há projeção atualizada disponível após o fim do período de teste.
               </p>
             )}
-            {txCountSinceFreeze > 0 ? (
-              <p className="mt-1 text-xs text-cf-text-secondary">
-                {txCountSinceFreeze}{" "}
-                {txCountSinceFreeze === 1 ? "transação registrada" : "transações registradas"} desde
-                então.
-              </p>
-            ) : null}
           </div>
           {onOpenProfileSettings ? (
             <button
@@ -273,6 +274,16 @@ const ForecastCard = ({
               Ativar plano
             </button>
           ) : null}
+        </div>
+
+        <div className="mt-3">
+          <OperationalStateBlock
+            severity="atencao"
+            title="Projeção congelada no plano gratuito"
+            happened="O período de teste encerrou e o Forecast foi pausado para novos recálculos."
+            impact={`Os valores exibidos podem estar desatualizados. ${staleDataSignal}`}
+            nextStep="Ative um plano para voltar a atualizar a projeção com os lançamentos mais recentes."
+          />
         </div>
       </div>
     );

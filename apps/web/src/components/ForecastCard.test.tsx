@@ -73,6 +73,7 @@ const renderCard = () =>
 describe("ForecastCard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     vi.mocked(profileService.getMe).mockResolvedValue(buildMe());
     vi.mocked(forecastService.getCurrent).mockResolvedValue(buildForecast());
     vi.mocked(forecastService.recompute).mockResolvedValue(buildForecast());
@@ -109,5 +110,29 @@ describe("ForecastCard", () => {
       expect(screen.getByText(/A projeção ultrapassa o limite/)).toBeInTheDocument(),
     );
     expect(screen.getByText(/100% do limite/)).toBeInTheDocument();
+  });
+
+  it("exibe aviso claro quando a projeção está congelada", async () => {
+    const frozenForecast = buildForecast({ month: "2026-03", projectedBalance: 1750 });
+    window.localStorage.setItem("cf.forecast.last", JSON.stringify(frozenForecast));
+
+    vi.mocked(profileService.getMe).mockResolvedValue({
+      ...buildMe(),
+      trialExpired: true,
+    });
+
+    render(
+      <DiscreetModeProvider>
+        <ForecastCard txCountSinceFreeze={3} />
+      </DiscreetModeProvider>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText("Projeção congelada no plano gratuito")).toBeInTheDocument(),
+    );
+
+    expect(screen.getByText(/o período de teste encerrou/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 transações registradas desde o congelamento/i)).toBeInTheDocument();
+    expect(screen.getByText(/os valores exibidos podem estar desatualizados/i)).toBeInTheDocument();
   });
 });
