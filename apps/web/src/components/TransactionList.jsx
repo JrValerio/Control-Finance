@@ -84,11 +84,11 @@ const TransactionList = ({ transactions, onDelete, onEdit, onBulkDelete }) => {
       {transactions.map((transaction) => (
         <div
           key={transaction.id}
-          className="my-2 flex w-full min-w-0 flex-col items-start gap-2 rounded border border-brand-1 bg-cf-surface p-3.5 sm:flex-row sm:items-center sm:justify-between"
+          className="my-2 w-full min-w-0 rounded-lg border border-cf-border bg-cf-surface px-3 py-2.5"
         >
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-start gap-2.5">
             {onBulkDelete ? (
-              <div className="mb-1 flex items-center gap-2">
+              <div className="pt-0.5">
                 <input
                   type="checkbox"
                   id={`select-transaction-${transaction.id}`}
@@ -99,47 +99,58 @@ const TransactionList = ({ transactions, onDelete, onEdit, onBulkDelete }) => {
                 />
               </div>
             ) : null}
-            <span className="break-words text-sm font-medium text-cf-text-primary">
-              {transaction.description || "Sem descrição"}
-            </span>
-            <span className="text-base font-medium text-cf-text-primary">
-              {money(transaction.value)}
-            </span>
-            <span className="text-xs text-cf-text-secondary">{formatDate(transaction.date)}</span>
-            <span className="break-words text-xs text-cf-text-secondary">
-              Categoria: {transaction.categoryName || "Sem categoria"}
-            </span>
-            {transaction.notes ? (
-              <span className="break-words text-xs text-cf-text-secondary">{transaction.notes}</span>
-            ) : null}
-          </div>
 
-          <div className="mt-1 flex w-full flex-wrap items-center gap-2 sm:mt-0 sm:w-auto sm:flex-nowrap sm:justify-end">
-            <span
-              className={`whitespace-nowrap rounded px-3 py-1 text-sm font-medium ${
-                transaction.type === CATEGORY_ENTRY
-                  ? "bg-green-100 text-green-700"
-                  : "bg-red-100 text-red-700"
-              }`}
-            >
-              {transaction.type}
-            </span>
-            <button
-              type="button"
-              onClick={() => onEdit(transaction)}
-              className="whitespace-nowrap rounded border border-cf-border px-2 py-1 text-xs font-semibold text-cf-text-secondary transition-colors hover:border-cf-border-input hover:text-cf-text-primary"
-              aria-label={`Editar transação ${transaction.id}`}
-            >
-              Editar
-            </button>
-            <button
-              type="button"
-              onClick={() => onDelete(transaction.id)}
-              className="whitespace-nowrap rounded border border-cf-border px-2 py-1 text-xs font-semibold text-cf-text-secondary transition-colors hover:border-cf-border-input hover:text-cf-text-primary"
-              aria-label={`Excluir transação ${transaction.id}`}
-            >
-              Excluir
-            </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium text-cf-text-primary">
+                    {transaction.description || "Sem descrição"}
+                  </p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-cf-text-secondary">
+                    <span>{formatDate(transaction.date)}</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span className="break-words">Categoria: {transaction.categoryName || "Sem categoria"}</span>
+                  </div>
+                  {transaction.notes ? (
+                    <p className="mt-0.5 break-words text-[11px] text-cf-text-secondary">{transaction.notes}</p>
+                  ) : null}
+                </div>
+
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <p className="text-lg font-semibold leading-none text-cf-text-primary">
+                    {money(transaction.value)}
+                  </p>
+                  <span
+                    className={`whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      transaction.type === CATEGORY_ENTRY
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-red-50 text-red-700"
+                    }`}
+                  >
+                    {transaction.type}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-2 flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => onEdit(transaction)}
+                  className="whitespace-nowrap text-[11px] font-semibold text-cf-text-secondary transition-colors hover:text-cf-text-primary"
+                  aria-label={`Editar transação ${transaction.id}`}
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(transaction.id)}
+                  className="whitespace-nowrap text-[11px] font-semibold text-cf-text-secondary transition-colors hover:text-cf-text-primary"
+                  aria-label={`Excluir transação ${transaction.id}`}
+                >
+                  Excluir
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       ))}
