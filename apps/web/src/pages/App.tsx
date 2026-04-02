@@ -2469,15 +2469,10 @@ const App = ({
                 <span className="text-xs text-cf-text-secondary">Prioridade de triagem</span>
               </div>
 
-              <div className="grid gap-5 xl:grid-cols-12">
-                <div className="xl:col-span-7">
-                  <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
-                </div>
-
-                <div className="space-y-5 xl:col-span-5">
-                  <BillsSummaryWidget onOpenBills={handleOpenBills} />
-                  <CreditCardsSummaryWidget onOpenCreditCards={handleOpenCreditCards} />
-                </div>
+              <div className="flex flex-col gap-5">
+                <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
+                <BillsSummaryWidget onOpenBills={handleOpenBills} />
+                <CreditCardsSummaryWidget onOpenCreditCards={handleOpenCreditCards} />
               </div>
             </section>
 
