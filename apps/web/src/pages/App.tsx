@@ -2752,10 +2752,24 @@ const App = ({
                     </Suspense>
                   </div>
                 ) : (
-                  <p className="mt-3 text-sm text-cf-text-secondary">
-                    Categorize suas saídas para liberar uma visão mais útil das despesas por
-                    categoria.
-                  </p>
+                  <div className="mt-3 rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-3">
+                    <p className="text-sm text-cf-text-secondary">
+                      Categorize suas saídas para liberar uma visão mais útil das despesas por
+                      categoria.
+                    </p>
+                    <p className="mt-1 text-[11px] text-cf-text-secondary">
+                      Registre movimentações com categoria para destravar esta leitura.
+                    </p>
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={openCreateModal}
+                        className="rounded border border-cf-border bg-cf-surface px-2.5 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                      >
+                        Registrar valor
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -2805,10 +2819,25 @@ const App = ({
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-3 text-sm text-cf-text-secondary">
-                    As maiores variações aparecem quando houver despesas categorizadas em mais de um
-                    mês.
-                  </p>
+                  <div className="mt-3 rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-3">
+                    <p className="text-sm text-cf-text-secondary">
+                      As maiores variações aparecem quando houver despesas categorizadas em mais de um
+                      mês.
+                    </p>
+                    <p className="mt-1 text-[11px] text-cf-text-secondary">
+                      Revise a lista de movimentações para completar a categorização do período.
+                    </p>
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={scrollToListTop}
+                        aria-label="Ver movimentações para categorizar"
+                        className="rounded border border-cf-border bg-cf-surface px-2.5 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+                      >
+                        Ver movimentações
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
