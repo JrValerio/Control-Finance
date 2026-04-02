@@ -219,13 +219,16 @@ describe("api service", () => {
 
   // ─── 402 handler ─────────────────────────────────────────────────────────────
 
-  it("chama paymentRequiredHandler com a mensagem quando status e 402", async () => {
+  it("chama paymentRequiredHandler com contexto trial_expired quando code=TRIAL_EXPIRED", async () => {
     const onPaymentRequired = vi.fn();
     setPaymentRequiredHandler(onPaymentRequired);
 
     await expect(
       responseErrorInterceptor({
-        response: { status: 402, data: { message: "Periodo de teste encerrado." } },
+        response: {
+          status: 402,
+          data: { message: "Periodo de teste encerrado.", code: "TRIAL_EXPIRED" },
+        },
       }),
     ).rejects.toBeTruthy();
 
