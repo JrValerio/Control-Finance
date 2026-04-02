@@ -79,6 +79,14 @@ const buildExemptAndExclusiveIncomeLimitMessage = ({
     annualExclusiveIncome,
   )}.`;
 
+const buildAssetBalanceLimitMessage = ({
+  totalAssetBalance,
+  assetBalanceThreshold,
+}) =>
+  `Bens e direitos acima do limite patrimonial do exercicio. Total: ${formatMoneyForMessage(
+    totalAssetBalance,
+  )}; limite: ${formatMoneyForMessage(assetBalanceThreshold)}.`;
+
 export const summarizeReviewedTaxFacts = (facts = []) => {
   const totals = {
     annualTaxableIncome: 0,
@@ -215,6 +223,7 @@ export const calculateTaxObligation = ({
   const exemptAndExclusiveIncomeThreshold = Number(
     obligationRules.exemptAndExclusiveIncomeThreshold || 0,
   );
+  const assetBalanceThreshold = Number(obligationRules.assetBalanceThreshold || 0);
 
   if (annualTaxableIncome > taxableIncomeThreshold) {
     reasons.push({
@@ -241,10 +250,13 @@ export const calculateTaxObligation = ({
     });
   }
 
-  if (totalAssetBalance > Number(obligationRules.assetBalanceThreshold || 0)) {
+  if (totalAssetBalance > assetBalanceThreshold) {
     reasons.push({
       code: "ASSET_BALANCE_LIMIT",
-      message: "Bens e direitos acima do limite patrimonial do exercicio.",
+      message: buildAssetBalanceLimitMessage({
+        totalAssetBalance,
+        assetBalanceThreshold,
+      }),
     });
   }
 
