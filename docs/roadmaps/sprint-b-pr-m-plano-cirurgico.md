@@ -1,7 +1,7 @@
 # Sprint B - PR M - Plano cirurgico (validacoes e alertas de obrigatoriedade)
 
 Data: 2026-04-02  
-Status: em execucao (slice 2)
+Status: em execucao (slice 3)
 
 ## Objetivo
 
@@ -73,7 +73,7 @@ Roadmap:
 - Sem merge sem diff completo e aprovacao explicita.
 - Sem alterar contratos estaveis do PR L sem necessidade objetiva.
 
-## Slice 2 (este PR)
+## Slice 2 (concluido)
 
 Escopo:
 - detalhar o motivo `EXEMPT_AND_EXCLUSIVE_INCOME_LIMIT` com total, limite e composicao (isentos e exclusivos);
@@ -101,3 +101,31 @@ Fora de escopo:
 
 - npm -w apps/api run test -- src/tax.test.js -t "explica composicao CLT e INSS no gatilho tributavel"
 - npm -w apps/api run test -- src/tax.test.js -t "explica total e composicao no gatilho de isentos/exclusivos"
+
+## Slice 3 (este PR)
+
+Escopo:
+- detalhar o motivo `ASSET_BALANCE_LIMIT` com total patrimonial e limite aplicavel;
+- validar via teste de integracao de `/tax/obligation/:taxYear` para o gatilho patrimonial.
+
+Fora de escopo:
+- alteracao de thresholds oficiais;
+- mudanca de semantica dos codigos de gatilho;
+- mudancas amplas de UX.
+
+## Criterios de aceite (slice 3)
+
+1. Quando `ASSET_BALANCE_LIMIT` disparar, a mensagem deve incluir:
+- total patrimonial;
+- limite aplicavel.
+
+2. Endpoint `/tax/obligation/:taxYear` continua deterministico:
+- codigo do gatilho preservado;
+- `mustDeclare` sem regressao.
+
+3. Suite focada verde.
+
+## Validacao (slice 3)
+
+- npm -w apps/api run test -- src/tax.test.js -t "explica total e composicao no gatilho de isentos/exclusivos"
+- npm -w apps/api run test -- src/tax.test.js -t "explica total e limite no gatilho patrimonial"

@@ -2381,6 +2381,58 @@ describe("Tax API foundation", () => {
     });
   });
 
+  it("GET /tax/obligation/:taxYear explica total e limite no gatilho patrimonial", async () => {
+    const email = "tax-obligation-asset-balance@test.dev";
+    const token = await registerAndLogin(email);
+    const userResult = await dbQuery(
+      `SELECT id
+       FROM users
+       WHERE email = $1`,
+      [email],
+    );
+    const userId = Number(userResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO tax_facts (
+         user_id,
+         tax_year,
+         fact_type,
+         category,
+         subcategory,
+         reference_period,
+         currency,
+         amount,
+         metadata_json,
+         review_status
+       )
+       VALUES
+       ($1, 2026, 'asset_balance', 'manual_entry', 'asset_balance_total', '2025-annual', 'BRL', 900000, '{}'::jsonb, 'approved')`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/tax/obligation/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.mustDeclare).toBe(true);
+    expect(response.body.reasons).toHaveLength(1);
+    expect(response.body.reasons[0]).toMatchObject({
+      code: "ASSET_BALANCE_LIMIT",
+    });
+    expect(response.body.reasons[0].message).toContain(
+      "Bens e direitos acima do limite patrimonial do exercicio.",
+    );
+    expect(response.body.reasons[0].message).toContain("Total: 900000.00");
+    expect(response.body.reasons[0].message).toContain("limite: 800000.00");
+    expect(response.body.totals).toMatchObject({
+      annualTaxableIncome: 0,
+      annualExemptIncome: 0,
+      annualExclusiveIncome: 0,
+      totalAssetBalance: 900000,
+    });
+  });
+
   it("exclui do calculo oficial fatos revisados com CPF divergente do titular cadastrado", async () => {
     const email = "tax-obligation-taxpayer-filter@test.dev";
     const token = await registerAndLogin(email);
