@@ -2494,11 +2494,11 @@ const App = ({
               </p>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-3">
+            <div className="grid gap-5 xl:grid-cols-3">
               <div className="xl:col-span-2">
                 <SalaryWidget />
               </div>
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <BankAccountsWidget />
                 <ConsignadoOverviewWidget />
               </div>

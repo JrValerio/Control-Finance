@@ -60,10 +60,13 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
   const hasMargin = overview?.comprometimentoPct != null && overview?.marginStatus != null;
   const pct = overview?.comprometimentoPct ?? 0;
   const status = overview?.marginStatus ?? "safe";
+  const contracts = overview?.contracts ?? [];
+  const visibleContracts = contracts.slice(0, 6);
+  const hiddenContractsCount = Math.max(contracts.length - visibleContracts.length, 0);
 
   return (
-    <section className="rounded border border-cf-border bg-cf-surface p-4">
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <section className="rounded-lg border border-cf-border bg-cf-surface p-4 md:p-5">
+      <div className="mb-4 flex items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-medium text-cf-text-primary">Consignado</h3>
           <p className="text-xs text-cf-text-secondary">Descontos em folha / benefício</p>
@@ -71,10 +74,10 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
 
         {!isLoading && overview && (
           <div className="text-right">
-            <p className="text-base font-semibold text-cf-text-primary">
+            <p className="text-lg font-semibold leading-none text-cf-text-primary">
               {formatCurrency(overview.monthlyTotal)}
             </p>
-            <p className="text-xs text-cf-text-secondary">
+            <p className="mt-1 text-[11px] text-cf-text-secondary">
               /mês · {overview.contracts.length} contrato{overview.contracts.length !== 1 ? "s" : ""}
             </p>
           </div>
@@ -90,7 +93,7 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
 
       {/* Margin bar (INSS beneficiary only) */}
       {!isLoading && hasMargin && (
-        <div className="mb-3">
+        <div className="mb-3 rounded-lg border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
           <div className="mb-1 flex items-center justify-between">
             <span className={`text-xs font-medium ${MARGIN_TEXT[status]}`}>
               {MARGIN_LABEL[status]}
@@ -116,7 +119,7 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
 
       {/* Net after consignado */}
       {!isLoading && overview?.netAfterConsignado != null && (
-        <p className="mb-3 text-xs text-cf-text-secondary">
+        <p className="mb-3 text-[11px] text-cf-text-secondary">
           Líquido após descontos:{" "}
           <span className="font-medium text-cf-text-primary">
             {formatCurrency(overview.netAfterConsignado)}
@@ -128,7 +131,7 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
       {isLoading ? (
         <div className="space-y-2 animate-pulse">
           {[1, 2].map((i) => (
-            <div key={i} className="flex items-center justify-between rounded bg-cf-bg-subtle px-3 py-2">
+            <div key={i} className="flex items-center justify-between rounded-lg bg-cf-bg-subtle px-3 py-2.5">
               <div className="space-y-1">
                 <div className="h-3 w-32 rounded bg-cf-border" />
                 <div className="h-2.5 w-20 rounded bg-cf-border" />
@@ -139,12 +142,12 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
         </div>
       ) : (
         <ul className="space-y-1.5">
-          {(overview?.contracts ?? []).map((c) => {
+          {visibleContracts.map((c) => {
             const endLabel = formatEndDate(c.endDate);
             return (
               <li
                 key={c.id}
-                className="flex items-center justify-between rounded bg-cf-bg-subtle px-3 py-2"
+                className="flex items-center justify-between rounded-lg border border-cf-border/70 bg-cf-bg-subtle px-3 py-2.5"
               >
                 <div className="min-w-0">
                   <p className="truncate text-xs font-medium text-cf-text-primary">
@@ -161,6 +164,11 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
               </li>
             );
           })}
+          {hiddenContractsCount > 0 ? (
+            <li className="px-1 text-[11px] text-cf-text-secondary">
+              + {hiddenContractsCount} contrato(s) adicionais na visão completa de renda.
+            </li>
+          ) : null}
         </ul>
       )}
     </section>

@@ -77,10 +77,10 @@ function BreakdownRow({
 
   return (
     <div className="flex items-center justify-between">
-      <span className={`text-xs ${highlight ? "font-medium text-cf-text-primary" : "text-cf-text-secondary"}`}>
+      <span className={`text-[11px] ${highlight ? "font-medium text-cf-text-primary" : "text-cf-text-secondary"}`}>
         {label}
       </span>
-      <span className={`text-xs ${valueClass}`}>{formatCurrency(value)}</span>
+      <span className={`text-[11px] ${valueClass}`}>{formatCurrency(value)}</span>
     </div>
   );
 }
@@ -105,14 +105,14 @@ function SummaryMetric({
         ? "text-red-600"
         : "text-cf-text-primary";
   const emphasisClass = emphasis
-    ? "border-brand-1/30 bg-brand-3/20 shadow-[inset_0_0_0_1px_rgba(76,113,255,0.16)]"
+    ? "border-brand-1/25 bg-brand-3/10"
     : "border-cf-border bg-cf-surface";
 
   return (
-    <div className={`rounded border px-3 py-2.5 ${emphasisClass}`}>
+    <div className={`rounded-lg border px-3 py-3 ${emphasisClass}`}>
       <p className="text-[11px] font-medium uppercase tracking-wide text-cf-text-secondary">{label}</p>
-      <p className={`mt-1 text-base font-bold ${valueClass}`}>{formatCurrency(value)}</p>
-      {helper ? <p className="mt-1 text-xs text-cf-text-secondary">{helper}</p> : null}
+      <p className={`mt-1 text-lg font-semibold leading-none ${valueClass}`}>{formatCurrency(value)}</p>
+      {helper ? <p className="mt-1 text-[11px] text-cf-text-secondary">{helper}</p> : null}
     </div>
   );
 }
@@ -393,6 +393,8 @@ function BenefitProfileView({
   const [savingConsig, setSavingConsig] = useState(false);
   const [consigError, setConsigError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const visibleConsignacoes = consignacoes.slice(0, 8);
+  const hiddenConsignacoesCount = Math.max(consignacoes.length - visibleConsignacoes.length, 0);
 
   const handleAddConsig = async () => {
     const amt = Number(consigForm.amount);
@@ -450,7 +452,7 @@ function BenefitProfileView({
         </button>
       </div>
 
-      <div className="mb-3 grid gap-2 sm:grid-cols-3">
+      <div className="mb-4 grid gap-3 sm:grid-cols-3">
         <SummaryMetric
           label="Benefício bruto"
           value={calculation.grossMonthly}
@@ -475,7 +477,7 @@ function BenefitProfileView({
         />
       </div>
 
-      <div className="mb-3 rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-xs text-cf-text-secondary">
+      <div className="mb-4 rounded-lg border border-cf-border bg-cf-bg-subtle px-3.5 py-2.5 text-[11px] text-cf-text-secondary">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {activeReferenceMonth ? (
             <span>
@@ -503,7 +505,7 @@ function BenefitProfileView({
         </div>
       </div>
 
-      <div className="rounded border border-cf-border bg-cf-bg-subtle p-3">
+      <div className="rounded-lg border border-cf-border bg-cf-bg-subtle p-3.5">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-xs font-medium text-cf-text-primary">Composição do benefício</p>
           <span className="text-[11px] text-cf-text-secondary">Resumo mensal consolidado</span>
@@ -519,8 +521,8 @@ function BenefitProfileView({
       </div>
 
       {/* Margin alerts */}
-      <div className="mt-3 space-y-1.5">
-        <div className={`flex items-center justify-between rounded border px-2.5 py-1.5 text-xs ${
+      <div className="mt-3 space-y-2">
+        <div className={`grid gap-1.5 rounded-lg border px-3 py-2 text-[11px] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
           calculation.isOverLoanLimit
             ? "border-red-200 bg-red-50 text-red-700"
             : "border-cf-border bg-cf-bg-subtle text-cf-text-secondary"
@@ -529,7 +531,7 @@ function BenefitProfileView({
             <span>Empréstimos</span>
             <OperationalSeverityBadge severity={loanSeverity} />
           </div>
-          <span>
+          <span className="sm:text-right">
             {formatCurrency(loanTotal)} / {formatCurrency(loanLimit)}
             {calculation.isOverLoanLimit ? (
               <span className="ml-1 font-semibold">acima do limite 35%</span>
@@ -539,7 +541,7 @@ function BenefitProfileView({
           </span>
         </div>
 
-        <div className={`flex items-center justify-between rounded border px-2.5 py-1.5 text-xs ${
+        <div className={`grid gap-1.5 rounded-lg border px-3 py-2 text-[11px] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center ${
           calculation.isOverCardLimit
             ? "border-red-200 bg-red-50 text-red-700"
             : "border-cf-border bg-cf-bg-subtle text-cf-text-secondary"
@@ -548,7 +550,7 @@ function BenefitProfileView({
             <span>Cartão consignado</span>
             <OperationalSeverityBadge severity={cardSeverity} />
           </div>
-          <span>
+          <span className="sm:text-right">
             {formatCurrency(cardTotal)} / {formatCurrency(cardLimit)}
             {calculation.isOverCardLimit ? (
               <span className="ml-1 font-semibold">acima do limite 5%</span>
@@ -592,22 +594,23 @@ function BenefitProfileView({
         ) : null}
 
         {consignacoes.length > 0 ? (
-          <ul className="space-y-1.5">
-            {consignacoes.map((c) => (
+          <>
+            <ul className="max-h-72 space-y-1.5 overflow-auto pr-1">
+              {visibleConsignacoes.map((c) => (
               <li
                 key={c.id}
-                className="flex items-center justify-between gap-2 rounded border border-cf-border bg-cf-surface px-2.5 py-2"
+                className="flex items-center justify-between gap-2 rounded-lg border border-cf-border/70 bg-cf-surface px-2.5 py-2"
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className={`inline-block rounded border px-1.5 py-0.5 text-xs ${CONSIG_TYPE_CLASS[c.consignacaoType]}`}>
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${CONSIG_TYPE_CLASS[c.consignacaoType]}`}>
                       {CONSIG_TYPE_LABEL[c.consignacaoType]}
                     </span>
                     <p className="truncate text-xs font-medium text-cf-text-primary">{c.description}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-cf-text-primary">{formatCurrency(c.amount)}</span>
+                  <span className="text-sm font-semibold text-cf-text-primary">{formatCurrency(c.amount)}</span>
                   <button
                     type="button"
                     disabled={deletingId === c.id}
@@ -619,8 +622,14 @@ function BenefitProfileView({
                   </button>
                 </div>
               </li>
-            ))}
-          </ul>
+              ))}
+            </ul>
+            {hiddenConsignacoesCount > 0 ? (
+              <p className="mt-2 text-[11px] text-cf-text-secondary">
+                + {hiddenConsignacoesCount} desconto(s) adicionais disponíveis no detalhe completo.
+              </p>
+            ) : null}
+          </>
         ) : null}
 
         {addingConsig ? (
