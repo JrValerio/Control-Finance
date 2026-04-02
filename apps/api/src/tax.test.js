@@ -2249,20 +2249,81 @@ describe("Tax API foundation", () => {
 
     expect(afterApprovalResponse.status).toBe(200);
     expect(afterApprovalResponse.body.mustDeclare).toBe(true);
-    expect(afterApprovalResponse.body.reasons).toEqual([
-      {
-        code: "TAXABLE_INCOME_LIMIT",
-        message: "Rendimentos tributaveis acima do limite do exercicio.",
-      },
-    ]);
+    expect(afterApprovalResponse.body.reasons).toHaveLength(1);
+    expect(afterApprovalResponse.body.reasons[0]).toMatchObject({
+      code: "TAXABLE_INCOME_LIMIT",
+    });
+    expect(afterApprovalResponse.body.reasons[0].message).toContain(
+      "Rendimentos tributaveis acima do limite do exercicio.",
+    );
+    expect(afterApprovalResponse.body.reasons[0].message).toContain("Total: 54321.00");
+    expect(afterApprovalResponse.body.reasons[0].message).toContain("limite: 35584.00");
+    expect(afterApprovalResponse.body.reasons[0].message).toContain("CLT 54321.00");
     expect(afterApprovalResponse.body.totals).toMatchObject({
       annualTaxableIncome: 54321,
+      annualTaxableIncomeClt: 54321,
+      annualTaxableIncomeInss: 0,
+      annualTaxableIncomeOther: 0,
       annualExemptIncome: 0,
       annualExclusiveIncome: 5000,
       annualCombinedExemptAndExclusiveIncome: 5000,
       totalAssetBalance: 0,
     });
     expect(afterApprovalResponse.body.approvedFactsCount).toBe(3);
+  });
+
+  it("GET /tax/obligation/:taxYear explica composicao CLT e INSS no gatilho tributavel", async () => {
+    const email = "tax-obligation-composition@test.dev";
+    const token = await registerAndLogin(email);
+    const userResult = await dbQuery(
+      `SELECT id
+       FROM users
+       WHERE email = $1`,
+      [email],
+    );
+    const userId = Number(userResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO tax_facts (
+         user_id,
+         tax_year,
+         fact_type,
+         category,
+         subcategory,
+         reference_period,
+         currency,
+         amount,
+         metadata_json,
+         review_status
+       )
+       VALUES
+       ($1, 2026, 'taxable_income', 'income_report_employer', 'annual_taxable_income', '2025-annual', 'BRL', 22000, '{}'::jsonb, 'approved'),
+       ($1, 2026, 'taxable_income', 'income_report_inss', 'inss_annual_taxable_income', '2025-annual', 'BRL', 15000, '{}'::jsonb, 'approved'),
+       ($1, 2026, 'taxable_income', 'manual_entry', 'custom_taxable_income', '2025-annual', 'BRL', 3000, '{}'::jsonb, 'approved')`,
+      [userId],
+    );
+
+    const response = await request(app)
+      .get("/tax/obligation/2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.mustDeclare).toBe(true);
+    expect(response.body.reasons).toHaveLength(1);
+    expect(response.body.reasons[0]).toMatchObject({
+      code: "TAXABLE_INCOME_LIMIT",
+    });
+    expect(response.body.reasons[0].message).toContain("Total: 40000.00");
+    expect(response.body.reasons[0].message).toContain("limite: 35584.00");
+    expect(response.body.reasons[0].message).toContain("CLT 22000.00");
+    expect(response.body.reasons[0].message).toContain("INSS 15000.00");
+    expect(response.body.reasons[0].message).toContain("OUTROS 3000.00");
+    expect(response.body.totals).toMatchObject({
+      annualTaxableIncome: 40000,
+      annualTaxableIncomeClt: 22000,
+      annualTaxableIncomeInss: 15000,
+      annualTaxableIncomeOther: 3000,
+    });
   });
 
   it("exclui do calculo oficial fatos revisados com CPF divergente do titular cadastrado", async () => {

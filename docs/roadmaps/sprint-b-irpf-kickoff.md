@@ -66,6 +66,10 @@ Escopo:
 - limites de isenção e sinalização de risco
 - alertas explicáveis com origem da regra
 
+Plano cirúrgico detalhado:
+
+- `docs/roadmaps/sprint-b-pr-m-plano-cirurgico.md`
+
 Critério de aceite:
 
 - alertas acionam de forma determinística
