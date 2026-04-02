@@ -60,9 +60,6 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
   const hasMargin = overview?.comprometimentoPct != null && overview?.marginStatus != null;
   const pct = overview?.comprometimentoPct ?? 0;
   const status = overview?.marginStatus ?? "safe";
-  const contracts = overview?.contracts ?? [];
-  const visibleContracts = contracts.slice(0, 6);
-  const hiddenContractsCount = Math.max(contracts.length - visibleContracts.length, 0);
 
   return (
     <section className="rounded-lg border border-cf-border bg-cf-surface p-4 md:p-5">
@@ -142,7 +139,7 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
         </div>
       ) : (
         <ul className="space-y-1.5">
-          {visibleContracts.map((c) => {
+          {(overview?.contracts ?? []).map((c) => {
             const endLabel = formatEndDate(c.endDate);
             return (
               <li
@@ -164,11 +161,6 @@ const ConsignadoOverviewWidget = (): JSX.Element | null => {
               </li>
             );
           })}
-          {hiddenContractsCount > 0 ? (
-            <li className="px-1 text-[11px] text-cf-text-secondary">
-              + {hiddenContractsCount} contrato(s) adicionais na visão completa de renda.
-            </li>
-          ) : null}
         </ul>
       )}
     </section>

@@ -393,8 +393,6 @@ function BenefitProfileView({
   const [savingConsig, setSavingConsig] = useState(false);
   const [consigError, setConsigError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const visibleConsignacoes = consignacoes.slice(0, 8);
-  const hiddenConsignacoesCount = Math.max(consignacoes.length - visibleConsignacoes.length, 0);
 
   const handleAddConsig = async () => {
     const amt = Number(consigForm.amount);
@@ -596,7 +594,7 @@ function BenefitProfileView({
         {consignacoes.length > 0 ? (
           <>
             <ul className="max-h-72 space-y-1.5 overflow-auto pr-1">
-              {visibleConsignacoes.map((c) => (
+              {consignacoes.map((c) => (
               <li
                 key={c.id}
                 className="flex items-center justify-between gap-2 rounded-lg border border-cf-border/70 bg-cf-surface px-2.5 py-2"
@@ -624,11 +622,6 @@ function BenefitProfileView({
               </li>
               ))}
             </ul>
-            {hiddenConsignacoesCount > 0 ? (
-              <p className="mt-2 text-[11px] text-cf-text-secondary">
-                + {hiddenConsignacoesCount} desconto(s) adicionais disponíveis no detalhe completo.
-              </p>
-            ) : null}
           </>
         ) : null}
 
