@@ -137,6 +137,9 @@ export interface TaxObligation {
   };
   totals: {
     annualTaxableIncome: number;
+    annualTaxableIncomeClt?: number;
+    annualTaxableIncomeInss?: number;
+    annualTaxableIncomeOther?: number;
     annualExemptIncome: number;
     annualExclusiveIncome: number;
     annualWithheldTax: number;

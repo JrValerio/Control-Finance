@@ -9,13 +9,68 @@ const normalizeMoney = (value) => {
 };
 
 const normalizeFactSubcategory = (value) => String(value || "").trim().toLowerCase();
+const normalizeFactCategory = (value) => String(value || "").trim().toLowerCase();
+
+const formatMoneyForMessage = (value) => normalizeMoney(value).toFixed(2);
 
 const isTriggeredOtherFact = (fact, expectedSubcategory) =>
   fact.fact_type === "other" && normalizeFactSubcategory(fact.subcategory) === expectedSubcategory;
 
+const isInssTaxableIncomeFact = (fact) => {
+  const normalizedCategory = normalizeFactCategory(fact.category);
+  const normalizedSubcategory = normalizeFactSubcategory(fact.subcategory);
+
+  return normalizedCategory === "income_report_inss" || normalizedSubcategory.startsWith("inss_");
+};
+
+const isCltTaxableIncomeFact = (fact) => {
+  const normalizedCategory = normalizeFactCategory(fact.category);
+  const normalizedSubcategory = normalizeFactSubcategory(fact.subcategory);
+
+  return (
+    normalizedCategory === "clt_payslip" ||
+    normalizedCategory === "income_report_employer" ||
+    normalizedSubcategory.startsWith("clt_") ||
+    normalizedSubcategory === "annual_taxable_income" ||
+    normalizedSubcategory.startsWith("app_income_statement_")
+  );
+};
+
+const buildTaxableIncomeLimitMessage = ({
+  annualTaxableIncome,
+  taxableIncomeThreshold,
+  annualTaxableIncomeClt,
+  annualTaxableIncomeInss,
+  annualTaxableIncomeOther,
+}) => {
+  const composition = [];
+
+  if (annualTaxableIncomeClt > 0) {
+    composition.push(`CLT ${formatMoneyForMessage(annualTaxableIncomeClt)}`);
+  }
+
+  if (annualTaxableIncomeInss > 0) {
+    composition.push(`INSS ${formatMoneyForMessage(annualTaxableIncomeInss)}`);
+  }
+
+  if (annualTaxableIncomeOther > 0) {
+    composition.push(`OUTROS ${formatMoneyForMessage(annualTaxableIncomeOther)}`);
+  }
+
+  const compositionMessage =
+    composition.length > 0 ? ` Composicao: ${composition.join(", ")}.` : "";
+
+  return `Rendimentos tributaveis acima do limite do exercicio. Total: ${formatMoneyForMessage(
+    annualTaxableIncome,
+  )}; limite: ${formatMoneyForMessage(taxableIncomeThreshold)}.${compositionMessage}`;
+};
+
 export const summarizeReviewedTaxFacts = (facts = []) => {
   const totals = {
     annualTaxableIncome: 0,
+    annualTaxableIncomeClt: 0,
+    annualTaxableIncomeInss: 0,
+    annualTaxableIncomeOther: 0,
     annualExemptIncome: 0,
     annualExclusiveIncome: 0,
     annualWithheldTax: 0,
@@ -44,6 +99,14 @@ export const summarizeReviewedTaxFacts = (facts = []) => {
     switch (fact.fact_type) {
       case "taxable_income":
         totals.annualTaxableIncome += amount;
+
+        if (isInssTaxableIncomeFact(fact)) {
+          totals.annualTaxableIncomeInss += amount;
+        } else if (isCltTaxableIncomeFact(fact)) {
+          totals.annualTaxableIncomeClt += amount;
+        } else {
+          totals.annualTaxableIncomeOther += amount;
+        }
         break;
       case "exempt_income":
         totals.annualExemptIncome += amount;
@@ -96,6 +159,9 @@ export const summarizeReviewedTaxFacts = (facts = []) => {
   }
 
   totals.annualTaxableIncome = normalizeMoney(totals.annualTaxableIncome);
+  totals.annualTaxableIncomeClt = normalizeMoney(totals.annualTaxableIncomeClt);
+  totals.annualTaxableIncomeInss = normalizeMoney(totals.annualTaxableIncomeInss);
+  totals.annualTaxableIncomeOther = normalizeMoney(totals.annualTaxableIncomeOther);
   totals.annualExemptIncome = normalizeMoney(totals.annualExemptIncome);
   totals.annualExclusiveIncome = normalizeMoney(totals.annualExclusiveIncome);
   totals.annualWithheldTax = normalizeMoney(totals.annualWithheldTax);
@@ -116,6 +182,9 @@ export const calculateTaxObligation = ({
   obligationRules = {},
 }) => {
   const annualTaxableIncome = normalizeMoney(totals.annualTaxableIncome);
+  const annualTaxableIncomeClt = normalizeMoney(totals.annualTaxableIncomeClt);
+  const annualTaxableIncomeInss = normalizeMoney(totals.annualTaxableIncomeInss);
+  const annualTaxableIncomeOther = normalizeMoney(totals.annualTaxableIncomeOther);
   const annualExemptIncome = normalizeMoney(totals.annualExemptIncome);
   const annualExclusiveIncome = normalizeMoney(totals.annualExclusiveIncome);
   const annualWithheldTax = normalizeMoney(totals.annualWithheldTax);
@@ -128,10 +197,18 @@ export const calculateTaxObligation = ({
   const totalStockOperations = normalizeMoney(totals.totalStockOperations);
   const reasons = [];
 
-  if (annualTaxableIncome > Number(obligationRules.taxableIncomeThreshold || 0)) {
+  const taxableIncomeThreshold = Number(obligationRules.taxableIncomeThreshold || 0);
+
+  if (annualTaxableIncome > taxableIncomeThreshold) {
     reasons.push({
       code: "TAXABLE_INCOME_LIMIT",
-      message: "Rendimentos tributaveis acima do limite do exercicio.",
+      message: buildTaxableIncomeLimitMessage({
+        annualTaxableIncome,
+        taxableIncomeThreshold,
+        annualTaxableIncomeClt,
+        annualTaxableIncomeInss,
+        annualTaxableIncomeOther,
+      }),
     });
   }
 
@@ -239,6 +316,9 @@ export const calculateTaxObligation = ({
     },
     totals: {
       annualTaxableIncome,
+      annualTaxableIncomeClt,
+      annualTaxableIncomeInss,
+      annualTaxableIncomeOther,
       annualExemptIncome,
       annualExclusiveIncome,
       annualWithheldTax,
