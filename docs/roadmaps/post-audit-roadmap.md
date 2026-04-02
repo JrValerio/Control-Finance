@@ -7,17 +7,29 @@
 - **P2** — qualidade interna, reduz risco operacional
 - **P3** — expansão, feature nova
 
+## Status de execução (atualizado em 2026-04-02)
+
+- **Sprint A (P0): encerrada**
+	- #416 — Forecast congelado com aviso explícito
+	- #417 — `api.ts` com fallback de paywall por `serverCode`
+	- #418 — feedback visual para OCR desativado
+- **Sprint B (IRPF): iniciada**
+	- Gate obrigatório aberto: decisão de escopo da deduplicação SHA256 (global vs ano-calendário)
+	- Kickoff documentado em `docs/roadmaps/sprint-b-irpf-kickoff.md`
+
 ---
 
 ## Sprint A — Correções P0 (agora)
 
-| Item | Gap | Origem |
-|---|---|---|
-| Forecast congelado sem aviso | Usuário vê número desatualizado após trial expirado sem explicação | Auditoria ⚠️ |
-| TODO em `api.ts` | Fallback de erro de paywall incompleto | Auditoria ⚠️ |
-| Feedback de OCR desativado | Upload de PDF escaneado falha silenciosamente sem explicar ao usuário | Auditoria ⚠️ |
+| Item | Gap | Origem | Status |
+|---|---|---|---|
+| Forecast congelado sem aviso | Usuário vê número desatualizado após trial expirado sem explicação | Auditoria ⚠️ | ✅ Entregue (#416) |
+| TODO em `api.ts` | Fallback de erro de paywall incompleto | Auditoria ⚠️ | ✅ Entregue (#417) |
+| Feedback de OCR desativado | Upload de PDF escaneado falha silenciosamente sem explicar ao usuário | Auditoria ⚠️ | ✅ Entregue (#418) |
 
 **PRs:** 1 PR por item. Escopo cirúrgico, sem feature nova.
+
+**Fechamento formal:** Sprint A concluída em 2026-04-02 com os três itens P0 entregues em `main`.
 
 ---
 
@@ -29,6 +41,8 @@
 | Validações e alertas de obrigatoriedade | Perfil CLT vs INSS, limites de isenção | PR M |
 | Exportação guiada com feedback visual | Geração de resumo, download, snapshot | PR N |
 | Deduplicação SHA256 — decisão de escopo | Global vs por ano-calendário | Decisão antes do PR L |
+
+**Status:** Sprint B iniciada. Nenhum merge dos PRs L/M/N deve ocorrer antes da decisão de escopo da deduplicação SHA256.
 
 ---
 
