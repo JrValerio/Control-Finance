@@ -253,6 +253,13 @@ describe("financial contracts schemas", () => {
       const result = TaxDocumentPreviewResponseSchema.safeParse({
         preview: {
           sourceType: "income",
+          detectedState: "ready",
+          blockingRules: [],
+          capabilities: {
+            canExtract: true,
+            canSuggest: true,
+            canExecute: true,
+          },
           documentType: "income_report_employer",
           confidenceScore: 0.97,
           extractorAvailable: true,
@@ -271,6 +278,38 @@ describe("financial contracts schemas", () => {
       const result = TaxDocumentPreviewResponseSchema.safeParse({
         preview: {
           sourceType: "other",
+          detectedState: "ready",
+          blockingRules: [],
+          capabilities: {
+            canExtract: true,
+            canSuggest: true,
+            canExecute: true,
+          },
+          documentType: "income_report_employer",
+          confidenceScore: 0.97,
+          extractorAvailable: true,
+          sourceLabelSuggestion: null,
+          reasons: ["matched_employer_signals"],
+          warnings: [],
+          textSource: "csv_text",
+          textPreviewLines: ["Comprovante de Rendimentos"],
+        },
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects preview payload with invalid detected state", () => {
+      const result = TaxDocumentPreviewResponseSchema.safeParse({
+        preview: {
+          sourceType: "income",
+          detectedState: "in_progress",
+          blockingRules: [],
+          capabilities: {
+            canExtract: true,
+            canSuggest: true,
+            canExecute: true,
+          },
           documentType: "income_report_employer",
           confidenceScore: 0.97,
           extractorAvailable: true,

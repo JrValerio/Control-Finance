@@ -46,7 +46,11 @@ export type {
 } from "./core-financial-semantic-contract.schema";
 
 export type {
+  TaxDocumentPreviewBlockingCode,
+  TaxDocumentPreviewBlockingRule,
+  TaxDocumentPreviewCapabilities,
   TaxDocumentPreview,
+  TaxDocumentPreviewDetectedState,
   TaxDocumentPreviewDocumentType,
   TaxDocumentPreviewResponse,
   TaxDocumentPreviewSourceType,
