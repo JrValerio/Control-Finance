@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getLatestForecast } from "./forecast.service.js";
+import { getLatestForecast } from "./forecast.service.ts";
 import { getGoalsSummaryForAI } from "./goals.service.js";
 import { listBankAccountsByUser } from "./bank-accounts.service.js";
 import { getUtilityBillsPanelForUser } from "./bills.service.js";

@@ -3,13 +3,73 @@ import { getPendingBillsDueByDate } from "./bills.service.js";
 
 const ENGINE_VERSION = "v2";
 
-const createError = (status, message) => {
-  const error = new Error(message);
+type ErrorWithStatus = Error & { status: number };
+
+type BalanceBasis = "bank_account" | "net_month_transactions";
+type IncomeBasis = "confirmed_statement" | "salary_profile_fallback";
+type BankLimitStatus = "unused" | "using" | "exceeded";
+
+interface ForecastPendingItems {
+  bills: number;
+  invoices: number;
+  creditCardCycles: number;
+}
+
+interface ForecastMeta {
+  balanceBasis: BalanceBasis;
+  incomeBasis: IncomeBasis;
+  pendingItems: ForecastPendingItems;
+  fallbacksUsed: string[];
+}
+
+interface ForecastBankLimitProjection {
+  total: number;
+  used: number;
+  remaining: number;
+  exceededBy: number;
+  usagePct: number;
+  status: BankLimitStatus;
+  alertTriggered: boolean;
+}
+
+interface ForecastPayload {
+  month: string;
+  engineVersion: string;
+  projectedBalance: number;
+  incomeExpected: number | null;
+  spendingToDate: number;
+  dailyAvgSpending: number;
+  daysRemaining: number;
+  flipDetected: boolean;
+  flipDirection: string | null;
+  generatedAt: string | Date;
+  billsPendingTotal: number;
+  billsPendingCount: number;
+  adjustedProjectedBalance: number;
+  bankLimit: ForecastBankLimitProjection | null;
+  _meta: ForecastMeta;
+}
+
+interface ForecastRow {
+  month: string | Date;
+  engine_version: string;
+  projected_balance: number | string;
+  income_expected: number | string | null;
+  spending_to_date: number | string;
+  daily_avg_spending: number | string;
+  days_remaining: number | string;
+  flip_detected: boolean;
+  flip_direction: string | null;
+  generated_at: string | Date;
+}
+
+const createError = (status: number, message: string): ErrorWithStatus => {
+  const error = new Error(message) as ErrorWithStatus;
   error.status = status;
   return error;
 };
 
-const normalizeUserId = (value) => {
+const normalizeUserId = (value: number | string): number => {
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed <= 0) {
     throw createError(401, "Usuario nao autenticado.");
@@ -18,20 +78,20 @@ const normalizeUserId = (value) => {
 };
 
 // Returns "YYYY-MM-DD" for the first day of the month containing `now`
-const monthStartStr = (now) => {
+const monthStartStr = (now: Date): string => {
   const y = now.getUTCFullYear();
   const m = String(now.getUTCMonth() + 1).padStart(2, "0");
   return `${y}-${m}-01`;
 };
 
 // Returns "YYYY-MM-DD" for the last day of the month containing `now`
-const monthEndStr = (now) => {
+const monthEndStr = (now: Date): string => {
   const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0));
   return d.toISOString().slice(0, 10);
 };
 
 // Days remaining in the month (inclusive of today)
-const calcDaysRemaining = (now) => {
+const calcDaysRemaining = (now: Date): number => {
   const lastDay = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0),
   ).getUTCDate();
@@ -39,15 +99,18 @@ const calcDaysRemaining = (now) => {
 };
 
 // "YYYY-MM-DD" for N days before `now`
-const daysAgoStr = (now, days) => {
+const daysAgoStr = (now: Date, days: number): string => {
   const d = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - days),
   );
   return d.toISOString().slice(0, 10);
 };
 
-const rowToForecast = (row) => ({
-  month: typeof row.month === "string" ? row.month.slice(0, 7) : row.month.toISOString().slice(0, 7),
+const rowToForecast = (row: ForecastRow) => ({
+  month:
+    typeof row.month === "string"
+      ? row.month.slice(0, 7)
+      : row.month.toISOString().slice(0, 7),
   engineVersion: row.engine_version,
   projectedBalance: Number(row.projected_balance),
   incomeExpected: row.income_expected != null ? Number(row.income_expected) : null,
@@ -59,21 +122,23 @@ const rowToForecast = (row) => ({
   generatedAt: row.generated_at,
 });
 
-const buildBankLimitProjection = (bankLimitTotal, adjustedProjectedBalance) => {
+const buildBankLimitProjection = (
+  bankLimitTotal: number | null,
+  adjustedProjectedBalance: number,
+): ForecastBankLimitProjection | null => {
   if (bankLimitTotal == null) return null;
 
   const total = Number(bankLimitTotal);
   if (!Number.isFinite(total) || total <= 0) return null;
 
-  const projectedDeficit = adjustedProjectedBalance < 0
-    ? Math.abs(Number(adjustedProjectedBalance))
-    : 0;
+  const projectedDeficit =
+    adjustedProjectedBalance < 0 ? Math.abs(Number(adjustedProjectedBalance)) : 0;
   const used = Number(Math.min(projectedDeficit, total).toFixed(2));
   const remaining = Number(Math.max(total - used, 0).toFixed(2));
   const exceededBy = Number(Math.max(projectedDeficit - total, 0).toFixed(2));
   const usagePct = total > 0 ? Number(((used / total) * 100).toFixed(2)) : 0;
 
-  let status = "unused";
+  let status: BankLimitStatus = "unused";
   if (exceededBy > 0) {
     status = "exceeded";
   } else if (used > 0) {
@@ -91,13 +156,17 @@ const buildBankLimitProjection = (bankLimitTotal, adjustedProjectedBalance) => {
   };
 };
 
-const resolveBalanceBasis = (activeAccountsCount) =>
+const resolveBalanceBasis = (activeAccountsCount: number): BalanceBasis =>
   activeAccountsCount > 0 ? "bank_account" : "net_month_transactions";
 
-const resolveIncomeBasis = (hasStatementsThisMonth) =>
+const resolveIncomeBasis = (hasStatementsThisMonth: boolean): IncomeBasis =>
   hasStatementsThisMonth ? "confirmed_statement" : "salary_profile_fallback";
 
-const getForecastPendingItems = async (userId, monthEnd, currentMonth) => {
+const getForecastPendingItems = async (
+  userId: number,
+  monthEnd: string,
+  currentMonth: string,
+): Promise<ForecastPendingItems> => {
   const billsResult = await dbQuery(
     `SELECT
        COUNT(*)::int AS bills_count,
@@ -132,9 +201,15 @@ const buildForecastMeta = async ({
   currentMonth,
   balanceBasis,
   incomeBasis,
-}) => {
+}: {
+  userId: number;
+  monthEnd: string;
+  currentMonth: string;
+  balanceBasis: BalanceBasis;
+  incomeBasis: IncomeBasis;
+}): Promise<ForecastMeta> => {
   const pendingItems = await getForecastPendingItems(userId, monthEnd, currentMonth);
-  const fallbacksUsed = [];
+  const fallbacksUsed: string[] = [];
 
   if (balanceBasis === "net_month_transactions") {
     fallbacksUsed.push("balanceBasis:net_month_transactions");
@@ -154,11 +229,11 @@ const buildForecastMeta = async ({
 /**
  * Computes (or recomputes) the forecast for the given user and month,
  * persists it, and returns the result.
- *
- * @param {number|string} userId
- * @param {{ now?: Date }} options  - injectable `now` for deterministic tests
  */
-export const computeForecast = async (userId, { now = new Date() } = {}) => {
+export const computeForecast = async (
+  userId: number | string,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<ForecastPayload> => {
   const uid = normalizeUserId(userId);
   const mStart = monthStartStr(now);
   const mEnd = monthEndStr(now);
@@ -256,9 +331,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
   // 4c. Resolve incomeExpected and incomeAdjustment.
   // Confirmed statements win over salary; salary remains fallback only.
   const hasStatementsThisMonth = statementsExpected > 0;
-  const incomeExpected = hasStatementsThisMonth
-    ? statementsExpected
-    : salaryMonthly;
+  const incomeExpected = hasStatementsThisMonth ? statementsExpected : salaryMonthly;
   const incomeAdjustment = hasStatementsThisMonth
     ? statementsCashPending
     : salaryMonthly != null && payday != null && payday > todayDay
@@ -270,7 +343,8 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
   // 5. Projected balance
   const netToDate = incomeToDate - spendingToDate;
   const realBalanceBase = activeAccountsCount > 0 ? totalBankBalance : netToDate;
-  const projectedBalance = realBalanceBase + incomeAdjustment - dailyAvgSpending * daysRemaining;
+  const projectedBalance =
+    realBalanceBase + incomeAdjustment - dailyAvgSpending * daysRemaining;
 
   // 6. Flip detection against previous stored value
   const prevResult = await dbQuery(
@@ -279,7 +353,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
     [uid, mStart],
   );
   let flipDetected = false;
-  let flipDirection = null;
+  let flipDirection: string | null = null;
   if (prevResult.rows.length > 0) {
     const prev = Number(prevResult.rows[0].projected_balance);
     if (prev >= 0 && projectedBalance < 0) {
@@ -312,11 +386,28 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
        flip_detected      = EXCLUDED.flip_detected,
        flip_direction     = EXCLUDED.flip_direction,
        generated_at       = EXCLUDED.generated_at`,
-    [uid, mStart, ENGINE_VERSION, pb, incomeExpected, spendingToDate.toFixed(2), da, daysRemaining, flipDetected, flipDirection],
+    [
+      uid,
+      mStart,
+      ENGINE_VERSION,
+      pb,
+      incomeExpected,
+      spendingToDate.toFixed(2),
+      da,
+      daysRemaining,
+      flipDetected,
+      flipDirection,
+    ],
   );
 
   const monthEnd = monthEndStr(now);
-  const { billsTotal, billsCount } = await getPendingBillsDueByDate(uid, monthEnd);
+  const { billsTotal, billsCount } = (await getPendingBillsDueByDate(
+    uid,
+    monthEnd,
+  )) as {
+    billsTotal: number;
+    billsCount: number;
+  };
   const adjustedProjectedBalance = Number((pb - billsTotal).toFixed(2));
   const meta = await buildForecastMeta({
     userId: uid,
@@ -348,7 +439,10 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
 /**
  * Returns the stored forecast for the current month, or null if none exists.
  */
-export const getLatestForecast = async (userId, { now = new Date() } = {}) => {
+export const getLatestForecast = async (
+  userId: number | string,
+  { now = new Date() }: { now?: Date } = {},
+): Promise<ForecastPayload | null> => {
   const uid = normalizeUserId(userId);
   const mStart = monthStartStr(now);
 
@@ -359,13 +453,19 @@ export const getLatestForecast = async (userId, { now = new Date() } = {}) => {
 
   if (result.rows.length === 0) return null;
 
-  const forecast = rowToForecast(result.rows[0]);
+  const forecast = rowToForecast(result.rows[0] as ForecastRow);
   const monthEnd = monthEndStr(now);
   const currentMonth = mStart.slice(0, 7);
-  const { billsTotal, billsCount } = await getPendingBillsDueByDate(uid, monthEnd);
-  forecast.billsPendingTotal = Number(billsTotal.toFixed(2));
-  forecast.billsPendingCount = billsCount;
-  forecast.adjustedProjectedBalance = Number((forecast.projectedBalance - billsTotal).toFixed(2));
+  const { billsTotal, billsCount } = (await getPendingBillsDueByDate(
+    uid,
+    monthEnd,
+  )) as {
+    billsTotal: number;
+    billsCount: number;
+  };
+  const adjustedProjectedBalance = Number(
+    (forecast.projectedBalance - billsTotal).toFixed(2),
+  );
   const profileResult = await dbQuery(
     `SELECT bank_limit_total FROM user_profiles WHERE user_id = $1 LIMIT 1`,
     [uid],
@@ -402,16 +502,23 @@ export const getLatestForecast = async (userId, { now = new Date() } = {}) => {
   const balanceBasis = resolveBalanceBasis(activeAccountsCount);
   const incomeBasis = resolveIncomeBasis(hasStatementsThisMonth);
 
-  forecast.bankLimit = buildBankLimitProjection(
-    effectiveBankLimitTotal,
-    forecast.adjustedProjectedBalance,
-  );
-  forecast._meta = await buildForecastMeta({
+  const meta = await buildForecastMeta({
     userId: uid,
     monthEnd,
     currentMonth,
     balanceBasis,
     incomeBasis,
   });
-  return forecast;
+
+  return {
+    ...forecast,
+    billsPendingTotal: Number(billsTotal.toFixed(2)),
+    billsPendingCount: billsCount,
+    adjustedProjectedBalance,
+    bankLimit: buildBankLimitProjection(
+      effectiveBankLimitTotal,
+      adjustedProjectedBalance,
+    ),
+    _meta: meta,
+  };
 };
