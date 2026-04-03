@@ -8,6 +8,7 @@ import {
 import { ForecastResultSchema } from "./forecast.schema";
 import { IncomeEntrySchema } from "./income.schema";
 import { ObligationSchema } from "./obligation.schema";
+import { TaxDocumentIngestionExecutionResponseSchema } from "./tax-document-ingestion-execution-response.schema";
 import { TaxDocumentPreviewResponseSchema } from "./tax-document-preview-response.schema";
 
 describe("financial contracts schemas", () => {
@@ -318,6 +319,102 @@ describe("financial contracts schemas", () => {
           warnings: [],
           textSource: "csv_text",
           textPreviewLines: ["Comprovante de Rendimentos"],
+        },
+      });
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("TaxDocumentIngestionExecutionResponseSchema", () => {
+    it("accepts operation payload with ingested and executed flow", () => {
+      const result = TaxDocumentIngestionExecutionResponseSchema.safeParse({
+        preview: {
+          sourceType: "income",
+          detectedState: "ready",
+          blockingRules: [],
+          capabilities: {
+            canExtract: true,
+            canSuggest: true,
+            canExecute: true,
+          },
+          documentType: "income_report_employer",
+          confidenceScore: 0.97,
+          extractorAvailable: true,
+          sourceLabelSuggestion: null,
+          reasons: ["matched_employer_signals"],
+          warnings: [],
+          textSource: "csv_text",
+          textPreviewLines: ["Comprovante de Rendimentos"],
+        },
+        ingestion: {
+          allowed: true,
+          status: "ingested",
+          documentId: 42,
+          blockingRules: [],
+        },
+        suggestion: {
+          allowed: true,
+          sourceLabelSuggestion: "ACME LTDA",
+        },
+        execution: {
+          requested: true,
+          allowed: true,
+          status: "executed",
+          documentId: 42,
+          blockingRules: [],
+        },
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects operation payload with invalid execution status", () => {
+      const result = TaxDocumentIngestionExecutionResponseSchema.safeParse({
+        preview: {
+          sourceType: "support",
+          detectedState: "review_required",
+          blockingRules: [
+            {
+              code: "source_type_requires_manual_review",
+              reason: "Revisao manual obrigatoria",
+            },
+          ],
+          capabilities: {
+            canExtract: false,
+            canSuggest: true,
+            canExecute: false,
+          },
+          documentType: "bank_statement_support",
+          confidenceScore: 0.89,
+          extractorAvailable: false,
+          sourceLabelSuggestion: null,
+          reasons: ["matched_bank_statement_support_signals"],
+          warnings: [],
+          textSource: "csv_text",
+          textPreviewLines: ["Saldo anterior"],
+        },
+        ingestion: {
+          allowed: true,
+          status: "ingested",
+          documentId: 11,
+          blockingRules: [],
+        },
+        suggestion: {
+          allowed: true,
+          sourceLabelSuggestion: null,
+        },
+        execution: {
+          requested: true,
+          allowed: false,
+          status: "blocked",
+          documentId: null,
+          blockingRules: [
+            {
+              code: "execution_not_allowed_for_source_type",
+              reason: "Execucao bloqueada",
+            },
+          ],
         },
       });
 

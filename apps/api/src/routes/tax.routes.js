@@ -2,8 +2,10 @@ import { Router } from "express";
 import path from "node:path";
 import multer from "multer";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
+import { TaxDocumentIngestionExecutionResponseSchema } from "../domain/contracts/tax-document-ingestion-execution-response.schema.ts";
 import { TaxDocumentPreviewResponseSchema } from "../domain/contracts/tax-document-preview-response.schema.ts";
 import { getTaxBootstrapByUser } from "../services/tax-bootstrap.service.js";
+import { ingestAndExecuteTaxDocumentBySourceType } from "../services/tax-document-ingestion-execution.service.js";
 import {
   createTaxDocumentForUser,
   deleteTaxDocumentByIdForUser,
@@ -150,6 +152,38 @@ router.post("/documents/preview", (req, res, next) => {
         req,
         res,
         { routeLabel: "POST /tax/documents/preview" },
+      );
+    } catch (serviceError) {
+      return next(serviceError);
+    }
+  });
+});
+
+router.post("/documents/ingest-execute", (req, res, next) => {
+  upload.single("file")(req, res, async (error) => {
+    if (error) {
+      let normalizedError = error;
+
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+        normalizedError = createError(413, "Arquivo muito grande.");
+      }
+
+      return next(normalizedError);
+    }
+
+    try {
+      ensureValidTaxDocumentFile(req.file);
+      const operation = await ingestAndExecuteTaxDocumentBySourceType({
+        userId: req.user.id,
+        payload: req.body ?? {},
+        file: req.file,
+      });
+      return respondValidated(
+        TaxDocumentIngestionExecutionResponseSchema,
+        operation,
+        req,
+        res,
+        { routeLabel: "POST /tax/documents/ingest-execute" },
       );
     } catch (serviceError) {
       return next(serviceError);

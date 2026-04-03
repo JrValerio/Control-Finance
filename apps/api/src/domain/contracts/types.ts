@@ -46,6 +46,15 @@ export type {
 } from "./core-financial-semantic-contract.schema";
 
 export type {
+  TaxDocumentExecutionDecision,
+  TaxDocumentExecutionStatus,
+  TaxDocumentIngestionDecision,
+  TaxDocumentIngestionExecutionResponse,
+  TaxDocumentIngestionStatus,
+  TaxDocumentSuggestionDecision,
+} from "./tax-document-ingestion-execution-response.schema";
+
+export type {
   TaxDocumentPreviewBlockingCode,
   TaxDocumentPreviewBlockingRule,
   TaxDocumentPreviewCapabilities,
