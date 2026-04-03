@@ -6,16 +6,9 @@ import Modal from "../components/Modal";
 import ImportCsvModal from "../components/ImportCsvModal";
 import ImportHistoryModal from "../components/ImportHistoryModal";
 import UpgradeModal from "../components/UpgradeModal";
-import ForecastCard from "../components/ForecastCard";
 import FinancialAlertBanner from "../components/FinancialAlertBanner";
-import BankAccountsWidget from "../components/BankAccountsWidget";
-import BillsSummaryWidget from "../components/BillsSummaryWidget";
-import UtilityBillsWidget from "../components/UtilityBillsWidget";
-import CreditCardsSummaryWidget from "../components/CreditCardsSummaryWidget";
-import SalaryWidget from "../components/SalaryWidget";
-import ConsignadoOverviewWidget from "../components/ConsignadoOverviewWidget";
-import OperationalSummaryPanel from "../components/OperationalSummaryPanel";
 import MonthViewSection from "../components/MonthViewSection";
+import OperationalWidgetsSection from "../components/OperationalWidgetsSection";
 import type {
   MonthOverMonthDirection,
   MonthOverMonthMetric,
@@ -2350,58 +2343,13 @@ const App = ({
             momToneClassNames={MOM_TONE_CLASSNAMES}
             money={money}
           />
-          <section className="space-y-4" aria-labelledby="operational-overview-title">
-            <div>
-              <h3
-                id="operational-overview-title"
-                className="text-sm font-medium text-cf-text-primary"
-              >
-                Painel operacional
-              </h3>
-              <p className="mt-1 text-xs text-cf-text-secondary">
-                O que pede ação agora: projeção, pendências, cartões, renda principal e sinais de risco.
-              </p>
-              <p className="mt-1 text-xs text-cf-text-secondary">
-                Níveis operacionais padronizados: normal, atenção e risco.
-              </p>
-            </div>
-
-            <OperationalSummaryPanel onOpenDueSoonBills={handleOpenDueSoonBills} />
-
-            <section className="space-y-3" aria-labelledby="critical-cards-title">
-              <div className="flex items-center justify-between gap-2">
-                <h4 id="critical-cards-title" className="text-xs font-semibold uppercase tracking-wide text-cf-text-secondary">
-                  Cards críticos
-                </h4>
-                <span className="text-xs text-cf-text-secondary">Prioridade de triagem</span>
-              </div>
-
-              <div className="flex flex-col gap-5">
-                <ForecastCard onOpenProfileSettings={onOpenProfileSettings} />
-                <BillsSummaryWidget onOpenBills={handleOpenBills} />
-                <CreditCardsSummaryWidget onOpenCreditCards={handleOpenCreditCards} />
-              </div>
-            </section>
-
-            <UtilityBillsWidget />
-          </section>
-
-          <section className="space-y-4" aria-labelledby="income-structure-title">
-            <div>
-              <h3 id="income-structure-title" className="text-sm font-medium text-cf-text-primary">
-                Renda e estrutura
-              </h3>
-              <p className="mt-1 text-xs text-cf-text-secondary">
-                Base do mês: benefício líquido, descontos estruturais e caixa em conta.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-5">
-              <BankAccountsWidget />
-              <SalaryWidget />
-              <ConsignadoOverviewWidget onOpenIncomeSources={handleOpenIncomeSources} />
-            </div>
-          </section>
+          <OperationalWidgetsSection
+            onOpenDueSoonBills={handleOpenDueSoonBills}
+            onOpenProfileSettings={handleOpenProfileSettings}
+            onOpenBills={handleOpenBills}
+            onOpenCreditCards={handleOpenCreditCards}
+            onOpenIncomeSources={handleOpenIncomeSources}
+          />
 
           <section className="space-y-4" aria-labelledby="health-goals-title">
             <div>
