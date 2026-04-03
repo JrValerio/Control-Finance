@@ -4,12 +4,36 @@ export type TaxFactReviewStatus = "pending" | "approved" | "corrected" | "reject
 export type TaxFactReviewAction = "approve" | "correct" | "reject";
 export type TaxExportFormat = "json" | "csv";
 export type TaxFactSourceFilter = "with_document" | "without_document";
+export type TaxDocumentSupportLevel = "supported" | "restricted" | "not_supported";
 export type TaxDocumentProcessingStatus =
   | "uploaded"
   | "classified"
   | "extracted"
   | "normalized"
   | "failed";
+
+export interface TaxDocumentSupportMatrixItem {
+  documentType: string;
+  sourceType: string;
+  supportLevel: TaxDocumentSupportLevel;
+  supportsExtraction: boolean;
+  allowsSuggestion: boolean;
+  allowsExecution: boolean;
+}
+
+export interface TaxBootstrap {
+  module: string;
+  scope: string;
+  apiVersion: string;
+  documentSupportMatrixVersion: string;
+  supportedTaxYears: number[];
+  documentTypes: string[];
+  documentSupportMatrix: TaxDocumentSupportMatrixItem[];
+  documentProcessingStatuses: string[];
+  factTypes: string[];
+  reviewStatuses: string[];
+  ruleFamilies: string[];
+}
 
 export interface TaxDocumentLatestExtraction {
   extractorName: string;
@@ -303,6 +327,30 @@ const normalizeNullableString = (value: unknown): string | null => {
   return normalizedValue || null;
 };
 
+const normalizeStringArray = (value: unknown): string[] =>
+  Array.isArray(value) ? value.map((item) => normalizeString(item)).filter(Boolean) : [];
+
+const normalizeNumberArray = (value: unknown): number[] =>
+  Array.isArray(value)
+    ? value
+        .map((item) => normalizeNumber(item))
+        .filter((item) => Number.isFinite(item))
+    : [];
+
+const normalizeTaxDocumentSupportLevel = (value: unknown): TaxDocumentSupportLevel => {
+  const normalizedValue = normalizeString(value);
+
+  if (
+    normalizedValue === "supported" ||
+    normalizedValue === "restricted" ||
+    normalizedValue === "not_supported"
+  ) {
+    return normalizedValue;
+  }
+
+  return "not_supported";
+};
+
 const normalizeObject = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {};
@@ -336,6 +384,39 @@ const normalizeLatestExtraction = (value: unknown): TaxDocumentLatestExtraction 
       ? raw.warnings.map((warning) => normalizeString(warning)).filter(Boolean)
       : [],
     createdAt: normalizeNullableString(raw.createdAt),
+  };
+};
+
+const normalizeDocumentSupportMatrixItem = (value: unknown): TaxDocumentSupportMatrixItem => {
+  const raw = normalizeObject(value);
+
+  return {
+    documentType: normalizeString(raw.documentType),
+    sourceType: normalizeString(raw.sourceType),
+    supportLevel: normalizeTaxDocumentSupportLevel(raw.supportLevel),
+    supportsExtraction: Boolean(raw.supportsExtraction),
+    allowsSuggestion: Boolean(raw.allowsSuggestion),
+    allowsExecution: Boolean(raw.allowsExecution),
+  };
+};
+
+const normalizeTaxBootstrap = (value: unknown): TaxBootstrap => {
+  const raw = normalizeObject(value);
+
+  return {
+    module: normalizeString(raw.module),
+    scope: normalizeString(raw.scope),
+    apiVersion: normalizeString(raw.apiVersion),
+    documentSupportMatrixVersion: normalizeString(raw.documentSupportMatrixVersion),
+    supportedTaxYears: normalizeNumberArray(raw.supportedTaxYears),
+    documentTypes: normalizeStringArray(raw.documentTypes),
+    documentSupportMatrix: Array.isArray(raw.documentSupportMatrix)
+      ? raw.documentSupportMatrix.map(normalizeDocumentSupportMatrixItem)
+      : [],
+    documentProcessingStatuses: normalizeStringArray(raw.documentProcessingStatuses),
+    factTypes: normalizeStringArray(raw.factTypes),
+    reviewStatuses: normalizeStringArray(raw.reviewStatuses),
+    ruleFamilies: normalizeStringArray(raw.ruleFamilies),
   };
 };
 
@@ -676,6 +757,11 @@ const normalizeBlobApiError = async (error: unknown) => {
 };
 
 export const taxService = {
+  getBootstrap: async (): Promise<TaxBootstrap> => {
+    const { data } = await api.get("/tax");
+    return normalizeTaxBootstrap(data);
+  },
+
   listDocuments: async (params: {
     taxYear: number;
     status?: TaxDocumentProcessingStatus;

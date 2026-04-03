@@ -67,6 +67,51 @@ describe("TaxUploadModal", () => {
     );
   });
 
+  it("expõe matriz de suporte com estados suportado, restrito e não suportado", () => {
+    render(
+      <TaxUploadModal
+        isOpen
+        taxYear={2026}
+        stage="idle"
+        supportMatrixVersion="2026-04-03.aud-001"
+        supportMatrix={[
+          {
+            documentType: "income_report_bank",
+            sourceType: "income",
+            supportLevel: "supported",
+            supportsExtraction: true,
+            allowsSuggestion: true,
+            allowsExecution: true,
+          },
+          {
+            documentType: "bank_statement_support",
+            sourceType: "support",
+            supportLevel: "restricted",
+            supportsExtraction: false,
+            allowsSuggestion: true,
+            allowsExecution: false,
+          },
+          {
+            documentType: "unknown",
+            sourceType: "unknown",
+            supportLevel: "not_supported",
+            supportsExtraction: false,
+            allowsSuggestion: false,
+            allowsExecution: false,
+          },
+        ]}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Matriz real de suporte documental")).toBeInTheDocument();
+    expect(screen.getByText("v2026-04-03.aud-001")).toBeInTheDocument();
+    expect(screen.getByText("Suportado (1)")).toBeInTheDocument();
+    expect(screen.getByText("Restrito (1)")).toBeInTheDocument();
+    expect(screen.getByText("Não suportado (0)")).toBeInTheDocument();
+  });
+
   // ─── Preview step ──────────────────────────────────────────────────────────
 
   it("renderiza o step de preview com nome do arquivo, tipo e contagem de fatos", () => {

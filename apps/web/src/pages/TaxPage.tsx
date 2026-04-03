@@ -5,6 +5,7 @@ import TaxManualFactModal from "../components/TaxManualFactModal";
 import { profileService } from "../services/profile.service";
 import {
   taxService,
+  type TaxDocumentSupportMatrixItem,
   type TaxDocument,
   type TaxDocumentDetail,
   type TaxDocumentsListResult,
@@ -477,6 +478,8 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
   const [uploadErrorMessage, setUploadErrorMessage] = useState("");
   const [uploadPreviewDocument, setUploadPreviewDocument] = useState<TaxDocumentDetail | null>(null);
   const [uploadPreviewFactCount, setUploadPreviewFactCount] = useState(0);
+  const [documentSupportMatrix, setDocumentSupportMatrix] = useState<TaxDocumentSupportMatrixItem[]>([]);
+  const [documentSupportMatrixVersion, setDocumentSupportMatrixVersion] = useState("");
   const [manualFactErrorMessage, setManualFactErrorMessage] = useState("");
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Guard: fire auto-sync at most once per mount (StrictMode + dep-change safety)
@@ -539,7 +542,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
     setIsLoadingPage(true);
     setPageError("");
 
-    const [summaryResult, obligationResult, documentsResult, factsResult, profileResult] = await Promise.allSettled([
+    const [summaryResult, obligationResult, documentsResult, factsResult, profileResult, bootstrapResult] = await Promise.allSettled([
       taxService.getSummary(taxYear),
       taxService.getObligation(taxYear),
       taxService.listDocuments({
@@ -554,6 +557,7 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
         pageSize: DEFAULT_FACTS_PAGE_SIZE,
       }),
       profileService.getMe(),
+      taxService.getBootstrap(),
     ]);
 
     const nextErrors: string[] = [];
@@ -595,6 +599,11 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
 
     if (profileResult.status === "fulfilled") {
       setTaxpayerCpf(profileResult.value.profile?.taxpayerCpf ?? null);
+    }
+
+    if (bootstrapResult.status === "fulfilled") {
+      setDocumentSupportMatrix(bootstrapResult.value.documentSupportMatrix);
+      setDocumentSupportMatrixVersion(bootstrapResult.value.documentSupportMatrixVersion);
     }
 
     setPageError(nextErrors[0] || "");
@@ -2102,6 +2111,8 @@ const TaxPage = ({ onBack = undefined, onOpenProfileSettings = undefined }: TaxP
         errorMessage={uploadErrorMessage}
         previewDocument={uploadPreviewDocument}
         previewFactCount={uploadPreviewFactCount}
+        supportMatrix={documentSupportMatrix}
+        supportMatrixVersion={documentSupportMatrixVersion}
         onClose={handleCloseUploadModal}
         onSubmit={handleUploadDocument}
         onConfirmPreview={handleConfirmUploadPreview}

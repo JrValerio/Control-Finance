@@ -1,54 +1,15 @@
 import { hasTaxExtractorForDocumentType } from "../domain/tax/tax-document-extractors.js";
+import {
+  resolvePolicyBySourceType as resolveDocumentPolicyBySourceType,
+  resolveTaxDocumentSourceType as resolveDocumentSourceType,
+} from "../domain/tax/tax-document-support-matrix.js";
 import { classifyTaxDocumentBuffer } from "./tax-classification.service.js";
-
-const SOURCE_TYPE_BY_DOCUMENT_TYPE = Object.freeze({
-  income_report_bank: "income",
-  income_report_employer: "income",
-  clt_payslip: "income",
-  income_report_inss: "income",
-  medical_statement: "deduction",
-  education_receipt: "deduction",
-  loan_statement: "debt",
-  bank_statement_support: "support",
-  unknown: "unknown",
-});
-
-const SOURCE_TYPE_POLICY = Object.freeze({
-  income: {
-    supportsExtraction: true,
-    allowsSuggestion: true,
-    allowsExecution: true,
-  },
-  deduction: {
-    supportsExtraction: true,
-    allowsSuggestion: true,
-    allowsExecution: true,
-  },
-  debt: {
-    supportsExtraction: false,
-    allowsSuggestion: true,
-    allowsExecution: false,
-  },
-  support: {
-    supportsExtraction: false,
-    allowsSuggestion: true,
-    allowsExecution: false,
-  },
-  unknown: {
-    supportsExtraction: false,
-    allowsSuggestion: false,
-    allowsExecution: false,
-  },
-});
 
 const BLOCKED_TEXT_SOURCES = new Set([
   "pdf_text_error",
   "image_text_pending",
   "unsupported_text_source",
 ]);
-
-const resolvePolicyBySourceType = (sourceType) =>
-  SOURCE_TYPE_POLICY[String(sourceType || "").trim()] || SOURCE_TYPE_POLICY.unknown;
 
 const buildBlockingRules = ({
   sourceType,
@@ -98,7 +59,7 @@ const buildBlockingRules = ({
 };
 
 export const resolveTaxDocumentSourceType = (documentType) =>
-  SOURCE_TYPE_BY_DOCUMENT_TYPE[String(documentType || "").trim()] || "unknown";
+  resolveDocumentSourceType(documentType);
 
 export const previewTaxDocumentBySourceType = async (file) => {
   const classification = await classifyTaxDocumentBuffer({
@@ -107,7 +68,7 @@ export const previewTaxDocumentBySourceType = async (file) => {
   });
 
   const sourceType = resolveTaxDocumentSourceType(classification.documentType);
-  const policy = resolvePolicyBySourceType(sourceType);
+  const policy = resolveDocumentPolicyBySourceType(sourceType);
   const extractorAvailable = hasTaxExtractorForDocumentType(classification.documentType);
   const canExtract =
     policy.supportsExtraction &&
