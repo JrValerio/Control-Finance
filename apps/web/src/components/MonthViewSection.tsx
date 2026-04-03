@@ -56,8 +56,8 @@ const MonthViewSection = ({
     {summaryError ? (
       <div
         className="mb-3 flex items-center justify-between gap-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-        role="status"
-        aria-live="polite"
+        role="alert"
+        aria-live="assertive"
       >
         <span>{summaryError}</span>
         <button

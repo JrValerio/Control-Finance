@@ -291,11 +291,13 @@ const UtilityBillsWidget = (): JSX.Element => {
   const money = useMaskedCurrency();
 
   const load = useCallback(() => {
+    setIsLoading(true);
+    setHasError(false);
+
     billsService
       .getUtilityPanel()
       .then((data) => {
         setPanel(data);
-        setHasError(false);
       })
       .catch(() => setHasError(true))
       .finally(() => setIsLoading(false));
@@ -377,7 +379,20 @@ const UtilityBillsWidget = (): JSX.Element => {
     return (
       <div className="rounded border border-cf-border bg-cf-surface p-4">
         <h3 className="mb-1 text-sm font-medium text-cf-text-primary">Contas de consumo</h3>
-        <p className="text-sm text-cf-text-secondary">Não foi possível carregar as contas.</p>
+        <div
+          className="mt-2 flex items-center justify-between gap-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          role="alert"
+          aria-live="assertive"
+        >
+          <span>Não foi possível carregar as contas.</span>
+          <button
+            type="button"
+            onClick={load}
+            className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Tentar novamente
+          </button>
+        </div>
       </div>
     );
   }

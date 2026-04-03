@@ -67,9 +67,17 @@ const TransactionsFeedSection = ({
 
     <section ref={sectionRef} className="rounded border border-cf-border bg-cf-surface px-4 py-3.5">
       {requestError ? (
-        <div className="p-4 text-center">
-          <p className="text-sm font-medium text-red-600">{requestError}</p>
-          <button onClick={() => void onRetryLoadTransactions()} className="mt-2 font-medium text-brand-1 hover:text-brand-2">
+        <div
+          className="mb-3 flex items-center justify-between gap-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          role="alert"
+          aria-live="assertive"
+        >
+          <span>{requestError}</span>
+          <button
+            type="button"
+            onClick={() => void onRetryLoadTransactions()}
+            className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
             Tentar novamente
           </button>
         </div>
@@ -85,13 +93,25 @@ const TransactionsFeedSection = ({
         </div>
       ) : transactions.length === 0 ? (
         hasActiveFilters ? (
-          <div className="p-4 text-center text-cf-text-primary">
-            Nenhum valor encontrado para os filtros selecionados.
+          <div
+            className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-secondary"
+            role="status"
+            aria-live="polite"
+          >
+            <p>Nenhum valor encontrado para os filtros selecionados.</p>
           </div>
         ) : (
-          <div className="p-4 text-center">
+          <div
+            className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2 text-sm text-cf-text-secondary"
+            role="status"
+            aria-live="polite"
+          >
             <p className="text-cf-text-primary">Nenhum valor cadastrado.</p>
-            <button onClick={onOpenCreateModal} className="font-medium text-brand-1 hover:text-brand-2">
+            <button
+              type="button"
+              onClick={onOpenCreateModal}
+              className="mt-2 rounded border border-cf-border bg-cf-surface px-2.5 py-1 text-xs font-semibold text-cf-text-primary hover:bg-cf-bg-subtle"
+            >
               Registrar valor
             </button>
           </div>
