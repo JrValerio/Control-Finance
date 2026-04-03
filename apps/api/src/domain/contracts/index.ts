@@ -34,6 +34,15 @@ export {
   ForecastRecomputeResponseSchema,
 } from "./forecast-response.schema";
 
+export {
+  CORE_FINANCIAL_SEMANTIC_SOURCE_MAP,
+  CoreFinancialCurrentPositionSchema,
+  CoreFinancialProjectionSchema,
+  CoreFinancialRealizedSchema,
+  CoreFinancialSemanticContractSchema,
+  CoreFinancialSemanticSourceMapSchema,
+} from "./core-financial-semantic-contract.schema";
+
 export type {
   BalanceSnapshot,
   BalanceSource,
@@ -72,3 +81,11 @@ export type {
   ForecastResponseMeta,
   ForecastRecomputeResponse,
 } from "./forecast-response.schema";
+
+export type {
+  CoreFinancialCurrentPosition,
+  CoreFinancialProjection,
+  CoreFinancialRealized,
+  CoreFinancialSemanticContract,
+  CoreFinancialSemanticSourceMap,
+} from "./core-financial-semantic-contract.schema";
