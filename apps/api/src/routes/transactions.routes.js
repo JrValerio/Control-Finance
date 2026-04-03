@@ -32,7 +32,7 @@ import {
   dryRunTransactionsImportForUser,
   getTransactionsImportMetricsByUser,
   listTransactionsImportSessionsByUser,
-} from "../services/transactions-import.service.js";
+} from "../services/transactions-import.service.ts";
 import {
   deleteTransactionImportCategoryRuleForUser,
   listTransactionImportCategoryRulesByUser,

@@ -28,6 +28,58 @@ import { applySmartClassification } from "../domain/imports/transaction-classifi
 import { normalizeCategoryNameKey } from "./categories-normalization.js";
 import { loadActiveTransactionImportCategoryRulesByUser } from "./transactions-import-rules.service.js";
 
+type ErrorWithStatus = Error & { status: number };
+
+type RawCsvRow = {
+  date: string;
+  type: string;
+  value: string;
+  description: string;
+  notes: string;
+  category: string;
+};
+
+type NormalizedImportRow = {
+  date: string;
+  type: string;
+  value: number;
+  description: string;
+  notes: string;
+  categoryId: number | null;
+};
+
+type StructuredIncomeStatement = {
+  id: number;
+  referenceMonth: string | null;
+  netAmount: number;
+  paymentDate: string | null;
+  status: "posted" | "draft";
+  postedTransactionId: number | null;
+  sourceName: string | null;
+};
+
+type StructuredIncomeConflict = {
+  type: "income_statement";
+  statementId: number;
+  sourceName: string | null;
+  referenceMonth: string | null;
+  paymentDate: string | null;
+  netAmount: number;
+  status: "posted" | "draft";
+  postedTransactionId: number | null;
+};
+
+type CategoryOverride = {
+  line: number;
+  categoryId: number | null;
+};
+
+type ImportFile = {
+  buffer?: Buffer;
+  originalname?: string;
+  mimetype?: string;
+};
+
 const CATEGORY_ENTRY = TRANSACTION_TYPE_ENTRY;
 const CATEGORY_EXIT = TRANSACTION_TYPE_EXIT;
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -46,12 +98,18 @@ const HEADER_ERROR_MESSAGE =
 const IMPORT_FORMAT_ERROR_MESSAGE =
   "Arquivo nao reconhecido. Envie um CSV manual com cabecalho date,type,value,description,notes,category ou um CSV, OFX ou PDF de extrato.";
 
-const extractFitId = (notes) => {
+const extractFitId = (notes: unknown): string | null => {
   const match = String(notes || "").match(/^FITID\s+(\S+)/);
   return match ? match[1] : null;
 };
 
-const generateImportFingerprint = (normalizedRow) => {
+const generateImportFingerprint = (normalizedRow: {
+  notes?: string;
+  date: string;
+  type: string;
+  value: number;
+  description?: string;
+}): string => {
   const fitId = extractFitId(normalizedRow.notes);
   const key = fitId
     ? `fitid|${fitId}`
@@ -67,7 +125,10 @@ const generateImportFingerprint = (normalizedRow) => {
   return createHash("sha256").update(key).digest("hex").slice(0, 32);
 };
 
-const loadExistingFingerprints = async (userId, fingerprints) => {
+const loadExistingFingerprints = async (
+  userId: number | string,
+  fingerprints: string[],
+): Promise<Set<string>> => {
   if (fingerprints.length === 0) return new Set();
   const result = await dbQuery(
     `SELECT import_fingerprint FROM transactions
@@ -77,12 +138,14 @@ const loadExistingFingerprints = async (userId, fingerprints) => {
   return new Set(result.rows.map((row) => row.import_fingerprint));
 };
 
-const toMoneyNumber = (value) => {
+const toMoneyNumber = (value: unknown): number => {
   const parsedValue = Number(value);
   return Number.isFinite(parsedValue) ? Number(parsedValue.toFixed(2)) : 0;
 };
 
-const loadStructuredIncomeStatementsForUser = async (userId) => {
+const loadStructuredIncomeStatementsForUser = async (
+  userId: number | string,
+): Promise<StructuredIncomeStatement[]> => {
   const result = await dbQuery(
     `SELECT st.id,
             st.reference_month,
@@ -118,7 +181,10 @@ const loadStructuredIncomeStatementsForUser = async (userId) => {
   }));
 };
 
-const calculateDateDiffInDays = (leftDate, rightDate) => {
+const calculateDateDiffInDays = (
+  leftDate: string | null | undefined,
+  rightDate: string | null | undefined,
+): number => {
   if (!leftDate || !rightDate) {
     return Number.POSITIVE_INFINITY;
   }
@@ -133,7 +199,7 @@ const calculateDateDiffInDays = (leftDate, rightDate) => {
   return Math.abs(leftMs - rightMs) / (1000 * 60 * 60 * 24);
 };
 
-const buildStructuredIncomeConflictDetail = (statement) => {
+const buildStructuredIncomeConflictDetail = (statement: StructuredIncomeConflict): string => {
   const sourceLabel = statement.sourceName || "Historico de renda";
   const referenceLabel = statement.referenceMonth || "sem competencia";
   const paymentLabel = statement.paymentDate || "sem data de pagamento";
@@ -141,7 +207,10 @@ const buildStructuredIncomeConflictDetail = (statement) => {
   return `${sourceLabel} ja registrado no historico de renda (${referenceLabel}, ${paymentLabel}).`;
 };
 
-const findStructuredIncomeConflict = (normalizedRow, statements = []) => {
+const findStructuredIncomeConflict = (
+  normalizedRow: NormalizedImportRow | null,
+  statements: StructuredIncomeStatement[] = [],
+): StructuredIncomeConflict | null => {
   if (!normalizedRow || normalizedRow.type !== CATEGORY_ENTRY || statements.length === 0) {
     return null;
   }
@@ -204,18 +273,18 @@ const findStructuredIncomeConflict = (normalizedRow, statements = []) => {
   };
 };
 
-const createError = (status, message) => {
-  const error = new Error(message);
+const createError = (status: number, message: string): ErrorWithStatus => {
+  const error = new Error(message) as ErrorWithStatus;
   error.status = status;
   return error;
 };
 
-const normalizeHeader = (value) => String(value || "").trim().toLowerCase();
+const normalizeHeader = (value: unknown): string => String(value || "").trim().toLowerCase();
 
-const normalizeRawCell = (value) =>
+const normalizeRawCell = (value: unknown): string =>
   typeof value === "undefined" || value === null ? "" : String(value);
 
-const parsePositiveInteger = (value, fallbackValue) => {
+const parsePositiveInteger = (value: unknown, fallbackValue: number): number => {
   const parsedValue = Number(value);
 
   if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
@@ -228,7 +297,10 @@ const parsePositiveInteger = (value, fallbackValue) => {
 const getImportCsvMaxRows = () =>
   parsePositiveInteger(process.env.IMPORT_CSV_MAX_ROWS, DEFAULT_IMPORT_CSV_MAX_ROWS);
 
-const parsePaginationInteger = (value, { fallbackValue, min, max }) => {
+const parsePaginationInteger = (
+  value: unknown,
+  { fallbackValue, min, max }: { fallbackValue: number; min: number; max: number },
+): number => {
   if (typeof value === "undefined" || value === null) {
     return fallbackValue;
   }
@@ -248,7 +320,9 @@ const parsePaginationInteger = (value, { fallbackValue, min, max }) => {
   return parsedValue;
 };
 
-const normalizeImportHistoryPagination = (filters = {}) => {
+const normalizeImportHistoryPagination = (
+  filters: { limit?: unknown; offset?: unknown } = {},
+) => {
   const limit = parsePaginationInteger(filters.limit, {
     fallbackValue: DEFAULT_IMPORT_HISTORY_LIMIT,
     min: 1,
@@ -266,7 +340,7 @@ const normalizeImportHistoryPagination = (filters = {}) => {
   };
 };
 
-const normalizeSummaryNumber = (value, fallbackValue = 0) => {
+const normalizeSummaryNumber = (value: unknown, fallbackValue = 0): number => {
   const parsedValue = Number(value);
 
   if (!Number.isFinite(parsedValue) || parsedValue < 0) {
@@ -276,7 +350,7 @@ const normalizeSummaryNumber = (value, fallbackValue = 0) => {
   return Number(parsedValue.toFixed(2));
 };
 
-const normalizeSummaryInteger = (value, fallbackValue = 0) => {
+const normalizeSummaryInteger = (value: unknown, fallbackValue = 0): number => {
   const parsedValue = Number(value);
 
   if (!Number.isInteger(parsedValue) || parsedValue < 0) {
@@ -320,7 +394,7 @@ const resolveImportSessionState = ({
   return "pending_confirmation";
 };
 
-const toIsoDateString = (value) => {
+const toIsoDateString = (value: unknown): string | null => {
   if (!value) {
     return null;
   }
@@ -334,7 +408,7 @@ const toIsoDateString = (value) => {
   return parsedDate.toISOString();
 };
 
-const toISODateOnly = (value) => {
+const toISODateOnly = (value: unknown): string | null => {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
@@ -344,7 +418,7 @@ const toISODateOnly = (value) => {
   return `${y}-${m}-${day}`;
 };
 
-const parsePayloadJson = (payloadJson) => {
+const parsePayloadJson = (payloadJson: unknown): Record<string, any> => {
   if (!payloadJson) {
     return {};
   }
@@ -393,7 +467,7 @@ const buildUndoBlockedReason = ({
   return `Nao e possivel desfazer esta importacao porque existem derivados ativos vinculados a ela: ${blockers.join(" e ")}.`;
 };
 
-const buildDeleteByIdsQuery = (tableName, ids = []) => {
+const buildDeleteByIdsQuery = (tableName: string, ids: number[] = []) => {
   if (!Array.isArray(ids) || ids.length === 0) {
     return null;
   }
@@ -580,7 +654,7 @@ const parseCsvFileRows = (fileBuffer) => {
   });
 };
 
-const parseImportFileRows = async (importFile) => {
+const parseImportFileRows = async (importFile: ImportFile) => {
   const fileBuffer = importFile?.buffer;
   const extension = path.extname(String(importFile?.originalname || "")).toLowerCase();
 
@@ -692,7 +766,7 @@ const parseImportFileRows = async (importFile) => {
   }
 };
 
-const normalizeDate = (value) => {
+const normalizeDate = (value: unknown): string => {
   const normalizedValue = String(value || "").trim();
 
   if (!ISO_DATE_REGEX.test(normalizedValue)) {
@@ -711,7 +785,7 @@ const normalizeDate = (value) => {
   return normalizedValue;
 };
 
-const normalizeType = (value) => {
+const normalizeType = (value: unknown): string => {
   const normalizedValue = String(value || "")
     .trim()
     .normalize("NFD")
@@ -729,7 +803,7 @@ const normalizeType = (value) => {
   throw new Error("Tipo invalido. Use Entrada ou Saida.");
 };
 
-const normalizeValue = (value) => {
+const normalizeValue = (value: unknown): number => {
   const compactValue = String(value || "").trim().replace(/\s+/g, "");
 
   if (!compactValue) {
@@ -761,7 +835,7 @@ const normalizeValue = (value) => {
   return Number(parsedValue.toFixed(2));
 };
 
-const normalizeDescription = (value) => {
+const normalizeDescription = (value: unknown): string => {
   const normalizedValue = String(value || "").trim();
 
   if (!normalizedValue) {
@@ -771,9 +845,9 @@ const normalizeDescription = (value) => {
   return normalizedValue;
 };
 
-const normalizeNotes = (value) => String(value || "").trim();
+const normalizeNotes = (value: unknown): string => String(value || "").trim();
 
-const resolveCategoryId = (value, categoryMap) => {
+const resolveCategoryId = (value: unknown, categoryMap: Map<string, number>): number | null => {
   const normalizedCategoryName = String(value || "").trim();
 
   if (!normalizedCategoryName) {
@@ -790,7 +864,7 @@ const resolveCategoryId = (value, categoryMap) => {
   return categoryId;
 };
 
-const loadCategoryMapForUser = async (userId) => {
+const loadCategoryMapForUser = async (userId: number | string): Promise<Map<string, number>> => {
   const result = await dbQuery(
     `
       SELECT id, name, normalized_name
@@ -807,7 +881,7 @@ const loadCategoryMapForUser = async (userId) => {
   }, new Map());
 };
 
-const loadCategoriesForUser = async (userId) => {
+const loadCategoriesForUser = async (userId: number | string) => {
   const result = await dbQuery(
     `
       SELECT id, name, normalized_name
@@ -825,7 +899,7 @@ const loadCategoriesForUser = async (userId) => {
   }));
 };
 
-const normalizeCsvRow = (rawRow, categoryMap) => {
+const normalizeCsvRow = (rawRow: RawCsvRow, categoryMap: Map<string, number>) => {
   const errors = [];
   let normalizedDate;
   let normalizedType;
@@ -918,7 +992,7 @@ const createSummary = (rows = []) => {
   );
 };
 
-const persistImportSession = async (userId, payload) => {
+const persistImportSession = async (userId: number | string, payload: unknown) => {
   const importId = randomUUID();
   const expiresAtDate = new Date(Date.now() + IMPORT_TTL_MINUTES * 60 * 1000);
   const result = await dbQuery(
@@ -939,7 +1013,7 @@ const persistImportSession = async (userId, payload) => {
   };
 };
 
-const normalizeImportId = (value) => {
+const normalizeImportId = (value: unknown): string => {
   if (typeof value === "undefined" || value === null || value === "") {
     throw createError(400, "importId e obrigatorio.");
   }
@@ -957,7 +1031,7 @@ const normalizeImportId = (value) => {
   return normalizedValue;
 };
 
-const loadImportSessionById = async (importId) => {
+const loadImportSessionById = async (importId: string) => {
   const result = await dbQuery(
     `
       SELECT id, user_id, payload_json, expires_at, committed_at
@@ -971,19 +1045,19 @@ const loadImportSessionById = async (importId) => {
   return result.rows[0] || null;
 };
 
-const assertSessionOwnership = (session, userId) => {
+const assertSessionOwnership = (session: any, userId: number | string): void => {
   if (!session || Number(session.user_id) !== Number(userId)) {
     throw createError(404, "Sessao de importacao nao encontrada.");
   }
 };
 
-const isSessionExpired = (session) => {
+const isSessionExpired = (session: any): boolean => {
   const expiresAt = new Date(session.expires_at);
 
   return Number.isFinite(expiresAt.getTime()) && expiresAt.getTime() <= Date.now();
 };
 
-const assertSessionReadyForCommit = (session, userId) => {
+const assertSessionReadyForCommit = (session: any, userId: number | string): void => {
   assertSessionOwnership(session, userId);
 
   if (session.committed_at) {
@@ -995,7 +1069,10 @@ const assertSessionReadyForCommit = (session, userId) => {
   }
 };
 
-export const dryRunTransactionsImportForUser = async (userId, importFile) => {
+export const dryRunTransactionsImportForUser = async (
+  userId: number | string,
+  importFile: ImportFile,
+) => {
   const {
     rows: parsedRows,
     documentType,
@@ -1086,7 +1163,10 @@ export const dryRunTransactionsImportForUser = async (userId, importFile) => {
   };
 };
 
-export const listTransactionsImportSessionsByUser = async (userId, filters = {}) => {
+export const listTransactionsImportSessionsByUser = async (
+  userId: number | string,
+  filters: { limit?: unknown; offset?: unknown } = {},
+) => {
   const pagination = normalizeImportHistoryPagination(filters);
   const result = await dbQuery(
     `
@@ -1208,7 +1288,7 @@ export const listTransactionsImportSessionsByUser = async (userId, filters = {})
   };
 };
 
-export const getTransactionsImportMetricsByUser = async (userId) => {
+export const getTransactionsImportMetricsByUser = async (userId: number | string) => {
   const result = await dbQuery(
     `
       SELECT
@@ -1238,7 +1318,7 @@ export const getTransactionsImportMetricsByUser = async (userId) => {
   };
 };
 
-const buildCategoryOverrideMap = (overrides) => {
+const buildCategoryOverrideMap = (overrides: CategoryOverride[]) => {
   if (!Array.isArray(overrides) || overrides.length === 0) return new Map();
   return new Map(
     overrides
@@ -1254,7 +1334,11 @@ const buildCategoryOverrideMap = (overrides) => {
   );
 };
 
-export const commitTransactionsImportForUser = async (userId, importId, categoryOverrides = []) => {
+export const commitTransactionsImportForUser = async (
+  userId: number | string,
+  importId: string,
+  categoryOverrides: CategoryOverride[] = [],
+) => {
   const normalizedImportId = normalizeImportId(importId);
   const importSession = await loadImportSessionById(normalizedImportId);
 
@@ -1398,7 +1482,10 @@ export const commitTransactionsImportForUser = async (userId, importId, category
   };
 };
 
-export const deleteImportSessionForUser = async (userId, sessionId) => {
+export const deleteImportSessionForUser = async (
+  userId: number | string,
+  sessionId: string,
+) => {
   const normalizedSessionId = normalizeImportId(sessionId);
 
   const result = await withDbTransaction(async (transactionClient) => {
@@ -1487,7 +1574,10 @@ export const deleteImportSessionForUser = async (userId, sessionId) => {
   };
 };
 
-export const bulkDeleteTransactionsForUser = async (userId, transactionIds) => {
+export const bulkDeleteTransactionsForUser = async (
+  userId: number | string,
+  transactionIds: number[],
+) => {
   if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
     return { deletedCount: 0, success: true };
   }
