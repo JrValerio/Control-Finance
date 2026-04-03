@@ -10,6 +10,19 @@ export interface ForecastBankLimit {
   alertTriggered: boolean;
 }
 
+export interface ForecastMetaPendingItems {
+  bills: number;
+  invoices: number;
+  creditCardCycles: number;
+}
+
+export interface ForecastMeta {
+  balanceBasis: "bank_account" | "net_month_transactions";
+  incomeBasis: "confirmed_statement" | "salary_profile_fallback";
+  pendingItems: ForecastMetaPendingItems;
+  fallbacksUsed: string[];
+}
+
 export interface Forecast {
   month: string;
   projectedBalance: number;
@@ -24,6 +37,8 @@ export interface Forecast {
   billsPendingCount: number;
   adjustedProjectedBalance: number;
   bankLimit?: ForecastBankLimit | null;
+  _meta?: ForecastMeta;
+  _degraded?: boolean;
 }
 
 let getCurrentInFlightRequest: Promise<Forecast | null> | null = null;
