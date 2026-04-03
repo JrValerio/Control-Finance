@@ -4,11 +4,16 @@ import userEvent from "@testing-library/user-event";
 import OperationalSummaryPanel from "./OperationalSummaryPanel";
 import { dashboardService, type DashboardSnapshot } from "../services/dashboard.service";
 
-vi.mock("../services/dashboard.service", () => ({
-  dashboardService: {
-    getSnapshot: vi.fn(),
-  },
-}));
+vi.mock("../services/dashboard.service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../services/dashboard.service")>();
+
+  return {
+    ...actual,
+    dashboardService: {
+      getSnapshot: vi.fn(),
+    },
+  };
+});
 
 const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSnapshot => ({
   bankBalance: 1000,

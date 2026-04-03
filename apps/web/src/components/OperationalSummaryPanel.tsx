@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useMaskedCurrency } from "../context/DiscreetModeContext";
-import { dashboardService, type DashboardSnapshot } from "../services/dashboard.service";
+import {
+  buildDashboardContractView,
+  dashboardService,
+  type DashboardSnapshot,
+} from "../services/dashboard.service";
 import { getApiErrorMessage } from "../utils/apiError";
 import { logWidgetFallbackError } from "../utils/widgetFallbackTelemetry";
 import { OperationalSeverityBadge, OperationalStateBlock } from "./OperationalStateBlock";
@@ -64,6 +68,14 @@ const SkeletonTile = () => (
 interface OperationalSummaryPanelProps {
   onOpenDueSoonBills?: () => void;
 }
+
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+const sumAmounts = (items: Array<{ amount: number }>): number =>
+  items.reduce((total, item) => total + item.amount, 0);
+
+const sumIncomeNetAmounts = (items: Array<{ netAmount: number }>): number =>
+  items.reduce((total, item) => total + item.netAmount, 0);
 
 const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanelProps): JSX.Element | null => {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
@@ -153,13 +165,46 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
     );
   }
 
-  const { bankBalance, bills, cards, income, forecast, consignado } = snapshot;
+  const { cards, forecast, consignado } = snapshot;
+  const { balanceSnapshot, incomes, obligations } = buildDashboardContractView(snapshot);
+
+  const nowTimestamp = Date.now();
+  const dueSoonLimit = nowTimestamp + 7 * DAY_IN_MS;
+  const overdueObligations = obligations.filter((obligation) => obligation.status === "due");
+  const dueSoonObligations = obligations.filter((obligation) => {
+    if (obligation.status !== "open") {
+      return false;
+    }
+
+    return Date.parse(obligation.dueDate) <= dueSoonLimit;
+  });
+  const upcomingObligations = obligations.filter((obligation) => {
+    if (obligation.status !== "open") {
+      return false;
+    }
+
+    return Date.parse(obligation.dueDate) > dueSoonLimit;
+  });
+
+  const overdueCount = overdueObligations.length;
+  const overdueTotal = sumAmounts(overdueObligations);
+  const dueSoonCount = dueSoonObligations.length;
+  const dueSoonTotal = sumAmounts(dueSoonObligations);
+  const upcomingCount = upcomingObligations.length;
+  const upcomingTotal = sumAmounts(upcomingObligations);
+  const receivedThisMonth = sumIncomeNetAmounts(
+    incomes.filter((entry) => entry.status === "confirmed"),
+  );
+  const pendingThisMonth = sumIncomeNetAmounts(
+    incomes.filter((entry) => entry.status === "pending" || entry.status === "detected"),
+  );
 
   // ── Tile 1: Bank balance ──────────────────────────────────────────────────
-  const hasOverdueBills = bills.overdueCount > 0;
-  const hasDueSoonBills = bills.dueSoonCount > 0;
-  const technicalBalance = bankBalance - bills.overdueTotal;
-  const shortTermBalance = technicalBalance - bills.dueSoonTotal;
+  const bankBalance = balanceSnapshot.bankBalance;
+  const hasOverdueBills = overdueCount > 0;
+  const hasDueSoonBills = dueSoonCount > 0;
+  const technicalBalance = balanceSnapshot.technicalBalance;
+  const shortTermBalance = technicalBalance - dueSoonTotal;
   const shouldShowShortTermBalance = hasDueSoonBills && !hasOverdueBills;
 
   const bankTileSecondary = hasOverdueBills
@@ -171,12 +216,12 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   const bankTileDetails: string[] = [];
   if (hasOverdueBills) {
     bankTileDetails.push(
-      `${bills.overdueCount} vencida${bills.overdueCount > 1 ? "s" : ""} somam ${money(bills.overdueTotal)}`,
+      `${overdueCount} vencida${overdueCount > 1 ? "s" : ""} somam ${money(overdueTotal)}`,
     );
   }
   if (hasDueSoonBills) {
     bankTileDetails.push(
-      `${bills.dueSoonCount} em 7 dias somam ${money(bills.dueSoonTotal)}`,
+      `${dueSoonCount} em 7 dias somam ${money(dueSoonTotal)}`,
     );
   }
 
@@ -196,42 +241,42 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   };
 
   // ── Tile 2: Bills ─────────────────────────────────────────────────────────
-  const totalImmediateBillsCount = bills.overdueCount + bills.dueSoonCount;
-  const totalImmediateBillsAmount = bills.overdueTotal + bills.dueSoonTotal;
-  const hasUpcomingBills = bills.upcomingCount > 0;
+  const totalImmediateBillsCount = overdueCount + dueSoonCount;
+  const totalImmediateBillsAmount = overdueTotal + dueSoonTotal;
+  const hasUpcomingBills = upcomingCount > 0;
   const shouldHighlightImmediateBills = totalImmediateBillsCount > 0;
   const billsPrimaryAmount = shouldHighlightImmediateBills
     ? totalImmediateBillsAmount
     : hasUpcomingBills
-      ? bills.upcomingTotal
+      ? upcomingTotal
       : 0;
   const billsAccent: TileProps["accent"] =
-    bills.overdueCount > 0 ? "danger" : bills.dueSoonCount > 0 ? "warning" : "muted";
+    overdueCount > 0 ? "danger" : dueSoonCount > 0 ? "warning" : "muted";
   const billsTertiaryTokens: string[] = [];
-  if (bills.dueSoonCount > 0) {
+  if (dueSoonCount > 0) {
     billsTertiaryTokens.push(
-      `Urgência 7d: ${bills.dueSoonCount} conta${bills.dueSoonCount > 1 ? "s" : ""} • ${money(bills.dueSoonTotal)}`,
+      `Urgência 7d: ${dueSoonCount} conta${dueSoonCount > 1 ? "s" : ""} • ${money(dueSoonTotal)}`,
     );
   }
   if (hasUpcomingBills) {
     billsTertiaryTokens.push(
-      `${bills.upcomingCount} próxima${bills.upcomingCount > 1 ? "s" : ""}`,
+      `${upcomingCount} próxima${upcomingCount > 1 ? "s" : ""}`,
     );
   }
   const billsTile: TileProps = {
     label: "Contas a pagar",
     primary: shouldHighlightImmediateBills || hasUpcomingBills ? money(billsPrimaryAmount) : "—",
     secondary:
-      bills.overdueCount > 0
-        ? `${bills.overdueCount} vencida${bills.overdueCount > 1 ? "s" : ""}`
-        : bills.dueSoonCount > 0
-          ? `${bills.dueSoonCount} em 7 dias`
+      overdueCount > 0
+        ? `${overdueCount} vencida${overdueCount > 1 ? "s" : ""}`
+        : dueSoonCount > 0
+          ? `${dueSoonCount} em 7 dias`
           : hasUpcomingBills
-            ? `${bills.upcomingCount} próxima${bills.upcomingCount > 1 ? "s" : ""}`
+            ? `${upcomingCount} próxima${upcomingCount > 1 ? "s" : ""}`
           : "Nenhuma pendente",
     tertiary: billsTertiaryTokens.length > 0 ? `+ ${billsTertiaryTokens.join(" • ")}` : undefined,
-    actionLabel: bills.dueSoonCount > 0 && onOpenDueSoonBills ? "Ver contas em 7 dias" : undefined,
-    onActionClick: bills.dueSoonCount > 0 && onOpenDueSoonBills ? onOpenDueSoonBills : undefined,
+    actionLabel: dueSoonCount > 0 && onOpenDueSoonBills ? "Ver contas em 7 dias" : undefined,
+    onActionClick: dueSoonCount > 0 && onOpenDueSoonBills ? onOpenDueSoonBills : undefined,
     accent: billsAccent,
   };
 
@@ -250,24 +295,24 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   };
 
   // ── Tile 4: Income ────────────────────────────────────────────────────────
-  const hasIncome = income.receivedThisMonth > 0 || income.pendingThisMonth > 0;
+  const hasIncome = receivedThisMonth > 0 || pendingThisMonth > 0;
   const incomeTile: TileProps = {
     label: "Renda do mês",
-    primary: hasIncome ? money(income.receivedThisMonth + income.pendingThisMonth) : "—",
+    primary: hasIncome ? money(receivedThisMonth + pendingThisMonth) : "—",
     secondary:
-      income.receivedThisMonth > 0
-        ? `${money(income.receivedThisMonth)} recebido`
-        : income.pendingThisMonth > 0
+      receivedThisMonth > 0
+        ? `${money(receivedThisMonth)} recebido`
+        : pendingThisMonth > 0
           ? "Ainda não recebido"
           : "Sem lançamento",
     tertiary:
-      income.pendingThisMonth > 0 && income.receivedThisMonth > 0
-        ? `${money(income.pendingThisMonth)} pendente`
+      pendingThisMonth > 0 && receivedThisMonth > 0
+        ? `${money(pendingThisMonth)} pendente`
         : undefined,
     accent:
-      income.receivedThisMonth > 0
+      receivedThisMonth > 0
         ? "success"
-        : income.pendingThisMonth > 0
+        : pendingThisMonth > 0
           ? "warning"
           : "muted",
   };
