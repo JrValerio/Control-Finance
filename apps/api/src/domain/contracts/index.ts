@@ -44,6 +44,15 @@ export {
 } from "./core-financial-semantic-contract.schema";
 
 export {
+  TaxDocumentExecutionDecisionSchema,
+  TaxDocumentExecutionStatusSchema,
+  TaxDocumentIngestionDecisionSchema,
+  TaxDocumentIngestionExecutionResponseSchema,
+  TaxDocumentIngestionStatusSchema,
+  TaxDocumentSuggestionDecisionSchema,
+} from "./tax-document-ingestion-execution-response.schema";
+
+export {
   TaxDocumentPreviewBlockingCodeSchema,
   TaxDocumentPreviewBlockingRuleSchema,
   TaxDocumentPreviewCapabilitiesSchema,
@@ -101,6 +110,15 @@ export type {
   CoreFinancialSemanticContract,
   CoreFinancialSemanticSourceMap,
 } from "./core-financial-semantic-contract.schema";
+
+export type {
+  TaxDocumentExecutionDecision,
+  TaxDocumentExecutionStatus,
+  TaxDocumentIngestionDecision,
+  TaxDocumentIngestionExecutionResponse,
+  TaxDocumentIngestionStatus,
+  TaxDocumentSuggestionDecision,
+} from "./tax-document-ingestion-execution-response.schema";
 
 export type {
   TaxDocumentPreviewBlockingCode,

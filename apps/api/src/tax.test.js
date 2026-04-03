@@ -13,6 +13,7 @@ import {
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import { resetImportRateLimiterState, resetWriteRateLimiterState } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
+import { TaxDocumentIngestionExecutionResponseSchema } from "./domain/contracts/tax-document-ingestion-execution-response.schema.ts";
 import { TaxDocumentPreviewResponseSchema } from "./domain/contracts/tax-document-preview-response.schema.ts";
 import { resolveTaxDocumentAbsolutePath } from "./services/tax-document-storage.service.js";
 
@@ -126,6 +127,22 @@ describe("Tax API foundation", () => {
   it("POST /tax/documents/preview retorna 401 sem token", async () => {
     const response = await request(app)
       .post("/tax/documents/preview")
+      .attach("file", Buffer.from("preview", "utf8"), {
+        filename: "preview.csv",
+        contentType: "text/csv",
+      });
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
+  it("POST /tax/documents/ingest-execute retorna 401 sem token", async () => {
+    const response = await request(app)
+      .post("/tax/documents/ingest-execute")
+      .field("taxYear", "2026")
       .attach("file", Buffer.from("preview", "utf8"), {
         filename: "preview.csv",
         contentType: "text/csv",
@@ -639,6 +656,155 @@ describe("Tax API foundation", () => {
     const blockingCodes = response.body.preview.blockingRules.map((rule) => rule.code);
     expect(blockingCodes).toContain("document_type_not_identified");
     expect(blockingCodes).toContain("execution_not_allowed_for_source_type");
+  });
+
+  it("POST /tax/documents/ingest-execute retorna 400 quando arquivo fiscal nao e enviado", async () => {
+    const token = await registerAndLogin("tax-ingest-execute-missing-file@test.dev");
+
+    const response = await request(app)
+      .post("/tax/documents/ingest-execute")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026");
+
+    expectErrorResponseWithRequestId(response, 400, "Arquivo fiscal (file) e obrigatorio.");
+  });
+
+  it("POST /tax/documents/ingest-execute bloqueia ingestao para sourceType unknown", async () => {
+    const token = await registerAndLogin("tax-ingest-execute-unknown@test.dev");
+
+    const response = await request(app)
+      .post("/tax/documents/ingest-execute")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach("file", Buffer.from("qualquer conteudo sem pistas fiscais claras", "utf8"), {
+        filename: "ingest-unknown.pdf",
+        contentType: "application/pdf",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.ingestion).toMatchObject({
+      allowed: false,
+      status: "blocked",
+      documentId: null,
+    });
+    expect(response.body.execution).toMatchObject({
+      requested: true,
+      allowed: false,
+      status: "not_allowed",
+      documentId: null,
+    });
+    const ingestionBlockingCodes = response.body.ingestion.blockingRules.map((rule) => rule.code);
+    expect(ingestionBlockingCodes).toContain("document_type_not_identified");
+
+    const parsed = TaxDocumentIngestionExecutionResponseSchema.safeParse(response.body);
+    expect(parsed.success).toBe(true);
+
+    const documentsResponse = await request(app)
+      .get("/tax/documents?taxYear=2026")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(documentsResponse.status).toBe(200);
+    expect(documentsResponse.body.total).toBe(0);
+  });
+
+  it("POST /tax/documents/ingest-execute ingere support e bloqueia execucao automatica", async () => {
+    const token = await registerAndLogin("tax-ingest-execute-support@test.dev");
+
+    const response = await request(app)
+      .post("/tax/documents/ingest-execute")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Data;Historico;Valor",
+            "05/02/2026;Saldo anterior;100,00",
+            "06/02/2026;Lancamentos;20,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "ingest-support.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.body.preview).toMatchObject({
+      sourceType: "support",
+      detectedState: "review_required",
+    });
+    expect(response.body.ingestion).toMatchObject({
+      allowed: true,
+      status: "ingested",
+    });
+    expect(response.body.execution).toMatchObject({
+      requested: true,
+      allowed: false,
+      status: "not_allowed",
+      documentId: null,
+    });
+    expect(response.body.suggestion.allowed).toBe(true);
+
+    const detailResponse = await request(app)
+      .get(`/tax/documents/${response.body.ingestion.documentId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.document.processingStatus).toBe("uploaded");
+  });
+
+  it("POST /tax/documents/ingest-execute ingere e executa automaticamente para sourceType ready", async () => {
+    const token = await registerAndLogin("tax-ingest-execute-income@test.dev");
+
+    const response = await request(app)
+      .post("/tax/documents/ingest-execute")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "ingest-income.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.body.preview).toMatchObject({
+      sourceType: "income",
+      detectedState: "ready",
+      documentType: "income_report_employer",
+    });
+    expect(response.body.ingestion).toMatchObject({
+      allowed: true,
+      status: "ingested",
+    });
+    expect(response.body.execution).toMatchObject({
+      requested: true,
+      allowed: true,
+      status: "executed",
+    });
+
+    const detailResponse = await request(app)
+      .get(`/tax/documents/${response.body.ingestion.documentId}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.body.document.processingStatus).toBe("normalized");
+    expect(detailResponse.body.document.documentType).toBe("income_report_employer");
+
+    const parsed = TaxDocumentIngestionExecutionResponseSchema.safeParse(response.body);
+    expect(parsed.success).toBe(true);
   });
 
   it("GET /tax/documents retorna documentos enviados pelo usuario autenticado", async () => {
