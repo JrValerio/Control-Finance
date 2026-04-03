@@ -1,7 +1,12 @@
 import { Router } from "express";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
+import {
+  ForecastCurrentResponseSchema,
+  ForecastRecomputeResponseSchema,
+} from "../domain/contracts/forecast-response.schema.ts";
 import { requireActiveTrialOrPaidPlan } from "../middlewares/entitlement.middleware.js";
 import { logWarn } from "../observability/logger.js";
+import { respondValidated } from "./respond-validated.js";
 import {
   maybeSendFlipNotification,
   maybeSendPaydayReminder,
@@ -26,7 +31,9 @@ const logNotificationError = (requestId, userId, notificationType, error) => {
 router.get("/current", async (req, res, next) => {
   try {
     const forecast = await getLatestForecast(req.user.id);
-    res.status(200).json(forecast);
+    respondValidated(ForecastCurrentResponseSchema, forecast, req, res, {
+      routeLabel: "GET /forecasts/current",
+    });
   } catch (error) {
     next(error);
   }
@@ -47,7 +54,9 @@ router.post("/recompute", async (req, res, next) => {
       logNotificationError(requestId, userId, "payday_reminder", error);
     });
 
-    res.status(200).json(forecast);
+    respondValidated(ForecastRecomputeResponseSchema, forecast, req, res, {
+      routeLabel: "POST /forecasts/recompute",
+    });
   } catch (error) {
     next(error);
   }
