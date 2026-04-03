@@ -74,9 +74,6 @@ const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const sumAmounts = (items: Array<{ amount: number }>): number =>
   items.reduce((total, item) => total + item.amount, 0);
 
-const sumIncomeNetAmounts = (items: Array<{ netAmount: number }>): number =>
-  items.reduce((total, item) => total + item.netAmount, 0);
-
 const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanelProps): JSX.Element | null => {
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -166,7 +163,7 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   }
 
   const { cards, forecast, consignado } = snapshot;
-  const { balanceSnapshot, incomes, obligations } = buildDashboardContractView(snapshot);
+  const { balanceSnapshot, obligations } = buildDashboardContractView(snapshot);
 
   const nowTimestamp = Date.now();
   const dueSoonLimit = nowTimestamp + 7 * DAY_IN_MS;
@@ -192,12 +189,8 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   const dueSoonTotal = sumAmounts(dueSoonObligations);
   const upcomingCount = upcomingObligations.length;
   const upcomingTotal = sumAmounts(upcomingObligations);
-  const receivedThisMonth = sumIncomeNetAmounts(
-    incomes.filter((entry) => entry.status === "confirmed"),
-  );
-  const pendingThisMonth = sumIncomeNetAmounts(
-    incomes.filter((entry) => entry.status === "pending" || entry.status === "detected"),
-  );
+  const receivedThisMonth = snapshot.income.receivedThisMonth;
+  const projectedThisMonth = snapshot.income.pendingThisMonth;
 
   // ── Tile 1: Bank balance ──────────────────────────────────────────────────
   const bankBalance = balanceSnapshot.bankBalance;
@@ -295,24 +288,17 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   };
 
   // ── Tile 4: Income ────────────────────────────────────────────────────────
-  const hasIncome = receivedThisMonth > 0 || pendingThisMonth > 0;
+  const hasConfirmedIncome = receivedThisMonth > 0;
+  const hasProjectedIncome = projectedThisMonth > 0;
   const incomeTile: TileProps = {
     label: "Renda do mês",
-    primary: hasIncome ? money(receivedThisMonth + pendingThisMonth) : "—",
-    secondary:
-      receivedThisMonth > 0
-        ? `${money(receivedThisMonth)} recebido`
-        : pendingThisMonth > 0
-          ? "Ainda não recebido"
-          : "Sem lançamento",
-    tertiary:
-      pendingThisMonth > 0 && receivedThisMonth > 0
-        ? `${money(pendingThisMonth)} pendente`
-        : undefined,
+    primary: money(receivedThisMonth),
+    secondary: "Recebido",
+    tertiary: `Previsto: ${money(projectedThisMonth)}`,
     accent:
-      receivedThisMonth > 0
+      hasConfirmedIncome
         ? "success"
-        : pendingThisMonth > 0
+        : hasProjectedIncome
           ? "warning"
           : "muted",
   };
