@@ -210,6 +210,85 @@ describe("OperationalSummaryPanel", () => {
     expect(screen.getByText(/2 próximas/)).toBeInTheDocument();
   });
 
+  it("cartao separa ciclo atual e faturas pendentes quando ambos existem", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        cards: {
+          openPurchasesTotal: 420,
+          pendingInvoicesTotal: 900,
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Cartão")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Faturas a pagar: R$ 900,00")).toBeInTheDocument();
+    expect(screen.getByText("Gastos no ciclo: R$ 420,00")).toBeInTheDocument();
+  });
+
+  it("cartao mostra apenas ciclo atual quando nao ha faturas pendentes", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        cards: {
+          openPurchasesTotal: 280,
+          pendingInvoicesTotal: 0,
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Cartão")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Gastos no ciclo: R$ 280,00")).toBeInTheDocument();
+    expect(screen.queryByText(/Faturas a pagar:/)).not.toBeInTheDocument();
+  });
+
+  it("cartao mostra apenas faturas pendentes quando nao ha ciclo aberto", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        cards: {
+          openPurchasesTotal: 0,
+          pendingInvoicesTotal: 610,
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Cartão")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Faturas a pagar: R$ 610,00")).toBeInTheDocument();
+    expect(screen.queryByText(/Gastos no ciclo:/)).not.toBeInTheDocument();
+  });
+
+  it("cartao mostra estado vazio quando nao ha ciclo nem faturas", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        cards: {
+          openPurchasesTotal: 0,
+          pendingInvoicesTotal: 0,
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Cartão")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("Sem movimentação")).toBeInTheDocument();
+  });
+
   it("separa renda recebida e prevista sem somar no valor principal", async () => {
     vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
       buildSnapshot({

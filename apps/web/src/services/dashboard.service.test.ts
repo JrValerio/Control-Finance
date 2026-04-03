@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { api } from "./api";
-import { dashboardService } from "./dashboard.service";
+import { buildDashboardContractView, dashboardService, type DashboardSnapshot } from "./dashboard.service";
 
 vi.mock("./api", () => ({
   api: {
@@ -10,6 +10,38 @@ vi.mock("./api", () => ({
 }));
 
 const getMock = vi.mocked(api.get);
+
+const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSnapshot => ({
+  bankBalance: 1200,
+  bills: {
+    overdueCount: 0,
+    overdueTotal: 0,
+    dueSoonCount: 0,
+    dueSoonTotal: 0,
+    upcomingCount: 0,
+    upcomingTotal: 0,
+    ...(overrides.bills ?? {}),
+  },
+  cards: {
+    openPurchasesTotal: 0,
+    pendingInvoicesTotal: 0,
+    ...(overrides.cards ?? {}),
+  },
+  income: {
+    receivedThisMonth: 0,
+    pendingThisMonth: 0,
+    referenceMonth: "2026-04",
+    ...(overrides.income ?? {}),
+  },
+  forecast: overrides.forecast ?? null,
+  consignado: {
+    monthlyTotal: 0,
+    contractsCount: 0,
+    comprometimentoPct: null,
+    ...(overrides.consignado ?? {}),
+  },
+  ...overrides,
+});
 
 describe("dashboardService", () => {
   beforeEach(() => {
@@ -60,5 +92,28 @@ describe("dashboardService", () => {
       upcomingCount: 3,
       upcomingTotal: 480,
     });
+  });
+
+  it("buildDashboardContractView separa obrigacoes de cartao por tipo", () => {
+    const snapshot = buildSnapshot({
+      cards: {
+        openPurchasesTotal: 320,
+        pendingInvoicesTotal: 780,
+      },
+    });
+
+    const result = buildDashboardContractView(snapshot, new Date("2026-04-15T00:00:00.000Z"));
+
+    const cycleObligations = result.obligations.filter(
+      (obligation) => obligation.obligationType === "credit_card_cycle",
+    );
+    const invoiceObligations = result.obligations.filter(
+      (obligation) => obligation.obligationType === "open_invoice",
+    );
+
+    expect(cycleObligations).toHaveLength(1);
+    expect(invoiceObligations).toHaveLength(1);
+    expect(cycleObligations[0].amount).toBe(320);
+    expect(invoiceObligations[0].amount).toBe(780);
   });
 });

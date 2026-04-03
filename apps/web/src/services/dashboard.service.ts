@@ -35,6 +35,23 @@ const createObligations = (
   }));
 };
 
+const createCardObligation = (
+  amount: number,
+  obligationType: "credit_card_cycle" | "open_invoice",
+  dueDate: Date,
+): Obligation[] => {
+  if (amount <= 0) {
+    return [];
+  }
+
+  return [{
+    amount,
+    obligationType,
+    dueDate: dueDate.toISOString(),
+    status: "open",
+  }];
+};
+
 export const buildDashboardContractView = (
   snapshot: DashboardSnapshot,
   now: Date = new Date(),
@@ -79,6 +96,16 @@ export const buildDashboardContractView = (
       snapshot.bills.upcomingCount,
       "open",
       new Date(now.getTime() + 30 * DAY_IN_MS),
+    ),
+    ...createCardObligation(
+      snapshot.cards.openPurchasesTotal,
+      "credit_card_cycle",
+      new Date(now.getTime() + 30 * DAY_IN_MS),
+    ),
+    ...createCardObligation(
+      snapshot.cards.pendingInvoicesTotal,
+      "open_invoice",
+      new Date(now.getTime() + 10 * DAY_IN_MS),
     ),
   ];
 

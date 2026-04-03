@@ -162,20 +162,21 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
     );
   }
 
-  const { cards, forecast, consignado } = snapshot;
+  const { forecast, consignado } = snapshot;
   const { balanceSnapshot, obligations } = buildDashboardContractView(snapshot);
 
   const nowTimestamp = Date.now();
   const dueSoonLimit = nowTimestamp + 7 * DAY_IN_MS;
-  const overdueObligations = obligations.filter((obligation) => obligation.status === "due");
-  const dueSoonObligations = obligations.filter((obligation) => {
+  const billObligations = obligations.filter((obligation) => obligation.obligationType === "bill");
+  const overdueObligations = billObligations.filter((obligation) => obligation.status === "due");
+  const dueSoonObligations = billObligations.filter((obligation) => {
     if (obligation.status !== "open") {
       return false;
     }
 
     return Date.parse(obligation.dueDate) <= dueSoonLimit;
   });
-  const upcomingObligations = obligations.filter((obligation) => {
+  const upcomingObligations = billObligations.filter((obligation) => {
     if (obligation.status !== "open") {
       return false;
     }
@@ -191,6 +192,12 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   const upcomingTotal = sumAmounts(upcomingObligations);
   const receivedThisMonth = snapshot.income.receivedThisMonth;
   const projectedThisMonth = snapshot.income.pendingThisMonth;
+  const cardCycleTotal = sumAmounts(
+    obligations.filter((obligation) => obligation.obligationType === "credit_card_cycle"),
+  );
+  const openInvoicesTotal = sumAmounts(
+    obligations.filter((obligation) => obligation.obligationType === "open_invoice"),
+  );
 
   // ── Tile 1: Bank balance ──────────────────────────────────────────────────
   const bankBalance = balanceSnapshot.bankBalance;
@@ -274,17 +281,22 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   };
 
   // ── Tile 3: Credit card ───────────────────────────────────────────────────
-  const cardTotal = cards.openPurchasesTotal + cards.pendingInvoicesTotal;
+  const hasCardCycle = cardCycleTotal > 0;
+  const hasOpenInvoices = openInvoicesTotal > 0;
   const cardTile: TileProps = {
     label: "Cartão",
-    primary: cardTotal > 0 ? money(cardTotal) : "—",
+    primary: hasOpenInvoices ? money(openInvoicesTotal) : hasCardCycle ? money(cardCycleTotal) : "—",
     secondary:
-      cards.openPurchasesTotal > 0 ? `${money(cards.openPurchasesTotal)} em aberto` : undefined,
+      hasOpenInvoices
+        ? `Faturas a pagar: ${money(openInvoicesTotal)}`
+        : hasCardCycle
+          ? `Gastos no ciclo: ${money(cardCycleTotal)}`
+          : "Sem movimentação",
     tertiary:
-      cards.pendingInvoicesTotal > 0
-        ? `${money(cards.pendingInvoicesTotal)} fatura`
+      hasOpenInvoices && hasCardCycle
+        ? `Gastos no ciclo: ${money(cardCycleTotal)}`
         : undefined,
-    accent: cards.pendingInvoicesTotal > 0 ? "warning" : "default",
+    accent: hasOpenInvoices ? "warning" : hasCardCycle ? "default" : "muted",
   };
 
   // ── Tile 4: Income ────────────────────────────────────────────────────────
