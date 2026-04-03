@@ -11,37 +11,63 @@ vi.mock("./api", () => ({
 
 const getMock = vi.mocked(api.get);
 
-const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSnapshot => ({
-  bankBalance: 1200,
-  bills: {
-    overdueCount: 0,
-    overdueTotal: 0,
-    dueSoonCount: 0,
-    dueSoonTotal: 0,
-    upcomingCount: 0,
-    upcomingTotal: 0,
-    ...(overrides.bills ?? {}),
-  },
-  cards: {
-    openPurchasesTotal: 0,
-    pendingInvoicesTotal: 0,
-    ...(overrides.cards ?? {}),
-  },
-  income: {
+const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSnapshot => {
+  const bankBalance = overrides.bankBalance ?? 1200;
+  const income = {
     receivedThisMonth: 0,
     pendingThisMonth: 0,
     referenceMonth: "2026-04",
     ...(overrides.income ?? {}),
-  },
-  forecast: overrides.forecast ?? null,
-  consignado: {
-    monthlyTotal: 0,
-    contractsCount: 0,
-    comprometimentoPct: null,
-    ...(overrides.consignado ?? {}),
-  },
-  ...overrides,
-});
+  };
+  const forecast = overrides.forecast ?? null;
+
+  return {
+    bankBalance,
+    bills: {
+      overdueCount: 0,
+      overdueTotal: 0,
+      dueSoonCount: 0,
+      dueSoonTotal: 0,
+      upcomingCount: 0,
+      upcomingTotal: 0,
+      ...(overrides.bills ?? {}),
+    },
+    cards: {
+      openPurchasesTotal: 0,
+      pendingInvoicesTotal: 0,
+      ...(overrides.cards ?? {}),
+    },
+    income,
+    forecast,
+    semanticCore: overrides.semanticCore ?? {
+      semanticsVersion: "v1",
+      realized: {
+        confirmedInflowTotal: income.receivedThisMonth,
+        settledOutflowTotal: 0,
+        netAmount: income.receivedThisMonth,
+        referenceMonth: income.referenceMonth,
+      },
+      currentPosition: {
+        bankBalance,
+        technicalBalance: bankBalance,
+        asOf: "2026-04-15T00:00:00.000Z",
+      },
+      projection: {
+        referenceMonth: forecast?.month ?? income.referenceMonth,
+        projectedBalance: forecast?.projectedBalance ?? bankBalance,
+        adjustedProjectedBalance: forecast?.projectedBalance ?? bankBalance,
+        expectedInflow:
+          income.pendingThisMonth > 0 ? income.pendingThisMonth : null,
+      },
+    },
+    consignado: {
+      monthlyTotal: 0,
+      contractsCount: 0,
+      comprometimentoPct: null,
+      ...(overrides.consignado ?? {}),
+    },
+  };
+};
 
 describe("dashboardService", () => {
   beforeEach(() => {
