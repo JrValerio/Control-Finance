@@ -17,6 +17,15 @@ vi.mock("../services/dashboard.service", async (importOriginal) => {
 
 const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSnapshot => {
   const bankBalance = overrides.bankBalance ?? 1000;
+  const bills = {
+    overdueCount: 0,
+    overdueTotal: 0,
+    dueSoonCount: 0,
+    dueSoonTotal: 0,
+    upcomingCount: 0,
+    upcomingTotal: 0,
+    ...(overrides.bills ?? {}),
+  };
   const income = {
     receivedThisMonth: 0,
     pendingThisMonth: 0,
@@ -27,15 +36,7 @@ const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSna
 
   return {
     bankBalance,
-    bills: {
-      overdueCount: 0,
-      overdueTotal: 0,
-      dueSoonCount: 0,
-      dueSoonTotal: 0,
-      upcomingCount: 0,
-      upcomingTotal: 0,
-      ...(overrides.bills ?? {}),
-    },
+    bills,
     cards: {
       openPurchasesTotal: 0,
       pendingInvoicesTotal: 0,
@@ -53,7 +54,7 @@ const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSna
       },
       currentPosition: {
         bankBalance,
-        technicalBalance: bankBalance,
+        technicalBalance: bankBalance - bills.overdueTotal,
         asOf: "2026-04-15T00:00:00.000Z",
       },
       projection: {
@@ -358,5 +359,63 @@ describe("OperationalSummaryPanel", () => {
     expect(screen.getByText("R$ 0,00")).toBeInTheDocument();
     expect(screen.getByText("Realizado no mês")).toBeInTheDocument();
     expect(screen.getByText("Previsto no mês: R$ 900,00")).toBeInTheDocument();
+  });
+
+  it("prioriza semanticCore no consumo de saldo e renda", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        bankBalance: 1000,
+        income: {
+          receivedThisMonth: 50,
+          pendingThisMonth: 20,
+          referenceMonth: "2026-04",
+        },
+        forecast: {
+          projectedBalance: 400,
+          month: "2026-04",
+        },
+        bills: {
+          overdueCount: 1,
+          overdueTotal: 120,
+          dueSoonCount: 0,
+          dueSoonTotal: 0,
+          upcomingCount: 0,
+          upcomingTotal: 0,
+        },
+        semanticCore: {
+          semanticsVersion: "v1",
+          realized: {
+            confirmedInflowTotal: 1200,
+            settledOutflowTotal: 300,
+            netAmount: 900,
+            referenceMonth: "2026-04",
+          },
+          currentPosition: {
+            bankBalance: 850,
+            technicalBalance: 730,
+            asOf: "2026-04-15T00:00:00.000Z",
+          },
+          projection: {
+            referenceMonth: "2026-04",
+            projectedBalance: 200,
+            adjustedProjectedBalance: 150,
+            expectedInflow: 350,
+          },
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Saldo realizado após vencidas: R$ 730,00")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("R$ 850,00")).toBeInTheDocument();
+    expect(screen.getByText("R$ 1.200,00")).toBeInTheDocument();
+    expect(screen.getByText("Previsto no mês: R$ 350,00")).toBeInTheDocument();
+    expect(screen.getByText("R$ 200,00")).toBeInTheDocument();
+    expect(screen.queryByText("R$ 50,00")).not.toBeInTheDocument();
+    expect(screen.queryByText("R$ 400,00")).not.toBeInTheDocument();
   });
 });

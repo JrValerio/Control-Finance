@@ -1,6 +1,7 @@
 import { api, withApiRequestContext, type ApiRequestContext } from "./api";
 import type {
   BalanceSnapshot,
+  CoreFinancialSemanticContract,
   DashboardSnapshotResponse,
   IncomeEntry,
   Obligation,
@@ -15,6 +16,10 @@ export interface DashboardFinancialContractView {
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+const toAsOfISOString = (
+  asOf: CoreFinancialSemanticContract["currentPosition"]["asOf"],
+): string => (typeof asOf === "string" ? asOf : asOf.toISOString());
 
 const createObligations = (
   totalAmount: number,
@@ -56,25 +61,29 @@ export const buildDashboardContractView = (
   snapshot: DashboardSnapshot,
   now: Date = new Date(),
 ): DashboardFinancialContractView => {
+  const semanticCore = snapshot.semanticCore;
+  const confirmedInflow = semanticCore.realized.confirmedInflowTotal;
+  const expectedInflow = semanticCore.projection.expectedInflow ?? 0;
+
   const incomes: IncomeEntry[] = [];
-  if (snapshot.income.receivedThisMonth > 0) {
+  if (confirmedInflow > 0) {
     incomes.push({
-      grossAmount: snapshot.income.receivedThisMonth,
-      netAmount: snapshot.income.receivedThisMonth,
+      grossAmount: confirmedInflow,
+      netAmount: confirmedInflow,
       status: "confirmed",
       incomeType: "salary",
       isInferred: true,
-      sourceId: snapshot.income.referenceMonth,
+      sourceId: semanticCore.realized.referenceMonth,
     });
   }
-  if (snapshot.income.pendingThisMonth > 0) {
+  if (expectedInflow > 0) {
     incomes.push({
-      grossAmount: snapshot.income.pendingThisMonth,
-      netAmount: snapshot.income.pendingThisMonth,
+      grossAmount: expectedInflow,
+      netAmount: expectedInflow,
       status: "pending",
       incomeType: "salary",
       isInferred: true,
-      sourceId: snapshot.income.referenceMonth,
+      sourceId: semanticCore.projection.referenceMonth,
     });
   }
 
@@ -110,10 +119,10 @@ export const buildDashboardContractView = (
   ];
 
   const balanceSnapshot: BalanceSnapshot = {
-    bankBalance: snapshot.bankBalance,
-    technicalBalance: snapshot.bankBalance - snapshot.bills.overdueTotal,
+    bankBalance: semanticCore.currentPosition.bankBalance,
+    technicalBalance: semanticCore.currentPosition.technicalBalance,
     source: "bank_account",
-    asOf: now.toISOString(),
+    asOf: toAsOfISOString(semanticCore.currentPosition.asOf),
   };
 
   return {
