@@ -19,7 +19,13 @@
     "forceConsistentCasingInFileNames": true,
     "types": [
       "vite/client"
-    ]
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@control/contracts": [
+        "../api/src/domain/contracts/types"
+      ]
+    }
   },
   "include": [
     "src",
