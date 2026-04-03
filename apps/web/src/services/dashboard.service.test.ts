@@ -13,6 +13,15 @@ const getMock = vi.mocked(api.get);
 
 const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSnapshot => {
   const bankBalance = overrides.bankBalance ?? 1200;
+  const bills = {
+    overdueCount: 0,
+    overdueTotal: 0,
+    dueSoonCount: 0,
+    dueSoonTotal: 0,
+    upcomingCount: 0,
+    upcomingTotal: 0,
+    ...(overrides.bills ?? {}),
+  };
   const income = {
     receivedThisMonth: 0,
     pendingThisMonth: 0,
@@ -23,15 +32,7 @@ const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSna
 
   return {
     bankBalance,
-    bills: {
-      overdueCount: 0,
-      overdueTotal: 0,
-      dueSoonCount: 0,
-      dueSoonTotal: 0,
-      upcomingCount: 0,
-      upcomingTotal: 0,
-      ...(overrides.bills ?? {}),
-    },
+    bills,
     cards: {
       openPurchasesTotal: 0,
       pendingInvoicesTotal: 0,
@@ -49,7 +50,7 @@ const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSna
       },
       currentPosition: {
         bankBalance,
-        technicalBalance: bankBalance,
+        technicalBalance: bankBalance - bills.overdueTotal,
         asOf: "2026-04-15T00:00:00.000Z",
       },
       projection: {
@@ -141,5 +142,54 @@ describe("dashboardService", () => {
     expect(invoiceObligations).toHaveLength(1);
     expect(cycleObligations[0].amount).toBe(320);
     expect(invoiceObligations[0].amount).toBe(780);
+  });
+
+  it("buildDashboardContractView prioriza semanticCore para renda e posicao atual", () => {
+    const snapshot = buildSnapshot({
+      bankBalance: 1200,
+      income: {
+        receivedThisMonth: 10,
+        pendingThisMonth: 20,
+        referenceMonth: "2026-03",
+      },
+      semanticCore: {
+        semanticsVersion: "v1",
+        realized: {
+          confirmedInflowTotal: 2300,
+          settledOutflowTotal: 700,
+          netAmount: 1600,
+          referenceMonth: "2026-04",
+        },
+        currentPosition: {
+          bankBalance: 850,
+          technicalBalance: 640,
+          asOf: "2026-04-20T00:00:00.000Z",
+        },
+        projection: {
+          referenceMonth: "2026-04",
+          projectedBalance: 900,
+          adjustedProjectedBalance: 500,
+          expectedInflow: 300,
+        },
+      },
+    });
+
+    const result = buildDashboardContractView(snapshot, new Date("2026-04-15T00:00:00.000Z"));
+
+    expect(result.balanceSnapshot.bankBalance).toBe(850);
+    expect(result.balanceSnapshot.technicalBalance).toBe(640);
+    expect(result.balanceSnapshot.asOf).toBe("2026-04-20T00:00:00.000Z");
+    expect(result.incomes).toEqual([
+      expect.objectContaining({
+        netAmount: 2300,
+        status: "confirmed",
+        sourceId: "2026-04",
+      }),
+      expect.objectContaining({
+        netAmount: 300,
+        status: "pending",
+        sourceId: "2026-04",
+      }),
+    ]);
   });
 });

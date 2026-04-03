@@ -162,8 +162,8 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
     );
   }
 
-  const { forecast, consignado } = snapshot;
-  const { balanceSnapshot, obligations } = buildDashboardContractView(snapshot);
+  const { forecast, consignado, semanticCore } = snapshot;
+  const { obligations } = buildDashboardContractView(snapshot);
 
   const nowTimestamp = Date.now();
   const dueSoonLimit = nowTimestamp + 7 * DAY_IN_MS;
@@ -190,8 +190,8 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   const dueSoonTotal = sumAmounts(dueSoonObligations);
   const upcomingCount = upcomingObligations.length;
   const upcomingTotal = sumAmounts(upcomingObligations);
-  const receivedThisMonth = snapshot.income.receivedThisMonth;
-  const projectedThisMonth = snapshot.income.pendingThisMonth;
+  const receivedThisMonth = semanticCore.realized.confirmedInflowTotal;
+  const projectedThisMonth = semanticCore.projection.expectedInflow ?? 0;
   const cardCycleTotal = sumAmounts(
     obligations.filter((obligation) => obligation.obligationType === "credit_card_cycle"),
   );
@@ -200,10 +200,10 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   );
 
   // ── Tile 1: Bank balance ──────────────────────────────────────────────────
-  const bankBalance = balanceSnapshot.bankBalance;
+  const bankBalance = semanticCore.currentPosition.bankBalance;
   const hasOverdueBills = overdueCount > 0;
   const hasDueSoonBills = dueSoonCount > 0;
-  const technicalBalance = balanceSnapshot.technicalBalance;
+  const technicalBalance = semanticCore.currentPosition.technicalBalance;
   const shortTermBalance = technicalBalance - dueSoonTotal;
   const shouldShowShortTermBalance = hasDueSoonBills && !hasOverdueBills;
 
@@ -316,12 +316,13 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   };
 
   // ── Tile 5: Forecast ──────────────────────────────────────────────────────
+  const projectionBalance = semanticCore.projection.projectedBalance;
   const forecastTile: TileProps = forecast
     ? {
         label: "Saldo projetado",
-        primary: money(forecast.projectedBalance),
+        primary: money(projectionBalance),
         secondary: "Fechamento previsto do mês",
-        accent: forecast.projectedBalance < 0 ? "danger" : forecast.projectedBalance < 200 ? "warning" : "default",
+        accent: projectionBalance < 0 ? "danger" : projectionBalance < 200 ? "warning" : "default",
       }
     : {
         label: "Saldo projetado",
