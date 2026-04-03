@@ -9,12 +9,12 @@ import UpgradeModal from "../components/UpgradeModal";
 import FinancialAlertBanner from "../components/FinancialAlertBanner";
 import MonthViewSection from "../components/MonthViewSection";
 import OperationalWidgetsSection from "../components/OperationalWidgetsSection";
+import TransactionsFeedSection from "../components/TransactionsFeedSection";
 import type {
   MonthOverMonthDirection,
   MonthOverMonthMetric,
   MonthOverMonthTone,
 } from "../components/month-view.types";
-import TransactionList from "../components/TransactionList";
 import {
   transactionsService,
   type CategoryOption,
@@ -2732,138 +2732,30 @@ const App = ({
             </section>
           </section>
 
-          <section className="space-y-3" aria-labelledby="transactions-overview-title">
-            <div>
-              <h3 id="transactions-overview-title" className="text-sm font-medium text-cf-text-primary">
-                Movimentações
-              </h3>
-              <p className="mt-1 text-xs text-cf-text-secondary">
-                Detalhe completo para revisão depois da triagem operacional e da análise do período.
-              </p>
-            </div>
-
-            <section
-              ref={listSectionRef}
-              className="rounded border border-cf-border bg-cf-surface px-4 py-3.5"
-            >
-              {requestError ? (
-                <div className="p-4 text-center">
-                  <p className="text-sm font-medium text-red-600">{requestError}</p>
-                  <button
-                    onClick={loadTransactions}
-                    className="mt-2 font-medium text-brand-1 hover:text-brand-2"
-                  >
-                    Tentar novamente
-                  </button>
-                </div>
-              ) : isLoadingTransactions ? (
-                <div className="space-y-2 p-2" role="status" aria-live="polite">
-                  {Array.from({ length: 4 }).map((_, index) => (
-                    <div
-                      key={`transactions-skeleton-${index + 1}`}
-                      className="h-20 animate-pulse rounded border border-cf-border bg-cf-bg-subtle"
-                    />
-                  ))}
-                  <span className="sr-only">Carregando transações...</span>
-                </div>
-              ) : filteredTransactions.length === 0 ? (
-                hasActiveFilters ? (
-                  <div className="p-4 text-center text-cf-text-primary">
-                    Nenhum valor encontrado para os filtros selecionados.
-                  </div>
-                ) : (
-                  <div className="p-4 text-center">
-                    <p className="text-cf-text-primary">Nenhum valor cadastrado.</p>
-                    <button
-                      onClick={openCreateModal}
-                      className="font-medium text-brand-1 hover:text-brand-2"
-                    >
-                      Registrar valor
-                    </button>
-                  </div>
-                )
-              ) : (
-                <TransactionList
-                  transactions={transactionsWithCategoryName}
-                  onDelete={requestDeleteTransaction}
-                  onEdit={openEditModal}
-                  onBulkDelete={handleBulkDeleteTransactions}
-                />
-              )}
-
-              {!requestError && !isLoadingTransactions ? (
-                <div className="mt-2 border-t border-cf-border px-2 pt-3 text-sm text-cf-text-primary">
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                    <span>
-                      Mostrando {rangeStart}-{rangeEnd} de {paginationMeta.total}
-                    </span>
-                    <label className="flex items-center gap-2 text-xs font-semibold">
-                      Itens por pagina
-                      <select
-                        aria-label="Itens por pagina"
-                        value={pageSize}
-                        onChange={(event) => handlePageSizeChange(event.target.value)}
-                        className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-sm text-cf-text-primary"
-                      >
-                        {PAGE_SIZE_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    {paginationMeta.totalPages > 2 ? (
-                      <button
-                        type="button"
-                        onClick={handleFirstPage}
-                        disabled={currentPage <= 1}
-                        className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Primeira
-                      </button>
-                    ) : (
-                      <span />
-                    )}
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handlePreviousPage}
-                        disabled={currentPage <= 1}
-                        className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Anterior
-                      </button>
-                      <span>
-                        Pagina {currentPage} de {paginationMeta.totalPages}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleNextPage}
-                        disabled={currentPage >= paginationMeta.totalPages}
-                        className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Proxima
-                      </button>
-                    </div>
-                    {paginationMeta.totalPages > 2 ? (
-                      <button
-                        type="button"
-                        onClick={handleLastPage}
-                        disabled={currentPage >= paginationMeta.totalPages}
-                        className="rounded border border-cf-border px-3 py-1 font-semibold text-cf-text-primary hover:bg-cf-bg-subtle disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Ultima
-                      </button>
-                    ) : (
-                      <span />
-                    )}
-                  </div>
-                </div>
-              ) : null}
-            </section>
-          </section>
+          <TransactionsFeedSection
+            sectionRef={listSectionRef}
+            requestError={requestError}
+            onRetryLoadTransactions={loadTransactions}
+            isLoadingTransactions={isLoadingTransactions}
+            hasActiveFilters={hasActiveFilters}
+            onOpenCreateModal={openCreateModal}
+            transactions={transactionsWithCategoryName}
+            onDeleteTransaction={requestDeleteTransaction}
+            onEditTransaction={openEditModal}
+            onBulkDeleteTransactions={handleBulkDeleteTransactions}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            totalTransactions={paginationMeta.total}
+            pageSize={pageSize}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            onPageSizeChange={handlePageSizeChange}
+            currentPage={currentPage}
+            totalPages={paginationMeta.totalPages}
+            onFirstPage={handleFirstPage}
+            onPreviousPage={handlePreviousPage}
+            onNextPage={handleNextPage}
+            onLastPage={handleLastPage}
+          />
         </div>
       </main>
 
