@@ -4,6 +4,7 @@ import {
   ForecastIncomeBasisSchema,
   ForecastPendingItemsSchema,
 } from "./forecast.schema";
+import { CoreFinancialSemanticContractSchema } from "./core-financial-semantic-contract.schema";
 
 const YearMonthSchema = z.string().regex(/^\d{4}-\d{2}$/);
 
@@ -45,6 +46,7 @@ const ForecastHttpPayloadSchema = z.object({
   adjustedProjectedBalance: z.number(),
   bankLimit: ForecastBankLimitProjectionSchema.nullable(),
   _meta: ForecastResponseMetaSchema,
+  semanticCore: CoreFinancialSemanticContractSchema,
 });
 
 export const ForecastCurrentResponseSchema = ForecastHttpPayloadSchema.nullable();

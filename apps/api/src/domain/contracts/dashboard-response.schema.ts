@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CoreFinancialSemanticContractSchema } from "./core-financial-semantic-contract.schema";
 
 const DashboardBillsSchema = z.object({
   overdueCount: z.number().int().nonnegative(),
@@ -37,6 +38,7 @@ export const DashboardSnapshotResponseSchema = z.object({
   cards: DashboardCardsSchema,
   income: DashboardIncomeSchema,
   forecast: DashboardForecastSchema.nullable(),
+  semanticCore: CoreFinancialSemanticContractSchema,
   consignado: DashboardConsignadoSchema,
 });
 

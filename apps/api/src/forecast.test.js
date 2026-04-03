@@ -75,6 +75,22 @@ describe("GET /forecasts/current", () => {
     expect(res.body).not.toBeNull();
     expect(typeof res.body.projectedBalance).toBe("number");
     expect(typeof res.body.month).toBe("string");
+    expect(res.body.semanticCore).toMatchObject({
+      semanticsVersion: "v1",
+      realized: {
+        referenceMonth: res.body.month,
+      },
+      currentPosition: {
+        bankBalance: expect.any(Number),
+        technicalBalance: expect.any(Number),
+        asOf: expect.any(String),
+      },
+      projection: {
+        referenceMonth: res.body.month,
+        projectedBalance: res.body.projectedBalance,
+        adjustedProjectedBalance: res.body.adjustedProjectedBalance,
+      },
+    });
   });
 });
 
@@ -111,6 +127,26 @@ describe("POST /forecasts/recompute", () => {
         bills: 0,
         invoices: 0,
         creditCardCycles: 0,
+      },
+    });
+    expect(res.body.semanticCore).toMatchObject({
+      semanticsVersion: "v1",
+      realized: {
+        confirmedInflowTotal: 0,
+        settledOutflowTotal: 0,
+        netAmount: 0,
+        referenceMonth: res.body.month,
+      },
+      currentPosition: {
+        bankBalance: 0,
+        technicalBalance: 0,
+        asOf: expect.any(String),
+      },
+      projection: {
+        referenceMonth: res.body.month,
+        projectedBalance: res.body.projectedBalance,
+        adjustedProjectedBalance: res.body.adjustedProjectedBalance,
+        expectedInflow: null,
       },
     });
     expect(Array.isArray(res.body._meta.fallbacksUsed)).toBe(true);
@@ -690,6 +726,11 @@ describe("forecast — bills integration", () => {
       used: 80,
       status: "using",
     });
+    expect(res.body.semanticCore.realized.settledOutflowTotal).toBe(res.body.spendingToDate);
+    expect(res.body.semanticCore.projection.adjustedProjectedBalance).toBe(
+      res.body.adjustedProjectedBalance,
+    );
+    expect(res.body.semanticCore.projection.expectedInflow).toBe(res.body.incomeExpected);
   });
 
   it("recompute com multiplas bills soma corretamente", async () => {

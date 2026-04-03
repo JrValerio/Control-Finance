@@ -48,6 +48,26 @@ interface ForecastPayload {
   adjustedProjectedBalance: number;
   bankLimit: ForecastBankLimitProjection | null;
   _meta: ForecastMeta;
+  semanticCore: {
+    semanticsVersion: "v1";
+    realized: {
+      confirmedInflowTotal: number;
+      settledOutflowTotal: number;
+      netAmount: number;
+      referenceMonth: string;
+    };
+    currentPosition: {
+      bankBalance: number;
+      technicalBalance: number;
+      asOf: string;
+    };
+    projection: {
+      referenceMonth: string;
+      projectedBalance: number;
+      adjustedProjectedBalance: number;
+      expectedInflow: number | null;
+    };
+  };
 }
 
 interface ForecastRow {
@@ -223,6 +243,52 @@ const buildForecastMeta = async ({
     incomeBasis,
     pendingItems,
     fallbacksUsed,
+  };
+};
+
+const buildForecastSemanticCore = ({
+  referenceMonth,
+  incomeToDate,
+  spendingToDate,
+  currentPositionBalance,
+  projectedBalance,
+  adjustedProjectedBalance,
+  expectedInflow,
+  asOf,
+}: {
+  referenceMonth: string;
+  incomeToDate: number;
+  spendingToDate: number;
+  currentPositionBalance: number;
+  projectedBalance: number;
+  adjustedProjectedBalance: number;
+  expectedInflow: number | null;
+  asOf: Date;
+}): ForecastPayload["semanticCore"] => {
+  const confirmedInflowTotal = Number(incomeToDate.toFixed(2));
+  const settledOutflowTotal = Number(spendingToDate.toFixed(2));
+  const netAmount = Number((confirmedInflowTotal - settledOutflowTotal).toFixed(2));
+  const normalizedCurrentPositionBalance = Number(currentPositionBalance.toFixed(2));
+
+  return {
+    semanticsVersion: "v1",
+    realized: {
+      confirmedInflowTotal,
+      settledOutflowTotal,
+      netAmount,
+      referenceMonth,
+    },
+    currentPosition: {
+      bankBalance: normalizedCurrentPositionBalance,
+      technicalBalance: normalizedCurrentPositionBalance,
+      asOf: asOf.toISOString(),
+    },
+    projection: {
+      referenceMonth,
+      projectedBalance: Number(projectedBalance.toFixed(2)),
+      adjustedProjectedBalance: Number(adjustedProjectedBalance.toFixed(2)),
+      expectedInflow,
+    },
   };
 };
 
@@ -416,6 +482,16 @@ export const computeForecast = async (
     balanceBasis,
     incomeBasis,
   });
+  const semanticCore = buildForecastSemanticCore({
+    referenceMonth: currentMonth,
+    incomeToDate,
+    spendingToDate,
+    currentPositionBalance: realBalanceBase,
+    projectedBalance: pb,
+    adjustedProjectedBalance,
+    expectedInflow: incomeExpected,
+    asOf: now,
+  });
 
   return {
     month: mStart.slice(0, 7),
@@ -433,6 +509,7 @@ export const computeForecast = async (
     adjustedProjectedBalance,
     bankLimit: buildBankLimitProjection(effectiveBankLimitTotal, adjustedProjectedBalance),
     _meta: meta,
+    semanticCore,
   };
 };
 
@@ -445,6 +522,7 @@ export const getLatestForecast = async (
 ): Promise<ForecastPayload | null> => {
   const uid = normalizeUserId(userId);
   const mStart = monthStartStr(now);
+  const todayStr = now.toISOString().slice(0, 10);
 
   const result = await dbQuery(
     `SELECT * FROM user_forecasts WHERE user_id = $1 AND month = $2 LIMIT 1`,
@@ -477,6 +555,7 @@ export const getLatestForecast = async (
 
   const bankLimitResult = await dbQuery(
     `SELECT
+       COALESCE(SUM(balance), 0)::numeric AS total_balance,
        COALESCE(SUM(limit_total), 0)::numeric AS total_limit_total,
        COUNT(*)::int AS active_accounts_count
      FROM bank_accounts
@@ -484,10 +563,24 @@ export const getLatestForecast = async (
        AND is_active = true`,
     [uid],
   );
+  const totalBankBalance = Number(bankLimitResult.rows[0]?.total_balance || 0);
   const totalBankLimitTotal = Number(bankLimitResult.rows[0]?.total_limit_total || 0);
   const activeAccountsCount = Number(bankLimitResult.rows[0]?.active_accounts_count || 0);
   const effectiveBankLimitTotal =
     activeAccountsCount > 0 ? totalBankLimitTotal : profileBankLimitTotal;
+
+  const monthlyResult = await dbQuery(
+    `SELECT
+       COALESCE(SUM(CASE WHEN type = 'Saida' THEN value ELSE 0 END), 0) AS spending_to_date,
+       COALESCE(SUM(CASE WHEN type = 'Entrada' THEN value ELSE 0 END), 0) AS income_to_date
+     FROM transactions
+     WHERE user_id = $1
+       AND deleted_at IS NULL
+       AND date >= $2
+       AND date <= $3`,
+    [uid, mStart, todayStr],
+  );
+  const incomeToDate = Number(monthlyResult.rows[0]?.income_to_date || 0);
 
   const stmtExpectedResult = await dbQuery(
     `SELECT COALESCE(SUM(st.net_amount), 0) AS total
@@ -509,6 +602,20 @@ export const getLatestForecast = async (
     balanceBasis,
     incomeBasis,
   });
+  const currentPositionBalance =
+    activeAccountsCount > 0
+      ? totalBankBalance
+      : Number((incomeToDate - forecast.spendingToDate).toFixed(2));
+  const semanticCore = buildForecastSemanticCore({
+    referenceMonth: forecast.month,
+    incomeToDate,
+    spendingToDate: forecast.spendingToDate,
+    currentPositionBalance,
+    projectedBalance: forecast.projectedBalance,
+    adjustedProjectedBalance,
+    expectedInflow: forecast.incomeExpected,
+    asOf: now,
+  });
 
   return {
     ...forecast,
@@ -520,5 +627,6 @@ export const getLatestForecast = async (
       adjustedProjectedBalance,
     ),
     _meta: meta,
+    semanticCore,
   };
 };
