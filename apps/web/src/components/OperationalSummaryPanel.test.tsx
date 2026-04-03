@@ -71,7 +71,7 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Saldo técnico: R$ 700,00")).toBeInTheDocument();
+      expect(screen.getByText("Saldo realizado após vencidas: R$ 700,00")).toBeInTheDocument();
     });
 
     expect(screen.getByText("2 vencidas somam R$ 300,00")).toBeInTheDocument();
@@ -95,16 +95,16 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Saldo em 7 dias: R$ 920,00")).toBeInTheDocument();
+      expect(screen.getByText("Saldo projetado em 7 dias: R$ 920,00")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("1 em 7 dias somam R$ 80,00")).toBeInTheDocument();
+    expect(screen.getByText("1 obrigação em 7 dias somam R$ 80,00")).toBeInTheDocument();
     expect(
       screen.getByText(
-        (content) => content.includes("Urgência 7d: 1 conta") && content.includes("80,00"),
+        (content) => content.includes("Urgência 7d: 1 obrigação") && content.includes("80,00"),
       ),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Saldo disponível")).not.toBeInTheDocument();
+    expect(screen.queryByText("Saldo realizado")).not.toBeInTheDocument();
   });
 
   it("dispara CTA de contas em 7 dias quando callback é fornecido", async () => {
@@ -150,10 +150,10 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Saldo disponível")).toBeInTheDocument();
+      expect(screen.getByText("Saldo realizado")).toBeInTheDocument();
     });
 
-    expect(screen.queryByText(/Saldo em 7 dias:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Saldo projetado em 7 dias:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Saldo técnico:/)).not.toBeInTheDocument();
   });
 
@@ -174,11 +174,11 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Contas a pagar")).toBeInTheDocument();
+      expect(screen.getByText("Obrigações de contas")).toBeInTheDocument();
     });
 
     expect(screen.getByText(/480[,.]00/)).toBeInTheDocument();
-    expect(screen.getByText("2 próximas")).toBeInTheDocument();
+    expect(screen.getByText("2 obrigações futuras")).toBeInTheDocument();
   });
 
   it("mantem foco em urgencia imediata e sinaliza proximas no contexto", async () => {
@@ -204,10 +204,10 @@ describe("OperationalSummaryPanel", () => {
     expect(screen.getByText(/300[,.]00/)).toBeInTheDocument();
     expect(
       screen.getByText(
-        (content) => content.includes("Urgência 7d: 1 conta") && content.includes("200,00"),
+        (content) => content.includes("Urgência 7d: 1 obrigação") && content.includes("200,00"),
       ),
     ).toBeInTheDocument();
-    expect(screen.getByText(/2 próximas/)).toBeInTheDocument();
+    expect(screen.getByText(/2 obrigações futuras/)).toBeInTheDocument();
   });
 
   it("cartao separa ciclo atual e faturas pendentes quando ambos existem", async () => {
@@ -223,7 +223,7 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Cartão")).toBeInTheDocument();
+      expect(screen.getByText("Obrigações de cartão")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Faturas a pagar: R$ 900,00")).toBeInTheDocument();
@@ -243,7 +243,7 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Cartão")).toBeInTheDocument();
+      expect(screen.getByText("Obrigações de cartão")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Gastos no ciclo: R$ 280,00")).toBeInTheDocument();
@@ -263,7 +263,7 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Cartão")).toBeInTheDocument();
+      expect(screen.getByText("Obrigações de cartão")).toBeInTheDocument();
     });
 
     expect(screen.getByText("Faturas a pagar: R$ 610,00")).toBeInTheDocument();
@@ -283,10 +283,10 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Cartão")).toBeInTheDocument();
+      expect(screen.getByText("Obrigações de cartão")).toBeInTheDocument();
     });
 
-    expect(screen.getByText("Sem movimentação")).toBeInTheDocument();
+    expect(screen.getByText("Sem ciclo e sem fatura")).toBeInTheDocument();
   });
 
   it("separa renda recebida e prevista sem somar no valor principal", async () => {
@@ -303,12 +303,12 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Renda do mês")).toBeInTheDocument();
+      expect(screen.getByText("Renda do mês (realizada e prevista)")).toBeInTheDocument();
     });
 
     expect(screen.getByText("R$ 1.200,00")).toBeInTheDocument();
-    expect(screen.getByText("Recebido")).toBeInTheDocument();
-    expect(screen.getByText("Previsto: R$ 350,00")).toBeInTheDocument();
+    expect(screen.getByText("Realizado no mês")).toBeInTheDocument();
+    expect(screen.getByText("Previsto no mês: R$ 350,00")).toBeInTheDocument();
     expect(screen.queryByText("R$ 1.550,00")).not.toBeInTheDocument();
   });
 
@@ -326,11 +326,11 @@ describe("OperationalSummaryPanel", () => {
     render(<OperationalSummaryPanel />);
 
     await waitFor(() => {
-      expect(screen.getByText("Renda do mês")).toBeInTheDocument();
+      expect(screen.getByText("Renda do mês (realizada e prevista)")).toBeInTheDocument();
     });
 
     expect(screen.getByText("R$ 0,00")).toBeInTheDocument();
-    expect(screen.getByText("Recebido")).toBeInTheDocument();
-    expect(screen.getByText("Previsto: R$ 900,00")).toBeInTheDocument();
+    expect(screen.getByText("Realizado no mês")).toBeInTheDocument();
+    expect(screen.getByText("Previsto no mês: R$ 900,00")).toBeInTheDocument();
   });
 });
