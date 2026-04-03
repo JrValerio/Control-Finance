@@ -11,7 +11,8 @@
   ],
   "scripts": {
     "dev": "concurrently \"npm -w apps/api run dev\" \"npm -w apps/web run dev\"",
-    "lint": "npm -w apps/web run lint && npm -w apps/api run lint",
+    "check:js-boundaries": "node scripts/check-js-boundaries.mjs",
+    "lint": "npm run check:js-boundaries && npm -w apps/web run lint && npm -w apps/api run lint",
     "typecheck:web": "npm -w apps/web run typecheck",
     "typecheck": "npm run typecheck:web",
     "test": "npm -w apps/web run test:run && npm -w apps/api run test:run",
