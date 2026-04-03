@@ -525,7 +525,7 @@ describe("Tax API foundation", () => {
     expectErrorResponseWithRequestId(response, 400, "Arquivo fiscal (file) e obrigatorio.");
   });
 
-  it("POST /tax/documents/preview classifica documento e retorna sourceType canonico", async () => {
+  it("POST /tax/documents/preview classifica documento e retorna estado operacional por tipo", async () => {
     const token = await registerAndLogin("tax-preview-employer@test.dev");
 
     const response = await request(app)
@@ -551,15 +551,94 @@ describe("Tax API foundation", () => {
     expect(response.status).toBe(200);
     expect(response.body.preview).toMatchObject({
       sourceType: "income",
+      detectedState: "ready",
       documentType: "income_report_employer",
       extractorAvailable: true,
       textSource: "csv_text",
+      capabilities: {
+        canExtract: true,
+        canSuggest: true,
+        canExecute: true,
+      },
     });
+    expect(response.body.preview.blockingRules).toEqual([]);
     expect(Array.isArray(response.body.preview.reasons)).toBe(true);
     expect(Array.isArray(response.body.preview.textPreviewLines)).toBe(true);
 
     const parsed = TaxDocumentPreviewResponseSchema.safeParse(response.body);
     expect(parsed.success).toBe(true);
+  });
+
+  it("POST /tax/documents/preview retorna review_required para sourceType support", async () => {
+    const token = await registerAndLogin("tax-preview-support@test.dev");
+
+    const response = await request(app)
+      .post("/tax/documents/preview")
+      .set("Authorization", `Bearer ${token}`)
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Data;Historico;Valor",
+            "05/02/2026;Saldo anterior;100,00",
+            "06/02/2026;Lancamentos;20,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "preview-support.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.body.preview).toMatchObject({
+      sourceType: "support",
+      detectedState: "review_required",
+      documentType: "bank_statement_support",
+      capabilities: {
+        canExtract: false,
+        canSuggest: true,
+        canExecute: false,
+      },
+    });
+
+    const blockingCodes = response.body.preview.blockingRules.map((rule) => rule.code);
+    expect(blockingCodes).toContain("source_type_requires_manual_review");
+    expect(blockingCodes).toContain("source_type_not_supported_for_extraction");
+    expect(blockingCodes).toContain("execution_not_allowed_for_source_type");
+  });
+
+  it("POST /tax/documents/preview retorna blocked para documento unknown", async () => {
+    const token = await registerAndLogin("tax-preview-unknown@test.dev");
+
+    const response = await request(app)
+      .post("/tax/documents/preview")
+      .set("Authorization", `Bearer ${token}`)
+      .attach(
+        "file",
+        Buffer.from("qualquer conteudo sem pistas fiscais claras", "utf8"),
+        {
+          filename: "preview-unknown.pdf",
+          contentType: "application/pdf",
+        },
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.body.preview).toMatchObject({
+      sourceType: "unknown",
+      detectedState: "blocked",
+      documentType: "unknown",
+      capabilities: {
+        canExtract: false,
+        canSuggest: false,
+        canExecute: false,
+      },
+    });
+
+    const blockingCodes = response.body.preview.blockingRules.map((rule) => rule.code);
+    expect(blockingCodes).toContain("document_type_not_identified");
+    expect(blockingCodes).toContain("execution_not_allowed_for_source_type");
   });
 
   it("GET /tax/documents retorna documentos enviados pelo usuario autenticado", async () => {

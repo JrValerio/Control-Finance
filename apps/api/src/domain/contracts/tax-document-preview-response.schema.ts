@@ -28,8 +28,36 @@ export const TaxDocumentPreviewTextSourceSchema = z.enum([
   "unsupported_text_source",
 ]);
 
+export const TaxDocumentPreviewDetectedStateSchema = z.enum([
+  "ready",
+  "review_required",
+  "blocked",
+]);
+
+export const TaxDocumentPreviewBlockingCodeSchema = z.enum([
+  "document_type_not_identified",
+  "source_type_requires_manual_review",
+  "source_type_not_supported_for_extraction",
+  "text_extraction_unavailable",
+  "execution_not_allowed_for_source_type",
+]);
+
+export const TaxDocumentPreviewBlockingRuleSchema = z.object({
+  code: TaxDocumentPreviewBlockingCodeSchema,
+  reason: z.string().min(1),
+});
+
+export const TaxDocumentPreviewCapabilitiesSchema = z.object({
+  canExtract: z.boolean(),
+  canSuggest: z.boolean(),
+  canExecute: z.boolean(),
+});
+
 export const TaxDocumentPreviewSchema = z.object({
   sourceType: TaxDocumentPreviewSourceTypeSchema,
+  detectedState: TaxDocumentPreviewDetectedStateSchema,
+  blockingRules: z.array(TaxDocumentPreviewBlockingRuleSchema),
+  capabilities: TaxDocumentPreviewCapabilitiesSchema,
   documentType: TaxDocumentPreviewDocumentTypeSchema,
   confidenceScore: z.number().min(0).max(1),
   extractorAvailable: z.boolean(),
@@ -52,6 +80,18 @@ export type TaxDocumentPreviewDocumentType = z.infer<
 >;
 export type TaxDocumentPreviewTextSource = z.infer<
   typeof TaxDocumentPreviewTextSourceSchema
+>;
+export type TaxDocumentPreviewDetectedState = z.infer<
+  typeof TaxDocumentPreviewDetectedStateSchema
+>;
+export type TaxDocumentPreviewBlockingCode = z.infer<
+  typeof TaxDocumentPreviewBlockingCodeSchema
+>;
+export type TaxDocumentPreviewBlockingRule = z.infer<
+  typeof TaxDocumentPreviewBlockingRuleSchema
+>;
+export type TaxDocumentPreviewCapabilities = z.infer<
+  typeof TaxDocumentPreviewCapabilitiesSchema
 >;
 export type TaxDocumentPreview = z.infer<typeof TaxDocumentPreviewSchema>;
 export type TaxDocumentPreviewResponse = z.infer<
