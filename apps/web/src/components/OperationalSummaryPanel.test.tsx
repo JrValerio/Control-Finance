@@ -209,4 +209,49 @@ describe("OperationalSummaryPanel", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/2 próximas/)).toBeInTheDocument();
   });
+
+  it("separa renda recebida e prevista sem somar no valor principal", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        income: {
+          receivedThisMonth: 1200,
+          pendingThisMonth: 350,
+          referenceMonth: "2026-04",
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Renda do mês")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("R$ 1.200,00")).toBeInTheDocument();
+    expect(screen.getByText("Recebido")).toBeInTheDocument();
+    expect(screen.getByText("Previsto: R$ 350,00")).toBeInTheDocument();
+    expect(screen.queryByText("R$ 1.550,00")).not.toBeInTheDocument();
+  });
+
+  it("mantem recebido e previsto explícitos mesmo sem credito confirmado", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        income: {
+          receivedThisMonth: 0,
+          pendingThisMonth: 900,
+          referenceMonth: "2026-04",
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Renda do mês")).toBeInTheDocument();
+    });
+
+    expect(screen.getByText("R$ 0,00")).toBeInTheDocument();
+    expect(screen.getByText("Recebido")).toBeInTheDocument();
+    expect(screen.getByText("Previsto: R$ 900,00")).toBeInTheDocument();
+  });
 });
