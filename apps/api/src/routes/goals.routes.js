@@ -8,6 +8,10 @@ import {
   updateGoalForUser,
   deleteGoalForUser,
 } from "../services/goals.service.js";
+import {
+  trackDomainFlowError,
+  trackDomainFlowSuccess,
+} from "../observability/domain-metrics.js";
 
 const router = Router();
 
@@ -27,8 +31,10 @@ router.get("/", async (req, res, next) => {
 router.post("/", goalsWriteRateLimiter, async (req, res, next) => {
   try {
     const goal = await createGoalForUser(req.user.id, req.body ?? {});
+    trackDomainFlowSuccess({ flow: "goals", operation: "create" });
     res.status(201).json(goal);
   } catch (error) {
+    trackDomainFlowError({ flow: "goals", operation: "create" });
     next(error);
   }
 });
@@ -37,8 +43,10 @@ router.post("/", goalsWriteRateLimiter, async (req, res, next) => {
 router.patch("/:id", goalsWriteRateLimiter, async (req, res, next) => {
   try {
     const goal = await updateGoalForUser(req.user.id, req.params.id, req.body ?? {});
+    trackDomainFlowSuccess({ flow: "goals", operation: "update" });
     res.status(200).json(goal);
   } catch (error) {
+    trackDomainFlowError({ flow: "goals", operation: "update" });
     next(error);
   }
 });
@@ -47,8 +55,10 @@ router.patch("/:id", goalsWriteRateLimiter, async (req, res, next) => {
 router.delete("/:id", goalsWriteRateLimiter, async (req, res, next) => {
   try {
     await deleteGoalForUser(req.user.id, req.params.id);
+    trackDomainFlowSuccess({ flow: "goals", operation: "delete" });
     res.status(204).send();
   } catch (error) {
+    trackDomainFlowError({ flow: "goals", operation: "delete" });
     next(error);
   }
 });

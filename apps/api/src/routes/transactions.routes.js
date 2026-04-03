@@ -17,6 +17,10 @@ import {
   trackDryRunSemanticDriftMetrics,
 } from "../observability/import-observability.js";
 import {
+  trackDomainFlowError,
+  trackDomainFlowSuccess,
+} from "../observability/domain-metrics.js";
+import {
   createTransactionForUser,
   deleteTransactionForUser,
   exportTransactionsCsvByUser,
@@ -361,8 +365,10 @@ router.get("/", async (req, res, next) => {
 router.post("/", transactionsWriteRateLimiter, async (req, res, next) => {
   try {
     const transaction = await createTransactionForUser(req.user.id, req.body || {});
+    trackDomainFlowSuccess({ flow: "transactions", operation: "create" });
     res.status(201).json(transaction);
   } catch (error) {
+    trackDomainFlowError({ flow: "transactions", operation: "create" });
     next(error);
   }
 });
@@ -382,8 +388,14 @@ router.post("/bulk-delete", transactionsWriteRateLimiter, async (req, res, next)
     ensureDestructiveActionConfirmation(req.body?.confirm ?? req.query?.confirm);
     const ids = Array.isArray(req.body?.transactionIds) ? req.body.transactionIds : [];
     const result = await bulkDeleteTransactionsForUser(req.user.id, ids);
+    trackDomainFlowSuccess({
+      flow: "transactions",
+      operation: "bulk_delete",
+      records: result.deletedCount,
+    });
     res.status(200).json(result);
   } catch (error) {
+    trackDomainFlowError({ flow: "transactions", operation: "bulk_delete" });
     next(error);
   }
 });
@@ -395,8 +407,10 @@ router.patch("/:id", transactionsWriteRateLimiter, async (req, res, next) => {
       req.params.id,
       req.body || {},
     );
+    trackDomainFlowSuccess({ flow: "transactions", operation: "update" });
     res.status(200).json(updatedTransaction);
   } catch (error) {
+    trackDomainFlowError({ flow: "transactions", operation: "update" });
     next(error);
   }
 });
@@ -404,11 +418,13 @@ router.patch("/:id", transactionsWriteRateLimiter, async (req, res, next) => {
 router.delete("/:id", transactionsWriteRateLimiter, async (req, res, next) => {
   try {
     const removedTransaction = await deleteTransactionForUser(req.user.id, req.params.id);
+    trackDomainFlowSuccess({ flow: "transactions", operation: "delete" });
     res.status(200).json({
       id: removedTransaction.id,
       success: true,
     });
   } catch (error) {
+    trackDomainFlowError({ flow: "transactions", operation: "delete" });
     next(error);
   }
 });
@@ -416,8 +432,10 @@ router.delete("/:id", transactionsWriteRateLimiter, async (req, res, next) => {
 router.post("/:id/restore", transactionsWriteRateLimiter, async (req, res, next) => {
   try {
     const restoredTransaction = await restoreTransactionForUser(req.user.id, req.params.id);
+    trackDomainFlowSuccess({ flow: "transactions", operation: "restore" });
     res.status(200).json(restoredTransaction);
   } catch (error) {
+    trackDomainFlowError({ flow: "transactions", operation: "restore" });
     next(error);
   }
 });
@@ -486,6 +504,12 @@ router.post("/import/dry-run", importRateLimiter, requireFeature("csv_import"), 
         statusCode: 200,
       });
 
+      trackDomainFlowSuccess({
+        flow: "transactions_import",
+        operation: "dry_run",
+        records: rowsTotal,
+      });
+
       return res.status(200).json(dryRunResult);
     } catch (serviceError) {
       logImportEvent("import.dry_run.error", {
@@ -499,6 +523,8 @@ router.post("/import/dry-run", importRateLimiter, requireFeature("csv_import"), 
         statusCode: Number.isInteger(serviceError?.status) ? serviceError.status : 500,
         message: serviceError?.message || "Unexpected error.",
       });
+
+      trackDomainFlowError({ flow: "transactions_import", operation: "dry_run" });
 
       return next(serviceError);
     }
@@ -528,6 +554,11 @@ router.post("/import/commit", importRateLimiter, requireFeature("csv_import"), a
     const invalidRows = Number(observability.invalidRows) || 0;
 
     trackCommitSuccessMetrics({ rowsImported: commitResult.imported });
+    trackDomainFlowSuccess({
+      flow: "transactions_import",
+      operation: "commit",
+      records: Number(commitResult.imported) || 0,
+    });
     logImportEvent("import.commit.success", {
       requestId,
       userId,
@@ -567,6 +598,8 @@ router.post("/import/commit", importRateLimiter, requireFeature("csv_import"), a
       statusCode,
       message: error?.message || "Unexpected error.",
     });
+
+    trackDomainFlowError({ flow: "transactions_import", operation: "commit" });
 
     next(error);
   }

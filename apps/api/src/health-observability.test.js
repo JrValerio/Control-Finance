@@ -10,7 +10,11 @@ import {
   resetWriteRateLimiterState,
 } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
-import { expectErrorResponseWithRequestId, setupTestDb } from "./test-helpers.js";
+import {
+  expectErrorResponseWithRequestId,
+  registerAndLogin,
+  setupTestDb,
+} from "./test-helpers.js";
 
 let testDbPool;
 
@@ -187,5 +191,47 @@ describe("health and observability", () => {
         process.env.METRICS_AUTH_TOKEN = envSnapshot.METRICS_AUTH_TOKEN;
       }
     }
+  });
+
+  it("GET /metrics expõe baseline de domain metrics para fluxo financeiro de transacoes", async () => {
+    const token = await registerAndLogin("domain-metrics-finance@test.dev");
+
+    const successResponse = await request(app)
+      .post("/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        type: "Entrada",
+        value: 150,
+        date: "2026-04-03",
+        description: "Recebimento baseline",
+      });
+
+    const errorResponse = await request(app)
+      .post("/transactions")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        type: "Entrada",
+      });
+
+    const metricsResponse = await request(app).get("/metrics");
+
+    expect(successResponse.status).toBe(201);
+    expect(errorResponse.status).toBe(400);
+    expect(metricsResponse.status).toBe(200);
+    expect(metricsResponse.text).toContain("# HELP domain_financial_flow_events_total");
+    expect(metricsResponse.text).toContain("# HELP domain_financial_flow_records_total");
+    expect(metricsResponse.text).toMatch(
+      /domain_financial_flow_events_total\{[^}]*flow="transactions"[^}]*operation="create"[^}]*outcome="success"[^}]*\}\s+([0-9.]+)/,
+    );
+    expect(metricsResponse.text).toMatch(
+      /domain_financial_flow_events_total\{[^}]*flow="transactions"[^}]*operation="create"[^}]*outcome="error"[^}]*\}\s+([0-9.]+)/,
+    );
+
+    const recordsMatch = metricsResponse.text.match(
+      /domain_financial_flow_records_total\{[^}]*flow="transactions"[^}]*operation="create"[^}]*\}\s+([0-9.]+)/,
+    );
+
+    expect(recordsMatch).not.toBeNull();
+    expect(Number(recordsMatch[1])).toBeGreaterThanOrEqual(1);
   });
 });
