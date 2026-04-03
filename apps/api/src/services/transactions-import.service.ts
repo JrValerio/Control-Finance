@@ -138,6 +138,24 @@ const loadExistingFingerprints = async (
   return new Set(result.rows.map((row) => row.import_fingerprint));
 };
 
+const loadExistingFingerprintsWithClient = async (
+  transactionClient: { query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<{ import_fingerprint: string }> }> },
+  userId: number | string,
+  fingerprints: string[],
+): Promise<Set<string>> => {
+  if (fingerprints.length === 0) {
+    return new Set();
+  }
+
+  const result = await transactionClient.query(
+    `SELECT import_fingerprint FROM transactions
+     WHERE user_id = $1 AND deleted_at IS NULL AND import_fingerprint = ANY($2)`,
+    [userId, fingerprints],
+  );
+
+  return new Set(result.rows.map((row) => row.import_fingerprint));
+};
+
 const toMoneyNumber = (value: unknown): number => {
   const parsedValue = Number(value);
   return Number.isFinite(parsedValue) ? Number(parsedValue.toFixed(2)) : 0;
@@ -1106,10 +1124,28 @@ export const dryRunTransactionsImportForUser = async (
     loadExistingFingerprints(userId, [...fingerprintMap.values()]),
     loadStructuredIncomeStatementsForUser(userId),
   ]);
+  const seenFingerprintsInFile = new Set<string>();
 
   const rows = validatedRows.map((row) => {
     if (row.status !== "valid" || !row.normalized) return row;
-    const fp = fingerprintMap.get(row.line);
+    const fp = String(fingerprintMap.get(row.line) || "").trim();
+
+    if (!fp) {
+      return row;
+    }
+
+    if (seenFingerprintsInFile.has(fp)) {
+      return {
+        ...row,
+        status: "duplicate",
+        statusDetail: "Ja existe uma linha equivalente no arquivo de importacao.",
+        fingerprint: fp,
+        normalized: null,
+      };
+    }
+
+    seenFingerprintsInFile.add(fp);
+
     if (existingSet.has(fp)) {
       return {
         ...row,
@@ -1393,10 +1429,45 @@ export const commitTransactionsImportForUser = async (
         imported: 0,
         income: 0,
         expense: 0,
+        createdTransactions: [],
       };
     }
 
-    const insertValuesPlaceholders = normalizedRows
+    const fingerprintCandidates = normalizedRows
+      .map((row) => (typeof row.fingerprint === "string" ? row.fingerprint.trim() : ""))
+      .filter(Boolean);
+    const existingFingerprints = await loadExistingFingerprintsWithClient(
+      transactionClient,
+      userId,
+      [...new Set(fingerprintCandidates)],
+    );
+    const seenFingerprints = new Set(existingFingerprints);
+
+    const dedupedRows = normalizedRows.filter((row) => {
+      const fingerprint = typeof row.fingerprint === "string" ? row.fingerprint.trim() : "";
+
+      if (!fingerprint) {
+        return true;
+      }
+
+      if (seenFingerprints.has(fingerprint)) {
+        return false;
+      }
+
+      seenFingerprints.add(fingerprint);
+      return true;
+    });
+
+    if (dedupedRows.length === 0) {
+      return {
+        imported: 0,
+        income: 0,
+        expense: 0,
+        createdTransactions: [],
+      };
+    }
+
+    const insertValuesPlaceholders = dedupedRows
       .map((_, rowIndex) => {
         const p = rowIndex * 10 + 2;
         return `($1, $${p}, $${p + 1}, $${p + 2}::date, $${p + 3}, $${p + 4}, $${p + 5}, $${p + 6}, $${p + 7}, NOW(), $${p + 8}, $${p + 9})`;
@@ -1405,7 +1476,7 @@ export const commitTransactionsImportForUser = async (
 
     const insertParams = [userId];
 
-    normalizedRows.forEach((row) => {
+    dedupedRows.forEach((row) => {
       insertParams.push(
         row.type,
         row.value,
@@ -1449,7 +1520,7 @@ export const commitTransactionsImportForUser = async (
     // transaction id with the original CSV line number.
     const createdTransactions = insertResult.rows.map((row, i) => ({
       id: Number(row.id),
-      line: normalizedRows[i]?.line ?? null,
+      line: dedupedRows[i]?.line ?? null,
       type: String(row.type),
       value: Number(row.value),
       date: toISODateOnly(row.date),
