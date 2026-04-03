@@ -1,15 +1,6 @@
 import type { RefObject } from "react";
 import type { MonthlySummary } from "../services/transactions.service";
-
-type MonthOverMonthDirection = "up" | "down" | "flat";
-type MonthOverMonthTone = "good" | "bad" | "neutral";
-
-interface MonthOverMonthMetric {
-  delta: number;
-  deltaPercent: number | null;
-  direction: MonthOverMonthDirection;
-  tone: MonthOverMonthTone;
-}
+import type { MonthOverMonthMetric, MonthOverMonthTone } from "./month-view.types";
 
 interface MonthViewSectionProps {
   sectionRef: RefObject<HTMLElement>;

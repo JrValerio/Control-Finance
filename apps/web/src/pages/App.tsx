@@ -16,6 +16,11 @@ import SalaryWidget from "../components/SalaryWidget";
 import ConsignadoOverviewWidget from "../components/ConsignadoOverviewWidget";
 import OperationalSummaryPanel from "../components/OperationalSummaryPanel";
 import MonthViewSection from "../components/MonthViewSection";
+import type {
+  MonthOverMonthDirection,
+  MonthOverMonthMetric,
+  MonthOverMonthTone,
+} from "../components/month-view.types";
 import TransactionList from "../components/TransactionList";
 import {
   transactionsService,
@@ -66,8 +71,6 @@ const HealthOverview = lazy(() => import("../components/HealthOverview"));
 const GoalsSection = lazy(() => import("../components/GoalsSection"));
 
 type SummaryMetricKey = "income" | "expense" | "balance";
-type MonthOverMonthDirection = "up" | "down" | "flat";
-type MonthOverMonthTone = "good" | "bad" | "neutral";
 type BudgetAlertStatus = Exclude<MonthlyBudgetStatus, "ok">;
 
 interface PaginationState {
@@ -101,13 +104,6 @@ interface TransactionModalPayload {
   date: string;
   description: string;
   notes: string;
-}
-
-interface MonthOverMonthMetric {
-  delta: number;
-  deltaPercent: number | null;
-  direction: MonthOverMonthDirection;
-  tone: MonthOverMonthTone;
 }
 
 interface AppProps {
