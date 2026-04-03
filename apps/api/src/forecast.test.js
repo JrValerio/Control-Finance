@@ -104,6 +104,16 @@ describe("POST /forecasts/recompute", () => {
     expect(typeof res.body.flipDetected).toBe("boolean");
     expect(res.body.engineVersion).toBe("v2");
     expect(res.body.incomeExpected).toBeNull();
+    expect(res.body._meta).toMatchObject({
+      balanceBasis: "net_month_transactions",
+      incomeBasis: "salary_profile_fallback",
+      pendingItems: {
+        bills: 0,
+        invoices: 0,
+        creditCardCycles: 0,
+      },
+    });
+    expect(Array.isArray(res.body._meta.fallbacksUsed)).toBe(true);
   });
 
   it("reflete gastos do mes nas metricas", async () => {
@@ -445,6 +455,12 @@ describe("computeForecast — projection semantics (deterministic)", () => {
     expect(result.billsPendingTotal).toBe(300);
     expect(result.billsPendingCount).toBe(1);
     expect(result.adjustedProjectedBalance).toBe(700);
+    expect(result._meta).toMatchObject({
+      balanceBasis: "bank_account",
+      pendingItems: {
+        bills: 1,
+      },
+    });
   });
 
   it("inclui fatura aberta como obrigacao futura sem tratar como saida liquidada", async () => {
@@ -698,6 +714,42 @@ describe("forecast — bills integration", () => {
       1,
     );
   });
+
+  it("recompute expõe pendingItems com invoices e ciclos de cartão", async () => {
+    const token = await registerAndLogin("fc-meta-pending-items@test.dev");
+    const userId = await getUserIdByEmail("fc-meta-pending-items@test.dev");
+
+    const cardResult = await dbQuery(
+      `INSERT INTO credit_cards (user_id, name, limit_total, closing_day, due_day)
+       VALUES ($1, 'Cartão principal', 5000, 20, 10)
+       RETURNING id`,
+      [userId],
+    );
+    const cardId = Number(cardResult.rows[0].id);
+
+    await dbQuery(
+      `INSERT INTO bills (user_id, title, amount, due_date, status, bill_type, credit_card_id)
+       VALUES ($1, 'Fatura de cartão', 700, $2, 'pending', 'credit_card_invoice', $3)`,
+      [userId, CURRENT_MONTH_END, cardId],
+    );
+
+    await dbQuery(
+      `INSERT INTO credit_card_purchases (user_id, credit_card_id, title, amount, purchase_date, status, statement_month)
+       VALUES ($1, $2, 'Compra aberta', 120, $3, 'open', $4)`,
+      [userId, cardId, CURRENT_MONTH_START, _now.toISOString().slice(0, 7)],
+    );
+
+    const res = await request(app)
+      .post("/forecasts/recompute")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body._meta.pendingItems).toMatchObject({
+      bills: 1,
+      invoices: 1,
+      creditCardCycles: 1,
+    });
+  });
 });
 
 // ─── Forecast — statement-aware income (deterministic) ───────────────────────
@@ -741,6 +793,12 @@ describe("computeForecast — statement-aware income (deterministic)", () => {
 
     expect(result.incomeExpected).toBe(4000);
     expect(result.projectedBalance).toBe(4000); // netToDate=0, adj=4000, daily=0
+    expect(result._meta).toMatchObject({
+      balanceBasis: "net_month_transactions",
+      incomeBasis: "salary_profile_fallback",
+    });
+    expect(result._meta.fallbacksUsed).toContain("balanceBasis:net_month_transactions");
+    expect(result._meta.fallbacksUsed).toContain("incomeBasis:salary_profile_fallback");
   });
 
   it("statement posted no mes: incomeAdjustment=0, incomeExpected=net_amount", async () => {
@@ -767,6 +825,10 @@ describe("computeForecast — statement-aware income (deterministic)", () => {
     expect(result.incomeExpected).toBe(5000);
     // posted statement already in transactions — no cash adjustment
     expect(result.projectedBalance).toBe(0); // netToDate=0, adj=0, daily=0
+    expect(result._meta).toMatchObject({
+      incomeBasis: "confirmed_statement",
+    });
+    expect(result._meta.fallbacksUsed).not.toContain("incomeBasis:salary_profile_fallback");
   });
 
   it("statement draft com payment_date futuro: nao entra na projecao sem confirmacao", async () => {

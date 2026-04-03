@@ -69,5 +69,6 @@ export type {
   ForecastBankLimitProjection,
   ForecastCurrentResponse,
   ForecastHttpPayload,
+  ForecastResponseMeta,
   ForecastRecomputeResponse,
 } from "./forecast-response.schema";

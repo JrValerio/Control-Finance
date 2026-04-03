@@ -91,6 +91,66 @@ const buildBankLimitProjection = (bankLimitTotal, adjustedProjectedBalance) => {
   };
 };
 
+const resolveBalanceBasis = (activeAccountsCount) =>
+  activeAccountsCount > 0 ? "bank_account" : "net_month_transactions";
+
+const resolveIncomeBasis = (hasStatementsThisMonth) =>
+  hasStatementsThisMonth ? "confirmed_statement" : "salary_profile_fallback";
+
+const getForecastPendingItems = async (userId, monthEnd, currentMonth) => {
+  const billsResult = await dbQuery(
+    `SELECT
+       COUNT(*)::int AS bills_count,
+       COUNT(*) FILTER (WHERE bill_type = 'credit_card_invoice')::int AS invoices_count
+     FROM bills
+     WHERE user_id  = $1
+       AND status   = 'pending'
+       AND due_date <= $2`,
+    [userId, monthEnd],
+  );
+
+  const cyclesResult = await dbQuery(
+    `SELECT COUNT(DISTINCT statement_month)::int AS cycles_count
+     FROM credit_card_purchases
+     WHERE user_id = $1
+       AND status = 'open'
+       AND statement_month IS NOT NULL
+       AND statement_month <= $2`,
+    [userId, currentMonth],
+  );
+
+  return {
+    bills: Number(billsResult.rows[0]?.bills_count || 0),
+    invoices: Number(billsResult.rows[0]?.invoices_count || 0),
+    creditCardCycles: Number(cyclesResult.rows[0]?.cycles_count || 0),
+  };
+};
+
+const buildForecastMeta = async ({
+  userId,
+  monthEnd,
+  currentMonth,
+  balanceBasis,
+  incomeBasis,
+}) => {
+  const pendingItems = await getForecastPendingItems(userId, monthEnd, currentMonth);
+  const fallbacksUsed = [];
+
+  if (balanceBasis === "net_month_transactions") {
+    fallbacksUsed.push("balanceBasis:net_month_transactions");
+  }
+  if (incomeBasis === "salary_profile_fallback") {
+    fallbacksUsed.push("incomeBasis:salary_profile_fallback");
+  }
+
+  return {
+    balanceBasis,
+    incomeBasis,
+    pendingItems,
+    fallbacksUsed,
+  };
+};
+
 /**
  * Computes (or recomputes) the forecast for the given user and month,
  * persists it, and returns the result.
@@ -204,6 +264,8 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
     : salaryMonthly != null && payday != null && payday > todayDay
       ? salaryMonthly
       : 0;
+  const balanceBasis = resolveBalanceBasis(activeAccountsCount);
+  const incomeBasis = resolveIncomeBasis(hasStatementsThisMonth);
 
   // 5. Projected balance
   const netToDate = incomeToDate - spendingToDate;
@@ -256,6 +318,13 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
   const monthEnd = monthEndStr(now);
   const { billsTotal, billsCount } = await getPendingBillsDueByDate(uid, monthEnd);
   const adjustedProjectedBalance = Number((pb - billsTotal).toFixed(2));
+  const meta = await buildForecastMeta({
+    userId: uid,
+    monthEnd,
+    currentMonth,
+    balanceBasis,
+    incomeBasis,
+  });
 
   return {
     month: mStart.slice(0, 7),
@@ -272,6 +341,7 @@ export const computeForecast = async (userId, { now = new Date() } = {}) => {
     billsPendingCount: billsCount,
     adjustedProjectedBalance,
     bankLimit: buildBankLimitProjection(effectiveBankLimitTotal, adjustedProjectedBalance),
+    _meta: meta,
   };
 };
 
@@ -291,6 +361,7 @@ export const getLatestForecast = async (userId, { now = new Date() } = {}) => {
 
   const forecast = rowToForecast(result.rows[0]);
   const monthEnd = monthEndStr(now);
+  const currentMonth = mStart.slice(0, 7);
   const { billsTotal, billsCount } = await getPendingBillsDueByDate(uid, monthEnd);
   forecast.billsPendingTotal = Number(billsTotal.toFixed(2));
   forecast.billsPendingCount = billsCount;
@@ -318,9 +389,29 @@ export const getLatestForecast = async (userId, { now = new Date() } = {}) => {
   const effectiveBankLimitTotal =
     activeAccountsCount > 0 ? totalBankLimitTotal : profileBankLimitTotal;
 
+  const stmtExpectedResult = await dbQuery(
+    `SELECT COALESCE(SUM(st.net_amount), 0) AS total
+     FROM income_statements st
+     JOIN income_sources s ON s.id = st.income_source_id
+     WHERE s.user_id = $1
+       AND st.reference_month = $2
+       AND st.status = 'posted'`,
+    [uid, currentMonth],
+  );
+  const hasStatementsThisMonth = Number(stmtExpectedResult.rows[0]?.total || 0) > 0;
+  const balanceBasis = resolveBalanceBasis(activeAccountsCount);
+  const incomeBasis = resolveIncomeBasis(hasStatementsThisMonth);
+
   forecast.bankLimit = buildBankLimitProjection(
     effectiveBankLimitTotal,
     forecast.adjustedProjectedBalance,
   );
+  forecast._meta = await buildForecastMeta({
+    userId: uid,
+    monthEnd,
+    currentMonth,
+    balanceBasis,
+    incomeBasis,
+  });
   return forecast;
 };
