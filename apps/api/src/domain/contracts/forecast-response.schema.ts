@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  ForecastBalanceBasisSchema,
+  ForecastIncomeBasisSchema,
+  ForecastPendingItemsSchema,
+} from "./forecast.schema";
 
 const YearMonthSchema = z.string().regex(/^\d{4}-\d{2}$/);
 
@@ -17,6 +22,13 @@ const ForecastBankLimitProjectionSchema = z.object({
   alertTriggered: z.boolean(),
 });
 
+const ForecastResponseMetaSchema = z.object({
+  balanceBasis: ForecastBalanceBasisSchema,
+  incomeBasis: ForecastIncomeBasisSchema,
+  pendingItems: ForecastPendingItemsSchema,
+  fallbacksUsed: z.array(z.string()),
+});
+
 const ForecastHttpPayloadSchema = z.object({
   month: YearMonthSchema,
   engineVersion: z.string(),
@@ -32,6 +44,7 @@ const ForecastHttpPayloadSchema = z.object({
   billsPendingCount: z.number().int().nonnegative(),
   adjustedProjectedBalance: z.number(),
   bankLimit: ForecastBankLimitProjectionSchema.nullable(),
+  _meta: ForecastResponseMetaSchema,
 });
 
 export const ForecastCurrentResponseSchema = ForecastHttpPayloadSchema.nullable();
@@ -39,6 +52,7 @@ export const ForecastCurrentResponseSchema = ForecastHttpPayloadSchema.nullable(
 export const ForecastRecomputeResponseSchema = ForecastHttpPayloadSchema;
 
 export type ForecastBankLimitProjection = z.infer<typeof ForecastBankLimitProjectionSchema>;
+export type ForecastResponseMeta = z.infer<typeof ForecastResponseMetaSchema>;
 export type ForecastHttpPayload = z.infer<typeof ForecastHttpPayloadSchema>;
 export type ForecastCurrentResponse = z.infer<typeof ForecastCurrentResponseSchema>;
 export type ForecastRecomputeResponse = z.infer<typeof ForecastRecomputeResponseSchema>;
