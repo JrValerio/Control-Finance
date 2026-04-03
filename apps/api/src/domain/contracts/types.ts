@@ -44,3 +44,11 @@ export type {
   CoreFinancialSemanticContract,
   CoreFinancialSemanticSourceMap,
 } from "./core-financial-semantic-contract.schema";
+
+export type {
+  TaxDocumentPreview,
+  TaxDocumentPreviewDocumentType,
+  TaxDocumentPreviewResponse,
+  TaxDocumentPreviewSourceType,
+  TaxDocumentPreviewTextSource,
+} from "./tax-document-preview-response.schema";

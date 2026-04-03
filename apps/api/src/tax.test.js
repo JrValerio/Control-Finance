@@ -13,6 +13,7 @@ import {
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import { resetImportRateLimiterState, resetWriteRateLimiterState } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
+import { TaxDocumentPreviewResponseSchema } from "./domain/contracts/tax-document-preview-response.schema.ts";
 import { resolveTaxDocumentAbsolutePath } from "./services/tax-document-storage.service.js";
 
 const TEST_TAX_STORAGE_DIR = path.join(os.tmpdir(), "control-finance-tax-documents-tests");
@@ -113,6 +114,21 @@ describe("Tax API foundation", () => {
       .attach("file", Buffer.from("%PDF-1.4\nfake", "utf8"), {
         filename: "informe.pdf",
         contentType: "application/pdf",
+      });
+
+    expectErrorResponseWithRequestId(
+      response,
+      401,
+      "Token de autenticacao ausente ou invalido.",
+    );
+  });
+
+  it("POST /tax/documents/preview retorna 401 sem token", async () => {
+    const response = await request(app)
+      .post("/tax/documents/preview")
+      .attach("file", Buffer.from("preview", "utf8"), {
+        filename: "preview.csv",
+        contentType: "text/csv",
       });
 
     expectErrorResponseWithRequestId(
@@ -497,6 +513,53 @@ describe("Tax API foundation", () => {
       pageSize: 20,
       total: 0,
     });
+  });
+
+  it("POST /tax/documents/preview retorna 400 quando arquivo fiscal nao e enviado", async () => {
+    const token = await registerAndLogin("tax-preview-missing-file@test.dev");
+
+    const response = await request(app)
+      .post("/tax/documents/preview")
+      .set("Authorization", `Bearer ${token}`);
+
+    expectErrorResponseWithRequestId(response, 400, "Arquivo fiscal (file) e obrigatorio.");
+  });
+
+  it("POST /tax/documents/preview classifica documento e retorna sourceType canonico", async () => {
+    const token = await registerAndLogin("tax-preview-employer@test.dev");
+
+    const response = await request(app)
+      .post("/tax/documents/preview")
+      .set("Authorization", `Bearer ${token}`)
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+          ].join("\n"),
+          "utf8",
+        ),
+        {
+          filename: "preview-employer.csv",
+          contentType: "text/csv",
+        },
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.body.preview).toMatchObject({
+      sourceType: "income",
+      documentType: "income_report_employer",
+      extractorAvailable: true,
+      textSource: "csv_text",
+    });
+    expect(Array.isArray(response.body.preview.reasons)).toBe(true);
+    expect(Array.isArray(response.body.preview.textPreviewLines)).toBe(true);
+
+    const parsed = TaxDocumentPreviewResponseSchema.safeParse(response.body);
+    expect(parsed.success).toBe(true);
   });
 
   it("GET /tax/documents retorna documentos enviados pelo usuario autenticado", async () => {

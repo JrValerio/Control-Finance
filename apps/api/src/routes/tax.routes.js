@@ -2,6 +2,7 @@ import { Router } from "express";
 import path from "node:path";
 import multer from "multer";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
+import { TaxDocumentPreviewResponseSchema } from "../domain/contracts/tax-document-preview-response.schema.ts";
 import { getTaxBootstrapByUser } from "../services/tax-bootstrap.service.js";
 import {
   createTaxDocumentForUser,
@@ -11,6 +12,7 @@ import {
 } from "../services/tax-documents.service.js";
 import { exportTaxDossierByYear } from "../services/tax-export.service.js";
 import { processTaxDocumentByIdForUser } from "../services/tax-extraction.service.js";
+import { previewTaxDocumentBySourceType } from "../services/tax-document-preview.service.js";
 import { syncAppTaxFactsByYear } from "../services/tax-app-sync.service.js";
 import { createManualTaxFactByUser, listTaxFactsByUser } from "../services/tax-facts.service.js";
 import { getTaxObligationByYear } from "../services/tax-obligation.service.js";
@@ -22,6 +24,7 @@ import {
   previewTaxSummaryByYear,
   rebuildTaxSummaryByYear,
 } from "../services/tax-summary.service.js";
+import { respondValidated } from "./respond-validated.js";
 
 const router = Router();
 const TAX_DOCUMENT_MAX_FILE_SIZE_BYTES = Number(
@@ -120,6 +123,34 @@ router.post("/documents", (req, res, next) => {
       ensureValidTaxDocumentFile(req.file);
       const document = await createTaxDocumentForUser(req.user.id, req.body ?? {}, req.file);
       return res.status(201).json({ document });
+    } catch (serviceError) {
+      return next(serviceError);
+    }
+  });
+});
+
+router.post("/documents/preview", (req, res, next) => {
+  upload.single("file")(req, res, async (error) => {
+    if (error) {
+      let normalizedError = error;
+
+      if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+        normalizedError = createError(413, "Arquivo muito grande.");
+      }
+
+      return next(normalizedError);
+    }
+
+    try {
+      ensureValidTaxDocumentFile(req.file);
+      const preview = await previewTaxDocumentBySourceType(req.file);
+      return respondValidated(
+        TaxDocumentPreviewResponseSchema,
+        { preview },
+        req,
+        res,
+        { routeLabel: "POST /tax/documents/preview" },
+      );
     } catch (serviceError) {
       return next(serviceError);
     }

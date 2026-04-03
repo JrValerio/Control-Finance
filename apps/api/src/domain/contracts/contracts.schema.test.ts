@@ -8,6 +8,7 @@ import {
 import { ForecastResultSchema } from "./forecast.schema";
 import { IncomeEntrySchema } from "./income.schema";
 import { ObligationSchema } from "./obligation.schema";
+import { TaxDocumentPreviewResponseSchema } from "./tax-document-preview-response.schema";
 
 describe("financial contracts schemas", () => {
   describe("BalanceSnapshotSchema", () => {
@@ -241,6 +242,44 @@ describe("financial contracts schemas", () => {
         realized: ["dashboard.bankBalance"],
         currentPosition: ["dashboard.bankBalance"],
         projection: ["forecast.adjustedProjectedBalance"],
+      });
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("TaxDocumentPreviewResponseSchema", () => {
+    it("accepts preview payload grouped by source type", () => {
+      const result = TaxDocumentPreviewResponseSchema.safeParse({
+        preview: {
+          sourceType: "income",
+          documentType: "income_report_employer",
+          confidenceScore: 0.97,
+          extractorAvailable: true,
+          sourceLabelSuggestion: null,
+          reasons: ["matched_employer_signals"],
+          warnings: [],
+          textSource: "csv_text",
+          textPreviewLines: ["Comprovante de Rendimentos"],
+        },
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects preview payload with invalid source type", () => {
+      const result = TaxDocumentPreviewResponseSchema.safeParse({
+        preview: {
+          sourceType: "other",
+          documentType: "income_report_employer",
+          confidenceScore: 0.97,
+          extractorAvailable: true,
+          sourceLabelSuggestion: null,
+          reasons: ["matched_employer_signals"],
+          warnings: [],
+          textSource: "csv_text",
+          textPreviewLines: ["Comprovante de Rendimentos"],
+        },
       });
 
       expect(result.success).toBe(false);
