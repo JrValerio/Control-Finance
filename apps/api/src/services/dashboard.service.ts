@@ -50,12 +50,34 @@ interface DashboardSnapshot {
     projectedBalance: number;
     month: string;
   } | null;
+  semanticCore: {
+    semanticsVersion: "v1";
+    realized: {
+      confirmedInflowTotal: number;
+      settledOutflowTotal: number;
+      netAmount: number;
+      referenceMonth: string;
+    };
+    currentPosition: {
+      bankBalance: number;
+      technicalBalance: number;
+      asOf: string;
+    };
+    projection: {
+      referenceMonth: string;
+      projectedBalance: number;
+      adjustedProjectedBalance: number;
+      expectedInflow: number | null;
+    };
+  };
   consignado: {
     monthlyTotal: number;
     contractsCount: number;
     comprometimentoPct: number | null;
   };
 }
+
+type DashboardSnapshotBase = Omit<DashboardSnapshot, "semanticCore">;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -67,6 +89,78 @@ const toISODate = (dateValue: Date): string => dateValue.toISOString().slice(0, 
 
 // Returns YYYY-MM from a Date
 const toYearMonth = (dateValue: Date): string => dateValue.toISOString().slice(0, 7);
+
+const normalizeYearMonth = (value: string | Date | null | undefined): string | null => {
+  if (value == null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return toYearMonth(value);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+
+  const fromDate = new Date(raw);
+  if (!Number.isNaN(fromDate.getTime())) {
+    return toYearMonth(fromDate);
+  }
+
+  if (/^\d{4}-\d{2}/.test(raw)) {
+    return raw.slice(0, 7);
+  }
+
+  return null;
+};
+
+const buildDashboardSemanticCore = (
+  snapshot: DashboardSnapshotBase,
+  asOf: Date,
+): DashboardSnapshot["semanticCore"] => {
+  const confirmedInflowTotal = Number(snapshot.income.receivedThisMonth.toFixed(2));
+  const settledOutflowTotal = 0;
+  const netAmount = Number((confirmedInflowTotal - settledOutflowTotal).toFixed(2));
+
+  const projectionReferenceMonth = snapshot.forecast?.month ?? snapshot.income.referenceMonth;
+  const projectedBalanceBase = snapshot.forecast?.projectedBalance ?? snapshot.bankBalance;
+  const pendingObligationsTotal =
+    snapshot.bills.overdueTotal +
+    snapshot.bills.dueSoonTotal +
+    snapshot.bills.upcomingTotal +
+    snapshot.cards.openPurchasesTotal +
+    snapshot.cards.pendingInvoicesTotal;
+  const expectedInflow =
+    snapshot.income.pendingThisMonth > 0 ? snapshot.income.pendingThisMonth : null;
+  const adjustedProjectedBalance = Number(
+    (projectedBalanceBase + (expectedInflow ?? 0) - pendingObligationsTotal).toFixed(2),
+  );
+
+  return {
+    semanticsVersion: "v1",
+    realized: {
+      confirmedInflowTotal,
+      settledOutflowTotal,
+      netAmount,
+      referenceMonth: snapshot.income.referenceMonth,
+    },
+    currentPosition: {
+      bankBalance: snapshot.bankBalance,
+      technicalBalance: Number(
+        (snapshot.bankBalance - snapshot.bills.overdueTotal).toFixed(2),
+      ),
+      asOf: asOf.toISOString(),
+    },
+    projection: {
+      referenceMonth: projectionReferenceMonth,
+      projectedBalance: Number(projectedBalanceBase.toFixed(2)),
+      adjustedProjectedBalance,
+      expectedInflow,
+    },
+  };
+};
 
 // ─── Snapshot ─────────────────────────────────────────────────────────────────
 
@@ -166,8 +260,9 @@ export const getDashboardSnapshot = async (
   const bills = (billsRes.rows[0] ?? {}) as BillsRow;
   const income = (incomeRes.rows[0] ?? {}) as IncomeRow;
   const forecastRow = (forecastRes.rows[0] ?? null) as ForecastRow | null;
+  const forecastMonth = normalizeYearMonth(forecastRow?.month);
 
-  return {
+  const baseSnapshot: DashboardSnapshotBase = {
     bankBalance: toNum(bankRes.rows[0]?.total as NumericLike),
     bills: {
       overdueCount: toInt(bills.overdue_count),
@@ -189,7 +284,7 @@ export const getDashboardSnapshot = async (
     forecast: forecastRow
       ? {
           projectedBalance: toNum(forecastRow.projected_balance),
-          month: String(forecastRow.month),
+          month: forecastMonth ?? currentMonth,
         }
       : null,
     consignado: (() => {
@@ -203,5 +298,10 @@ export const getDashboardSnapshot = async (
           : null;
       return { monthlyTotal, contractsCount, comprometimentoPct };
     })(),
+  };
+
+  return {
+    ...baseSnapshot,
+    semanticCore: buildDashboardSemanticCore(baseSnapshot, now),
   };
 };

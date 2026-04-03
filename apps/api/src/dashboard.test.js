@@ -79,6 +79,7 @@ const DASHBOARD_TOP_LEVEL_KEYS = [
   "cards",
   "income",
   "forecast",
+  "semanticCore",
   "consignado",
 ].sort();
 
@@ -96,6 +97,33 @@ const DASHBOARD_CARDS_KEYS = ["openPurchasesTotal", "pendingInvoicesTotal"].sort
 const DASHBOARD_INCOME_KEYS = ["receivedThisMonth", "pendingThisMonth", "referenceMonth"].sort();
 
 const DASHBOARD_CONSIGNADO_KEYS = ["monthlyTotal", "contractsCount", "comprometimentoPct"].sort();
+
+const DASHBOARD_SEMANTIC_CORE_KEYS = [
+  "semanticsVersion",
+  "realized",
+  "currentPosition",
+  "projection",
+].sort();
+
+const DASHBOARD_SEMANTIC_REALIZED_KEYS = [
+  "confirmedInflowTotal",
+  "settledOutflowTotal",
+  "netAmount",
+  "referenceMonth",
+].sort();
+
+const DASHBOARD_SEMANTIC_CURRENT_POSITION_KEYS = [
+  "bankBalance",
+  "technicalBalance",
+  "asOf",
+].sort();
+
+const DASHBOARD_SEMANTIC_PROJECTION_KEYS = [
+  "referenceMonth",
+  "projectedBalance",
+  "adjustedProjectedBalance",
+  "expectedInflow",
+].sort();
 
 const getUserIdByEmail = async (email) => {
   const userRes = await dbQuery("SELECT id FROM users WHERE email = $1 LIMIT 1", [email]);
@@ -434,6 +462,16 @@ describe("dashboard snapshot", () => {
     expect(Object.keys(res.body.cards).sort()).toEqual(DASHBOARD_CARDS_KEYS);
     expect(Object.keys(res.body.income).sort()).toEqual(DASHBOARD_INCOME_KEYS);
     expect(Object.keys(res.body.consignado).sort()).toEqual(DASHBOARD_CONSIGNADO_KEYS);
+    expect(Object.keys(res.body.semanticCore).sort()).toEqual(DASHBOARD_SEMANTIC_CORE_KEYS);
+    expect(Object.keys(res.body.semanticCore.realized).sort()).toEqual(
+      DASHBOARD_SEMANTIC_REALIZED_KEYS,
+    );
+    expect(Object.keys(res.body.semanticCore.currentPosition).sort()).toEqual(
+      DASHBOARD_SEMANTIC_CURRENT_POSITION_KEYS,
+    );
+    expect(Object.keys(res.body.semanticCore.projection).sort()).toEqual(
+      DASHBOARD_SEMANTIC_PROJECTION_KEYS,
+    );
 
     expect(res.body).toStrictEqual({
       bankBalance: 0,
@@ -455,6 +493,26 @@ describe("dashboard snapshot", () => {
         referenceMonth: currentMonth(),
       },
       forecast: null,
+      semanticCore: {
+        semanticsVersion: "v1",
+        realized: {
+          confirmedInflowTotal: 0,
+          settledOutflowTotal: 0,
+          netAmount: 0,
+          referenceMonth: currentMonth(),
+        },
+        currentPosition: {
+          bankBalance: 0,
+          technicalBalance: 0,
+          asOf: expect.any(String),
+        },
+        projection: {
+          referenceMonth: currentMonth(),
+          projectedBalance: 0,
+          adjustedProjectedBalance: 0,
+          expectedInflow: null,
+        },
+      },
       consignado: {
         monthlyTotal: 0,
         contractsCount: 0,
@@ -510,6 +568,7 @@ describe("dashboard snapshot", () => {
     expect(Object.keys(res.body.cards).sort()).toEqual(DASHBOARD_CARDS_KEYS);
     expect(Object.keys(res.body.income).sort()).toEqual(DASHBOARD_INCOME_KEYS);
     expect(Object.keys(res.body.consignado).sort()).toEqual(DASHBOARD_CONSIGNADO_KEYS);
+    expect(Object.keys(res.body.semanticCore).sort()).toEqual(DASHBOARD_SEMANTIC_CORE_KEYS);
 
     expect(typeof res.body.bankBalance).toBe("number");
     expect(typeof res.body.bills.overdueTotal).toBe("number");
@@ -520,6 +579,17 @@ describe("dashboard snapshot", () => {
     expect(typeof res.body.income.pendingThisMonth).toBe("number");
     expect(typeof res.body.consignado.monthlyTotal).toBe("number");
     expect(typeof res.body.consignado.contractsCount).toBe("number");
+    expect(res.body.semanticCore.semanticsVersion).toBe("v1");
+    expect(res.body.semanticCore.realized.confirmedInflowTotal).toBe(
+      res.body.income.receivedThisMonth,
+    );
+    expect(res.body.semanticCore.currentPosition.bankBalance).toBe(res.body.bankBalance);
+    expect(res.body.semanticCore.projection.projectedBalance).toBe(
+      res.body.forecast ? res.body.forecast.projectedBalance : res.body.bankBalance,
+    );
+    expect(res.body.semanticCore.projection.expectedInflow).toBe(
+      res.body.income.pendingThisMonth > 0 ? res.body.income.pendingThisMonth : null,
+    );
     expect(
       res.body.consignado.comprometimentoPct === null
         ? true
@@ -694,6 +764,7 @@ describe("dashboard snapshot", () => {
     expect(Object.keys(res.body.cards).sort()).toEqual(DASHBOARD_CARDS_KEYS);
     expect(Object.keys(res.body.income).sort()).toEqual(DASHBOARD_INCOME_KEYS);
     expect(Object.keys(res.body.consignado).sort()).toEqual(DASHBOARD_CONSIGNADO_KEYS);
+    expect(Object.keys(res.body.semanticCore).sort()).toEqual(DASHBOARD_SEMANTIC_CORE_KEYS);
 
     const bankIsPositive = res.body.bankBalance > 0;
     expect(bankIsPositive).toBe(scenario.expected.bankSign === "positive");
@@ -713,6 +784,14 @@ describe("dashboard snapshot", () => {
 
     const cardExposure = res.body.cards.openPurchasesTotal + res.body.cards.pendingInvoicesTotal;
     expect(cardExposure > 0).toBe(scenario.expected.cardImpacts);
+
+    expect(res.body.semanticCore.realized.confirmedInflowTotal).toBe(
+      res.body.income.receivedThisMonth,
+    );
+    expect(res.body.semanticCore.currentPosition.bankBalance).toBe(res.body.bankBalance);
+    expect(res.body.semanticCore.projection.referenceMonth).toBe(
+      res.body.forecast ? res.body.forecast.month : res.body.income.referenceMonth,
+    );
 
     if (scenario.expected.forecastMode === "available") {
       expect(res.body.forecast).not.toBeNull();
