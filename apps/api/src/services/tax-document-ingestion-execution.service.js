@@ -36,6 +36,122 @@ const normalizeExecuteWhenAllowed = (value) => {
 const selectExecutionBlockingRules = (preview) =>
   preview.blockingRules.filter((rule) => EXECUTION_BLOCKING_CODES.has(rule.code));
 
+const mapRuleCodes = (rules = []) => rules.map((rule) => rule.code);
+
+const buildTransparency = ({
+  preview,
+  suggestion,
+  execution,
+  blockedRules,
+}) => ({
+  detected: {
+    sourceType: preview.sourceType,
+    documentType: preview.documentType,
+    detectedState: preview.detectedState,
+    reasonCodes: [...preview.reasons],
+  },
+  blocked: {
+    hasBlockingRules: blockedRules.length > 0,
+    rules: blockedRules,
+  },
+  suggested: {
+    allowed: suggestion.allowed,
+    sourceLabelSuggestion: suggestion.sourceLabelSuggestion,
+    reasonCodes: suggestion.allowed
+      ? suggestion.sourceLabelSuggestion
+        ? ["source_label_suggestion_available"]
+        : ["source_label_suggestion_not_available"]
+      : ["suggestion_not_allowed_for_source_type"],
+  },
+  executed: {
+    requested: execution.requested,
+    allowed: execution.allowed,
+    status: execution.status,
+    reasonCodes:
+      execution.status === "executed"
+        ? ["execution_completed"]
+        : execution.status === "not_requested"
+          ? ["execution_not_requested"]
+          : mapRuleCodes(execution.blockingRules),
+  },
+});
+
+const buildAuditTrail = ({
+  preview,
+  ingestion,
+  suggestion,
+  execution,
+}) => {
+  const entries = [
+    {
+      step: "detected",
+      outcome: preview.detectedState === "blocked" ? "blocked" : "allowed",
+      sourceType: preview.sourceType,
+      documentId: null,
+      reasonCodes: [...preview.reasons],
+      reasonMessage: `Documento detectado como ${preview.documentType} no sourceType ${preview.sourceType}.`,
+    },
+  ];
+
+  if (ingestion.blockingRules.length > 0 || execution.blockingRules.length > 0) {
+    const blockedCodes = [
+      ...mapRuleCodes(ingestion.blockingRules),
+      ...mapRuleCodes(execution.blockingRules),
+    ];
+    const uniqueBlockedCodes = [...new Set(blockedCodes)];
+
+    entries.push({
+      step: "blocked",
+      outcome: "blocked",
+      sourceType: preview.sourceType,
+      documentId: ingestion.documentId,
+      reasonCodes: uniqueBlockedCodes,
+      reasonMessage: "Fluxo documental teve bloqueios operacionais para o tipo detectado.",
+    });
+  }
+
+  entries.push({
+    step: "suggested",
+    outcome: suggestion.allowed ? "allowed" : "skipped",
+    sourceType: preview.sourceType,
+    documentId: ingestion.documentId,
+    reasonCodes: suggestion.allowed
+      ? suggestion.sourceLabelSuggestion
+        ? ["source_label_suggestion_available"]
+        : ["source_label_suggestion_not_available"]
+      : ["suggestion_not_allowed_for_source_type"],
+    reasonMessage: suggestion.allowed
+      ? "Sugestao operacional avaliada para o tipo detectado."
+      : "Sugestao nao permitida para o tipo detectado.",
+  });
+
+  entries.push({
+    step: "executed",
+    outcome:
+      execution.status === "executed"
+        ? "executed"
+        : execution.status === "not_allowed"
+          ? "blocked"
+          : "skipped",
+    sourceType: preview.sourceType,
+    documentId: execution.documentId || ingestion.documentId,
+    reasonCodes:
+      execution.status === "executed"
+        ? ["execution_completed"]
+        : execution.status === "not_requested"
+          ? ["execution_not_requested"]
+          : mapRuleCodes(execution.blockingRules),
+    reasonMessage:
+      execution.status === "executed"
+        ? "Execucao automatica concluida para o tipo detectado."
+        : execution.status === "not_requested"
+          ? "Execucao automatica nao requisitada para esta operacao."
+          : "Execucao automatica bloqueada pelas regras do tipo detectado.",
+  });
+
+  return entries;
+};
+
 const buildIngestionPayload = (payload = {}, preview) => {
   const normalizedPayload = payload && typeof payload === "object" ? { ...payload } : {};
   const hasSourceLabel =
@@ -60,27 +176,43 @@ export const ingestAndExecuteTaxDocumentBySourceType = async ({
   const ingestionAllowed = preview.detectedState !== "blocked";
 
   if (!ingestionAllowed) {
+    const suggestion = {
+      allowed: preview.capabilities.canSuggest,
+      sourceLabelSuggestion: preview.capabilities.canSuggest
+        ? preview.sourceLabelSuggestion
+        : null,
+    };
+    const execution = {
+      requested: executionRequested,
+      allowed: false,
+      status: "not_allowed",
+      documentId: null,
+      blockingRules: selectExecutionBlockingRules(preview),
+    };
+    const ingestion = {
+      allowed: false,
+      status: "blocked",
+      documentId: null,
+      blockingRules: [...preview.blockingRules],
+    };
+
     return {
       preview,
-      ingestion: {
-        allowed: false,
-        status: "blocked",
-        documentId: null,
-        blockingRules: [...preview.blockingRules],
-      },
-      suggestion: {
-        allowed: preview.capabilities.canSuggest,
-        sourceLabelSuggestion: preview.capabilities.canSuggest
-          ? preview.sourceLabelSuggestion
-          : null,
-      },
-      execution: {
-        requested: executionRequested,
-        allowed: false,
-        status: "not_allowed",
-        documentId: null,
-        blockingRules: selectExecutionBlockingRules(preview),
-      },
+      ingestion,
+      suggestion,
+      execution,
+      transparency: buildTransparency({
+        preview,
+        suggestion,
+        execution,
+        blockedRules: [...ingestion.blockingRules],
+      }),
+      auditTrail: buildAuditTrail({
+        preview,
+        ingestion,
+        suggestion,
+        execution,
+      }),
     };
   }
 
@@ -106,26 +238,42 @@ export const ingestAndExecuteTaxDocumentBySourceType = async ({
     executionBlockingRules = selectExecutionBlockingRules(preview);
   }
 
+  const ingestion = {
+    allowed: true,
+    status: "ingested",
+    documentId: Number(ingestedDocument.id),
+    blockingRules: [],
+  };
+  const suggestion = {
+    allowed: preview.capabilities.canSuggest,
+    sourceLabelSuggestion: preview.capabilities.canSuggest
+      ? preview.sourceLabelSuggestion
+      : null,
+  };
+  const execution = {
+    requested: executionRequested,
+    allowed: executionAllowed,
+    status: executionStatus,
+    documentId: executionDocumentId,
+    blockingRules: executionBlockingRules,
+  };
+
   return {
     preview,
-    ingestion: {
-      allowed: true,
-      status: "ingested",
-      documentId: Number(ingestedDocument.id),
-      blockingRules: [],
-    },
-    suggestion: {
-      allowed: preview.capabilities.canSuggest,
-      sourceLabelSuggestion: preview.capabilities.canSuggest
-        ? preview.sourceLabelSuggestion
-        : null,
-    },
-    execution: {
-      requested: executionRequested,
-      allowed: executionAllowed,
-      status: executionStatus,
-      documentId: executionDocumentId,
-      blockingRules: executionBlockingRules,
-    },
+    ingestion,
+    suggestion,
+    execution,
+    transparency: buildTransparency({
+      preview,
+      suggestion,
+      execution,
+      blockedRules: [...execution.blockingRules],
+    }),
+    auditTrail: buildAuditTrail({
+      preview,
+      ingestion,
+      suggestion,
+      execution,
+    }),
   };
 };

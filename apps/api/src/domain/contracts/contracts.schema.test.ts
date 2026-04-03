@@ -364,6 +364,47 @@ describe("financial contracts schemas", () => {
           documentId: 42,
           blockingRules: [],
         },
+        transparency: {
+          detected: {
+            sourceType: "income",
+            documentType: "income_report_employer",
+            detectedState: "ready",
+            reasonCodes: ["matched_employer_signals"],
+          },
+          blocked: {
+            hasBlockingRules: false,
+            rules: [],
+          },
+          suggested: {
+            allowed: true,
+            sourceLabelSuggestion: "ACME LTDA",
+            reasonCodes: ["source_label_suggestion_available"],
+          },
+          executed: {
+            requested: true,
+            allowed: true,
+            status: "executed",
+            reasonCodes: ["execution_completed"],
+          },
+        },
+        auditTrail: [
+          {
+            step: "detected",
+            outcome: "allowed",
+            sourceType: "income",
+            documentId: null,
+            reasonCodes: ["matched_employer_signals"],
+            reasonMessage: "Documento detectado como income_report_employer no sourceType income.",
+          },
+          {
+            step: "executed",
+            outcome: "executed",
+            sourceType: "income",
+            documentId: 42,
+            reasonCodes: ["execution_completed"],
+            reasonMessage: "Execucao automatica concluida para o tipo detectado.",
+          },
+        ],
       });
 
       expect(result.success).toBe(true);
@@ -416,6 +457,119 @@ describe("financial contracts schemas", () => {
             },
           ],
         },
+        transparency: {
+          detected: {
+            sourceType: "support",
+            documentType: "bank_statement_support",
+            detectedState: "review_required",
+            reasonCodes: ["matched_bank_statement_support_signals"],
+          },
+          blocked: {
+            hasBlockingRules: true,
+            rules: [
+              {
+                code: "source_type_requires_manual_review",
+                reason: "Revisao manual obrigatoria",
+              },
+            ],
+          },
+          suggested: {
+            allowed: true,
+            sourceLabelSuggestion: null,
+            reasonCodes: ["source_label_suggestion_not_available"],
+          },
+          executed: {
+            requested: true,
+            allowed: false,
+            status: "not_allowed",
+            reasonCodes: ["execution_not_allowed_for_source_type"],
+          },
+        },
+        auditTrail: [
+          {
+            step: "detected",
+            outcome: "allowed",
+            sourceType: "support",
+            documentId: null,
+            reasonCodes: ["matched_bank_statement_support_signals"],
+            reasonMessage: "Documento detectado como bank_statement_support no sourceType support.",
+          },
+        ],
+      });
+
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects operation payload with invalid audit step", () => {
+      const result = TaxDocumentIngestionExecutionResponseSchema.safeParse({
+        preview: {
+          sourceType: "income",
+          detectedState: "ready",
+          blockingRules: [],
+          capabilities: {
+            canExtract: true,
+            canSuggest: true,
+            canExecute: true,
+          },
+          documentType: "income_report_employer",
+          confidenceScore: 0.97,
+          extractorAvailable: true,
+          sourceLabelSuggestion: null,
+          reasons: ["matched_employer_signals"],
+          warnings: [],
+          textSource: "csv_text",
+          textPreviewLines: ["Comprovante de Rendimentos"],
+        },
+        ingestion: {
+          allowed: true,
+          status: "ingested",
+          documentId: 42,
+          blockingRules: [],
+        },
+        suggestion: {
+          allowed: true,
+          sourceLabelSuggestion: "ACME LTDA",
+        },
+        execution: {
+          requested: true,
+          allowed: true,
+          status: "executed",
+          documentId: 42,
+          blockingRules: [],
+        },
+        transparency: {
+          detected: {
+            sourceType: "income",
+            documentType: "income_report_employer",
+            detectedState: "ready",
+            reasonCodes: ["matched_employer_signals"],
+          },
+          blocked: {
+            hasBlockingRules: false,
+            rules: [],
+          },
+          suggested: {
+            allowed: true,
+            sourceLabelSuggestion: "ACME LTDA",
+            reasonCodes: ["source_label_suggestion_available"],
+          },
+          executed: {
+            requested: true,
+            allowed: true,
+            status: "executed",
+            reasonCodes: ["execution_completed"],
+          },
+        },
+        auditTrail: [
+          {
+            step: "classified",
+            outcome: "allowed",
+            sourceType: "income",
+            documentId: 42,
+            reasonCodes: ["matched_employer_signals"],
+            reasonMessage: "Etapa invalida.",
+          },
+        ],
       });
 
       expect(result.success).toBe(false);

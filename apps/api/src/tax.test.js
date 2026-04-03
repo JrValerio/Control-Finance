@@ -693,6 +693,17 @@ describe("Tax API foundation", () => {
       status: "not_allowed",
       documentId: null,
     });
+    expect(response.body.transparency.detected).toMatchObject({
+      sourceType: "unknown",
+      documentType: "unknown",
+      detectedState: "blocked",
+    });
+    expect(response.body.transparency.blocked.hasBlockingRules).toBe(true);
+    expect(response.body.transparency.executed.reasonCodes).toContain(
+      "execution_not_allowed_for_source_type",
+    );
+    expect(Array.isArray(response.body.auditTrail)).toBe(true);
+    expect(response.body.auditTrail.map((entry) => entry.step)).toContain("blocked");
     const ingestionBlockingCodes = response.body.ingestion.blockingRules.map((rule) => rule.code);
     expect(ingestionBlockingCodes).toContain("document_type_not_identified");
 
@@ -746,6 +757,16 @@ describe("Tax API foundation", () => {
       documentId: null,
     });
     expect(response.body.suggestion.allowed).toBe(true);
+    expect(response.body.transparency.detected).toMatchObject({
+      sourceType: "support",
+      documentType: "bank_statement_support",
+      detectedState: "review_required",
+    });
+    expect(response.body.transparency.blocked.hasBlockingRules).toBe(true);
+    expect(response.body.transparency.executed.reasonCodes).toContain(
+      "execution_not_allowed_for_source_type",
+    );
+    expect(response.body.auditTrail.map((entry) => entry.step)).toContain("blocked");
 
     const detailResponse = await request(app)
       .get(`/tax/documents/${response.body.ingestion.documentId}`)
@@ -794,6 +815,14 @@ describe("Tax API foundation", () => {
       allowed: true,
       status: "executed",
     });
+    expect(response.body.transparency.detected).toMatchObject({
+      sourceType: "income",
+      documentType: "income_report_employer",
+      detectedState: "ready",
+    });
+    expect(response.body.transparency.blocked.hasBlockingRules).toBe(false);
+    expect(response.body.transparency.executed.reasonCodes).toContain("execution_completed");
+    expect(response.body.auditTrail.map((entry) => entry.step)).toContain("executed");
 
     const detailResponse = await request(app)
       .get(`/tax/documents/${response.body.ingestion.documentId}`)

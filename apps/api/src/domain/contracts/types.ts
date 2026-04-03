@@ -46,12 +46,20 @@ export type {
 } from "./core-financial-semantic-contract.schema";
 
 export type {
+  TaxDocumentAuditEntry,
+  TaxDocumentAuditOutcome,
+  TaxDocumentAuditStep,
   TaxDocumentExecutionDecision,
   TaxDocumentExecutionStatus,
   TaxDocumentIngestionDecision,
   TaxDocumentIngestionExecutionResponse,
   TaxDocumentIngestionStatus,
   TaxDocumentSuggestionDecision,
+  TaxDocumentTransparency,
+  TaxDocumentTransparencyBlocked,
+  TaxDocumentTransparencyDetected,
+  TaxDocumentTransparencyExecuted,
+  TaxDocumentTransparencySuggested,
 } from "./tax-document-ingestion-execution-response.schema";
 
 export type {
