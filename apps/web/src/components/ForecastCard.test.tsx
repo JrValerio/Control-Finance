@@ -33,6 +33,16 @@ const buildForecast = (overrides: Partial<Forecast> = {}): Forecast => ({
   incomeExpected: 1200,
   billsPendingTotal: 0,
   billsPendingCount: 0,
+  _meta: {
+    balanceBasis: "bank_account",
+    incomeBasis: "confirmed_statement",
+    pendingItems: {
+      bills: 2,
+      invoices: 1,
+      creditCardCycles: 1,
+    },
+    fallbacksUsed: [],
+  },
   bankLimit: {
     total: 1000,
     used: 220,
@@ -110,6 +120,48 @@ describe("ForecastCard", () => {
       expect(screen.getByText(/A projeção ultrapassa o limite/)).toBeInTheDocument(),
     );
     expect(screen.getByText(/100% do limite/)).toBeInTheDocument();
+  });
+
+  it("exibe a base de cálculo do forecast com os metadados da API", async () => {
+    vi.mocked(forecastService.getCurrent).mockResolvedValue(
+      buildForecast({
+        _meta: {
+          balanceBasis: "net_month_transactions",
+          incomeBasis: "salary_profile_fallback",
+          pendingItems: {
+            bills: 3,
+            invoices: 1,
+            creditCardCycles: 2,
+          },
+          fallbacksUsed: [
+            "balanceBasis:net_month_transactions",
+            "incomeBasis:salary_profile_fallback",
+          ],
+        },
+      }),
+    );
+
+    renderCard();
+
+    await waitFor(() => expect(screen.getByText("Base do cálculo")).toBeInTheDocument());
+    expect(screen.getByText("Saldo líquido do mês (entradas - saídas)")).toBeInTheDocument();
+    expect(screen.getByText("Fallback pelo perfil salarial")).toBeInTheDocument();
+    expect(screen.getByText(/3 contas, 1 faturas e 2 ciclos de cartão/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sem conta bancária ativa, usando saldo líquido do mês/i)).toBeInTheDocument();
+    expect(screen.getByText(/Sem extrato confirmado no mês, usando perfil salarial/i)).toBeInTheDocument();
+  });
+
+  it("mantém fallback silencioso quando _meta não está disponível", async () => {
+    vi.mocked(forecastService.getCurrent).mockResolvedValue(
+      buildForecast({ _meta: undefined }),
+    );
+
+    renderCard();
+
+    await waitFor(() => expect(screen.getByText("Base do cálculo")).toBeInTheDocument());
+    expect(
+      screen.getByText("Detalhes de origem do cálculo indisponíveis no momento."),
+    ).toBeInTheDocument();
   });
 
   it("exibe aviso claro quando a projeção está congelada", async () => {

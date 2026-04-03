@@ -90,6 +90,77 @@ const BankLimitPanel = ({ forecast, money }: { forecast: Forecast; money: (value
   );
 };
 
+const BALANCE_BASIS_LABEL: Record<"bank_account" | "net_month_transactions", string> = {
+  bank_account: "Saldo atual das contas bancárias ativas",
+  net_month_transactions: "Saldo líquido do mês (entradas - saídas)",
+};
+
+const INCOME_BASIS_LABEL: Record<"confirmed_statement" | "salary_profile_fallback", string> = {
+  confirmed_statement: "Extratos confirmados no mês",
+  salary_profile_fallback: "Fallback pelo perfil salarial",
+};
+
+const FALLBACK_REASON_LABEL: Record<string, string> = {
+  "balanceBasis:net_month_transactions": "Sem conta bancária ativa, usando saldo líquido do mês.",
+  "incomeBasis:salary_profile_fallback": "Sem extrato confirmado no mês, usando perfil salarial.",
+};
+
+const ForecastTransparencyPanel = ({
+  forecast,
+}: {
+  forecast: Forecast;
+}): JSX.Element => {
+  const meta = forecast._meta;
+
+  if (!meta) {
+    return (
+      <div className="mt-4 rounded-lg border border-cf-border bg-cf-bg-subtle px-3.5 py-3">
+        <p className="text-xs font-medium uppercase text-cf-text-secondary">Base do cálculo</p>
+        <p className="mt-1 text-sm text-cf-text-secondary">
+          Detalhes de origem do cálculo indisponíveis no momento.
+        </p>
+      </div>
+    );
+  }
+
+  const fallbackReasons = meta.fallbacksUsed
+    .map((item) => FALLBACK_REASON_LABEL[item] ?? item)
+    .filter(Boolean);
+
+  return (
+    <div className="mt-4 rounded-lg border border-cf-border bg-cf-bg-subtle px-3.5 py-3">
+      <p className="text-xs font-medium uppercase text-cf-text-secondary">Base do cálculo</p>
+
+      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        <div>
+          <p className="text-[11px] font-semibold uppercase text-cf-text-secondary">Saldo</p>
+          <p className="mt-0.5 text-sm text-cf-text-primary">{BALANCE_BASIS_LABEL[meta.balanceBasis]}</p>
+        </div>
+        <div>
+          <p className="text-[11px] font-semibold uppercase text-cf-text-secondary">Renda</p>
+          <p className="mt-0.5 text-sm text-cf-text-primary">{INCOME_BASIS_LABEL[meta.incomeBasis]}</p>
+        </div>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[11px] font-semibold uppercase text-cf-text-secondary">Itens pendentes considerados</p>
+        <p className="mt-0.5 text-sm text-cf-text-primary">
+          {meta.pendingItems.bills} contas, {meta.pendingItems.invoices} faturas e {meta.pendingItems.creditCardCycles} ciclos de cartão.
+        </p>
+      </div>
+
+      <div className="mt-3">
+        <p className="text-[11px] font-semibold uppercase text-cf-text-secondary">Fallbacks usados</p>
+        {fallbackReasons.length > 0 ? (
+          <p className="mt-0.5 text-sm text-cf-text-primary">{fallbackReasons.join(" ")}</p>
+        ) : (
+          <p className="mt-0.5 text-sm text-cf-text-secondary">Nenhum fallback foi necessário neste cálculo.</p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const ForecastCard = ({
   onOpenProfileSettings,
   trialExpired = false,
@@ -423,6 +494,8 @@ const ForecastCard = ({
           {forecast.flipDetected && forecast.flipDirection ? (
             <FlipBanner direction={forecast.flipDirection} />
           ) : null}
+
+          <ForecastTransparencyPanel forecast={forecast} />
 
           <BankLimitPanel forecast={forecast} money={money} />
         </>
