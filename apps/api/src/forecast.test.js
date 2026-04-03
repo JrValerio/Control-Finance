@@ -13,7 +13,7 @@ import {
   resetWriteRateLimiterState,
 } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
-import { computeForecast, getLatestForecast } from "./services/forecast.service.js";
+import { computeForecast, getLatestForecast } from "./services/forecast.service.ts";
 
 // Fixed "now" for deterministic tests — 10th day of month, plenty of days remaining
 const FIXED_NOW = new Date("2026-03-10T12:00:00.000Z");

@@ -11,7 +11,7 @@ import {
   maybeSendFlipNotification,
   maybeSendPaydayReminder,
 } from "../services/notifications.service.js";
-import { computeForecast, getLatestForecast } from "../services/forecast.service.js";
+import { computeForecast, getLatestForecast } from "../services/forecast.service.ts";
 
 const router = Router();
 
