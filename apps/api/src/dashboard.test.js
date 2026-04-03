@@ -6,6 +6,7 @@ import { setupTestDb, registerAndLogin } from "./test-helpers.js";
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import { resetWriteRateLimiterState } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
+import { DashboardSnapshotResponseSchema } from "./domain/contracts/dashboard-response.schema.ts";
 
 // ─── Date helpers (UTC-safe) ──────────────────────────────────────────────────
 
@@ -71,6 +72,30 @@ const createIncomeSource = (token) =>
     .post("/income-sources")
     .set("Authorization", `Bearer ${token}`)
     .send({ name: "INSS Aposentadoria", sourceType: "inss_benefit" });
+
+const DASHBOARD_TOP_LEVEL_KEYS = [
+  "bankBalance",
+  "bills",
+  "cards",
+  "income",
+  "forecast",
+  "consignado",
+].sort();
+
+const DASHBOARD_BILLS_KEYS = [
+  "overdueCount",
+  "overdueTotal",
+  "dueSoonCount",
+  "dueSoonTotal",
+  "upcomingCount",
+  "upcomingTotal",
+].sort();
+
+const DASHBOARD_CARDS_KEYS = ["openPurchasesTotal", "pendingInvoicesTotal"].sort();
+
+const DASHBOARD_INCOME_KEYS = ["receivedThisMonth", "pendingThisMonth", "referenceMonth"].sort();
+
+const DASHBOARD_CONSIGNADO_KEYS = ["monthlyTotal", "contractsCount", "comprometimentoPct"].sort();
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
@@ -374,5 +399,117 @@ describe("dashboard snapshot", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.bankBalance).toBe(0);
+  });
+
+  // ─── Contract regression ─────────────────────────────────────────────────
+
+  it("mantem shape canônico estrito no estado vazio", async () => {
+    const token = await registerAndLogin("dash-contract-empty@test.dev");
+
+    const res = await getSnapshot(token);
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body).sort()).toEqual(DASHBOARD_TOP_LEVEL_KEYS);
+    expect(Object.keys(res.body.bills).sort()).toEqual(DASHBOARD_BILLS_KEYS);
+    expect(Object.keys(res.body.cards).sort()).toEqual(DASHBOARD_CARDS_KEYS);
+    expect(Object.keys(res.body.income).sort()).toEqual(DASHBOARD_INCOME_KEYS);
+    expect(Object.keys(res.body.consignado).sort()).toEqual(DASHBOARD_CONSIGNADO_KEYS);
+
+    expect(res.body).toStrictEqual({
+      bankBalance: 0,
+      bills: {
+        overdueCount: 0,
+        overdueTotal: 0,
+        dueSoonCount: 0,
+        dueSoonTotal: 0,
+        upcomingCount: 0,
+        upcomingTotal: 0,
+      },
+      cards: {
+        openPurchasesTotal: 0,
+        pendingInvoicesTotal: 0,
+      },
+      income: {
+        receivedThisMonth: 0,
+        pendingThisMonth: 0,
+        referenceMonth: currentMonth(),
+      },
+      forecast: null,
+      consignado: {
+        monthlyTotal: 0,
+        contractsCount: 0,
+        comprometimentoPct: null,
+      },
+    });
+
+    const parsed = DashboardSnapshotResponseSchema.safeParse(res.body);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("mantem campos financeiros críticos numéricos e previsíveis sem forecast", async () => {
+    const email = "dash-contract-populated@test.dev";
+    const token = await registerAndLogin(email);
+
+    await createBankAccount(token, { balance: 1234.56 });
+    await createBill(token, { dueDate: isoDate(-2), amount: 400.15 });
+    await createBill(token, { dueDate: isoDate(4), amount: 99.85 });
+
+    const cardRes = await createCreditCard(token, { name: "Nubank" });
+    const cardId = cardRes.body.id;
+    await createPurchase(token, cardId, { amount: 310.4 });
+
+    const userRes = await dbQuery("SELECT id FROM users WHERE email = $1 LIMIT 1", [email]);
+    const userId = Number(userRes.rows[0].id);
+    await dbQuery(
+      `INSERT INTO bills (user_id, title, amount, due_date, bill_type, credit_card_id)
+       VALUES ($1, 'Fatura Nubank', 789.9, $2, 'credit_card_invoice', $3)`,
+      [userId, isoDate(6), cardId],
+    );
+
+    const srcRes = await createIncomeSource(token);
+    const sourceId = srcRes.body.id;
+    await request(app)
+      .post(`/income-sources/${sourceId}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: currentMonth(),
+        netAmount: 2500.45,
+        paymentDate: isoDate(-3),
+      });
+    await dbQuery(
+      `UPDATE income_statements SET status = 'posted'
+       WHERE income_source_id = $1 AND reference_month = $2`,
+      [sourceId, currentMonth()],
+    );
+
+    const res = await getSnapshot(token);
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body).sort()).toEqual(DASHBOARD_TOP_LEVEL_KEYS);
+    expect(Object.keys(res.body.bills).sort()).toEqual(DASHBOARD_BILLS_KEYS);
+    expect(Object.keys(res.body.cards).sort()).toEqual(DASHBOARD_CARDS_KEYS);
+    expect(Object.keys(res.body.income).sort()).toEqual(DASHBOARD_INCOME_KEYS);
+    expect(Object.keys(res.body.consignado).sort()).toEqual(DASHBOARD_CONSIGNADO_KEYS);
+
+    expect(typeof res.body.bankBalance).toBe("number");
+    expect(typeof res.body.bills.overdueTotal).toBe("number");
+    expect(typeof res.body.bills.dueSoonTotal).toBe("number");
+    expect(typeof res.body.cards.openPurchasesTotal).toBe("number");
+    expect(typeof res.body.cards.pendingInvoicesTotal).toBe("number");
+    expect(typeof res.body.income.receivedThisMonth).toBe("number");
+    expect(typeof res.body.income.pendingThisMonth).toBe("number");
+    expect(typeof res.body.consignado.monthlyTotal).toBe("number");
+    expect(typeof res.body.consignado.contractsCount).toBe("number");
+    expect(
+      res.body.consignado.comprometimentoPct === null
+        ? true
+        : typeof res.body.consignado.comprometimentoPct === "number",
+    ).toBe(true);
+
+    // Sem forecast computado, o estado degradado previsível continua sendo forecast null.
+    expect(res.body.forecast).toBeNull();
+
+    const parsed = DashboardSnapshotResponseSchema.safeParse(res.body);
+    expect(parsed.success).toBe(true);
   });
 });
