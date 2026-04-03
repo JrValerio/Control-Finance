@@ -1,19 +1,78 @@
 import { dbQuery } from "../db/index.js";
 
+type NumericLike = number | string | null | undefined;
+
+interface BillsRow {
+  overdue_count?: NumericLike;
+  overdue_total?: NumericLike;
+  due_soon_count?: NumericLike;
+  due_soon_total?: NumericLike;
+  upcoming_count?: NumericLike;
+  upcoming_total?: NumericLike;
+}
+
+interface IncomeRow {
+  received?: NumericLike;
+  pending?: NumericLike;
+}
+
+interface ForecastRow {
+  projected_balance?: NumericLike;
+  month?: string | Date | null;
+}
+
+interface ConsignadoRow {
+  monthly_total?: NumericLike;
+  contracts_count?: NumericLike;
+  gross_salary?: NumericLike;
+}
+
+interface DashboardSnapshot {
+  bankBalance: number;
+  bills: {
+    overdueCount: number;
+    overdueTotal: number;
+    dueSoonCount: number;
+    dueSoonTotal: number;
+    upcomingCount: number;
+    upcomingTotal: number;
+  };
+  cards: {
+    openPurchasesTotal: number;
+    pendingInvoicesTotal: number;
+  };
+  income: {
+    receivedThisMonth: number;
+    pendingThisMonth: number;
+    referenceMonth: string;
+  };
+  forecast: {
+    projectedBalance: number;
+    month: string;
+  } | null;
+  consignado: {
+    monthlyTotal: number;
+    contractsCount: number;
+    comprometimentoPct: number | null;
+  };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const toNum = (v) => Number(v) || 0;
-const toInt = (v) => Math.round(toNum(v));
+const toNum = (value: NumericLike): number => Number(value) || 0;
+const toInt = (value: NumericLike): number => Math.round(toNum(value));
 
 // Returns YYYY-MM-DD from a Date
-const toISODate = (d) => d.toISOString().slice(0, 10);
+const toISODate = (dateValue: Date): string => dateValue.toISOString().slice(0, 10);
 
 // Returns YYYY-MM from a Date
-const toYearMonth = (d) => d.toISOString().slice(0, 7);
+const toYearMonth = (dateValue: Date): string => dateValue.toISOString().slice(0, 7);
 
 // ─── Snapshot ─────────────────────────────────────────────────────────────────
 
-export const getDashboardSnapshot = async (userId) => {
+export const getDashboardSnapshot = async (
+  userId: number | string,
+): Promise<DashboardSnapshot> => {
   const uid = Number(userId);
 
   const now = new Date();
@@ -104,12 +163,12 @@ export const getDashboardSnapshot = async (userId) => {
     ),
   ]);
 
-  const bills = billsRes.rows[0] ?? {};
-  const income = incomeRes.rows[0] ?? {};
-  const forecastRow = forecastRes.rows[0] ?? null;
+  const bills = (billsRes.rows[0] ?? {}) as BillsRow;
+  const income = (incomeRes.rows[0] ?? {}) as IncomeRow;
+  const forecastRow = (forecastRes.rows[0] ?? null) as ForecastRow | null;
 
   return {
-    bankBalance: toNum(bankRes.rows[0]?.total),
+    bankBalance: toNum(bankRes.rows[0]?.total as NumericLike),
     bills: {
       overdueCount: toInt(bills.overdue_count),
       overdueTotal: toNum(bills.overdue_total),
@@ -119,8 +178,8 @@ export const getDashboardSnapshot = async (userId) => {
       upcomingTotal: toNum(bills.upcoming_total),
     },
     cards: {
-      openPurchasesTotal: toNum(cardPurchasesRes.rows[0]?.total),
-      pendingInvoicesTotal: toNum(cardInvoicesRes.rows[0]?.total),
+      openPurchasesTotal: toNum(cardPurchasesRes.rows[0]?.total as NumericLike),
+      pendingInvoicesTotal: toNum(cardInvoicesRes.rows[0]?.total as NumericLike),
     },
     income: {
       receivedThisMonth: toNum(income.received),
@@ -134,7 +193,7 @@ export const getDashboardSnapshot = async (userId) => {
         }
       : null,
     consignado: (() => {
-      const row = consignadoRes.rows[0];
+      const row = (consignadoRes.rows[0] ?? null) as ConsignadoRow | null;
       const monthlyTotal = toNum(row?.monthly_total);
       const contractsCount = toInt(row?.contracts_count);
       const grossSalary = toNum(row?.gross_salary);
