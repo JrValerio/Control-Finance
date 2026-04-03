@@ -36,3 +36,11 @@ export type {
   ForecastResponseMeta,
   ForecastRecomputeResponse,
 } from "./forecast-response.schema";
+
+export type {
+  CoreFinancialCurrentPosition,
+  CoreFinancialProjection,
+  CoreFinancialRealized,
+  CoreFinancialSemanticContract,
+  CoreFinancialSemanticSourceMap,
+} from "./core-financial-semantic-contract.schema";
