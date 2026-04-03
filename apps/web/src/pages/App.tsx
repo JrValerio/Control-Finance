@@ -15,6 +15,12 @@ import CreditCardsSummaryWidget from "../components/CreditCardsSummaryWidget";
 import SalaryWidget from "../components/SalaryWidget";
 import ConsignadoOverviewWidget from "../components/ConsignadoOverviewWidget";
 import OperationalSummaryPanel from "../components/OperationalSummaryPanel";
+import MonthViewSection from "../components/MonthViewSection";
+import type {
+  MonthOverMonthDirection,
+  MonthOverMonthMetric,
+  MonthOverMonthTone,
+} from "../components/month-view.types";
 import TransactionList from "../components/TransactionList";
 import {
   transactionsService,
@@ -65,8 +71,6 @@ const HealthOverview = lazy(() => import("../components/HealthOverview"));
 const GoalsSection = lazy(() => import("../components/GoalsSection"));
 
 type SummaryMetricKey = "income" | "expense" | "balance";
-type MonthOverMonthDirection = "up" | "down" | "flat";
-type MonthOverMonthTone = "good" | "bad" | "neutral";
 type BudgetAlertStatus = Exclude<MonthlyBudgetStatus, "ok">;
 
 interface PaginationState {
@@ -100,13 +104,6 @@ interface TransactionModalPayload {
   date: string;
   description: string;
   notes: string;
-}
-
-interface MonthOverMonthMetric {
-  delta: number;
-  deltaPercent: number | null;
-  direction: MonthOverMonthDirection;
-  tone: MonthOverMonthTone;
 }
 
 interface AppProps {
@@ -2338,111 +2335,21 @@ const App = ({
         </section>
 
         <div className="space-y-6">
-          <section ref={summarySectionRef}>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div>
-                <h3 className="text-sm font-medium text-cf-text-primary">Visão do mês</h3>
-                <p className="mt-1 text-xs text-cf-text-secondary">
-                  Saldo, entradas e saídas de movimentações realizadas (sem pendências ou projeções).
-                </p>
-              </div>
-              <input
-                type="month"
-                aria-label="Mês do resumo"
-                value={selectedSummaryMonth}
-                onChange={(event) => setSelectedSummaryMonth(event.target.value)}
-                className="rounded border border-cf-border bg-cf-surface px-2 py-1 text-sm text-cf-text-primary"
-              />
-            </div>
-            {summaryError ? (
-              <div
-                className="mb-3 flex items-center justify-between gap-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-                role="status"
-                aria-live="polite"
-              >
-                <span>{summaryError}</span>
-                <button
-                  type="button"
-                  onClick={loadMonthlySummary}
-                  className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
-                >
-                  Tentar novamente
-                </button>
-              </div>
-            ) : null}
-            <div className="grid gap-3 sm:grid-cols-3">
-              <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
-                <p className="text-xs font-medium uppercase text-cf-text-secondary">Saldo</p>
-                <p className="text-xl font-semibold text-cf-text-primary">
-                  {isLoadingSummary ? "Carregando..." : money(monthlySummary.balance)}
-                </p>
-                <p
-                  className={`mt-1 text-xs font-medium ${
-                    isLoadingSummary || summaryError || momError
-                      ? MOM_TONE_CLASSNAMES.neutral
-                      : MOM_TONE_CLASSNAMES[monthOverMonthMetrics.balance.tone]
-                  }`}
-                  data-testid="mom-balance"
-                >
-                  {isLoadingSummary
-                    ? "Vs. mês anterior: calculando..."
-                    : summaryError || momError
-                      ? "Vs. mês anterior: indisponível"
-                      : formatMonthOverMonthSummary(monthOverMonthMetrics.balance)}
-                </p>
-              </div>
-              <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
-                <p className="text-xs font-medium uppercase text-cf-text-secondary">Entradas</p>
-                <p className="text-xl font-semibold text-cf-text-primary">
-                  {isLoadingSummary ? "Carregando..." : money(monthlySummary.income)}
-                </p>
-                <p
-                  className={`mt-1 text-xs font-medium ${
-                    isLoadingSummary || summaryError || momError
-                      ? MOM_TONE_CLASSNAMES.neutral
-                      : MOM_TONE_CLASSNAMES[monthOverMonthMetrics.income.tone]
-                  }`}
-                  data-testid="mom-income"
-                >
-                  {isLoadingSummary
-                    ? "Vs. mês anterior: calculando..."
-                    : summaryError || momError
-                      ? "Vs. mês anterior: indisponível"
-                      : formatMonthOverMonthSummary(monthOverMonthMetrics.income)}
-                </p>
-              </div>
-              <div className="rounded border border-brand-1 bg-cf-bg-subtle px-4 py-3.5">
-                <p className="text-xs font-medium uppercase text-cf-text-secondary">Saídas</p>
-                <p className="text-xl font-semibold text-cf-text-primary">
-                  {isLoadingSummary ? "Carregando..." : money(monthlySummary.expense)}
-                </p>
-                <p
-                  className={`mt-1 text-xs font-medium ${
-                    isLoadingSummary || summaryError || momError
-                      ? MOM_TONE_CLASSNAMES.neutral
-                      : MOM_TONE_CLASSNAMES[monthOverMonthMetrics.expense.tone]
-                  }`}
-                  data-testid="mom-expense"
-                >
-                  {isLoadingSummary
-                    ? "Vs. mês anterior: calculando..."
-                    : summaryError || momError
-                      ? "Vs. mês anterior: indisponível"
-                      : formatMonthOverMonthSummary(monthOverMonthMetrics.expense)}
-                </p>
-              </div>
-            </div>
-            {!isLoadingSummary && !summaryError && momError ? (
-              <div className="mt-2 rounded border border-cf-border bg-cf-surface px-3 py-2 text-sm text-cf-text-secondary">
-                {momError}
-              </div>
-            ) : null}
-            {!isLoadingSummary && !summaryError && !hasMonthlySummaryData ? (
-              <div className="mt-2 rounded border border-cf-border bg-cf-surface px-3 py-2 text-sm text-cf-text-secondary">
-                Sem dados para o mês selecionado.
-              </div>
-            ) : null}
-          </section>
+          <MonthViewSection
+            sectionRef={summarySectionRef}
+            selectedSummaryMonth={selectedSummaryMonth}
+            onSummaryMonthChange={setSelectedSummaryMonth}
+            summaryError={summaryError}
+            onRetrySummary={loadMonthlySummary}
+            isLoadingSummary={isLoadingSummary}
+            monthlySummary={monthlySummary}
+            momError={momError}
+            hasMonthlySummaryData={hasMonthlySummaryData}
+            monthOverMonthMetrics={monthOverMonthMetrics}
+            formatMonthOverMonthSummary={formatMonthOverMonthSummary}
+            momToneClassNames={MOM_TONE_CLASSNAMES}
+            money={money}
+          />
           <section className="space-y-4" aria-labelledby="operational-overview-title">
             <div>
               <h3
