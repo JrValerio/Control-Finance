@@ -3,7 +3,9 @@
     "composite": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "allowJs": true,
+    "outDir": ".tsbuild/node",
     "allowSyntheticDefaultImports": true
   },
-  "include": ["vite.config.js"]
+  "include": ["vite.config.js", "vite.config.ts"]
 }

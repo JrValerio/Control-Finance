@@ -14,7 +14,8 @@
     "db:backfill:categories-normalized": "node src/db/backfill-categories-normalized.js",
     "db:seed": "node src/db/seed.js",
     "lint": "eslint src --max-warnings 0",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",

@@ -14,7 +14,7 @@
     "lint": "npm -w apps/web run lint && npm -w apps/api run lint",
     "typecheck:web": "npm -w apps/web run typecheck",
     "typecheck": "npm run typecheck:web",
-    "test": "npm -w apps/web run test:run && npm -w apps/api run test",
+    "test": "npm -w apps/web run test:run && npm -w apps/api run test:run",
     "test:run": "npm run test",
     "build": "npm -w apps/web run build && npm -w apps/api run build",
     "preview": "npm -w apps/web run preview"
