@@ -3,7 +3,7 @@ import { Counter, Histogram, Registry } from "prom-client";
 const METRICS_ENDPOINT_PATH = "/metrics";
 const CRITICAL_ENDPOINTS = new Set(["/transactions", "/categories", "/auth/login"]);
 
-const metricsRegistry = new Registry();
+export const metricsRegistry = new Registry();
 
 const httpRequestsTotalCounter = new Counter({
   name: "http_requests_total",
