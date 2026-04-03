@@ -97,6 +97,26 @@ const DASHBOARD_INCOME_KEYS = ["receivedThisMonth", "pendingThisMonth", "referen
 
 const DASHBOARD_CONSIGNADO_KEYS = ["monthlyTotal", "contractsCount", "comprometimentoPct"].sort();
 
+const getUserIdByEmail = async (email) => {
+  const userRes = await dbQuery("SELECT id FROM users WHERE email = $1 LIMIT 1", [email]);
+  return Number(userRes.rows[0].id);
+};
+
+const upsertForecastForUser = async (userId, projectedBalance, month = currentMonth()) => {
+  await dbQuery(
+    `INSERT INTO user_forecasts
+       (user_id, month, engine_version, projected_balance, income_expected,
+        spending_to_date, daily_avg_spending, days_remaining,
+        flip_detected, flip_direction, generated_at)
+     VALUES ($1, $2, 'v1', $3, 0, 0, 0, 0, false, null, NOW())
+     ON CONFLICT (user_id, month)
+     DO UPDATE SET
+       projected_balance = EXCLUDED.projected_balance,
+       generated_at = EXCLUDED.generated_at`,
+    [userId, `${month}-01`, projectedBalance],
+  );
+};
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe("dashboard snapshot", () => {
@@ -508,6 +528,208 @@ describe("dashboard snapshot", () => {
 
     // Sem forecast computado, o estado degradado previsível continua sendo forecast null.
     expect(res.body.forecast).toBeNull();
+
+    const parsed = DashboardSnapshotResponseSchema.safeParse(res.body);
+    expect(parsed.success).toBe(true);
+  });
+
+  // ─── Truth table regression ─────────────────────────────────────────────
+
+  it.each([
+    {
+      name: "saldo positivo + receita confirmada + sem pendencias + sem cartao + forecast disponivel",
+      email: "dash-tt-1@test.dev",
+      bankBalance: 2500,
+      postedIncome: 1800,
+      draftIncome: 0,
+      overdueBill: 0,
+      dueSoonBill: 0,
+      openPurchase: 0,
+      pendingInvoice: 0,
+      forecastProjectedBalance: 3900,
+      expected: {
+        bankSign: "positive",
+        incomeMode: "confirmed",
+        hasPending: false,
+        cardImpacts: false,
+        forecastMode: "available",
+        operationalSign: "positive",
+      },
+    },
+    {
+      name: "saldo negativo + receita fallback + com pendencias + cartao impactando + forecast degradado",
+      email: "dash-tt-2@test.dev",
+      bankBalance: -400,
+      postedIncome: 0,
+      draftIncome: 600,
+      overdueBill: 350,
+      dueSoonBill: 220,
+      openPurchase: 300,
+      pendingInvoice: 700,
+      forecastProjectedBalance: null,
+      expected: {
+        bankSign: "negative",
+        incomeMode: "fallback",
+        hasPending: true,
+        cardImpacts: true,
+        forecastMode: "degraded",
+        operationalSign: "negative",
+      },
+    },
+    {
+      name: "saldo positivo + receita fallback + sem pendencias + cartao impactando + forecast disponivel",
+      email: "dash-tt-3@test.dev",
+      bankBalance: 1500,
+      postedIncome: 0,
+      draftIncome: 900,
+      overdueBill: 0,
+      dueSoonBill: 0,
+      openPurchase: 100,
+      pendingInvoice: 0,
+      forecastProjectedBalance: 1800,
+      expected: {
+        bankSign: "positive",
+        incomeMode: "fallback",
+        hasPending: false,
+        cardImpacts: true,
+        forecastMode: "available",
+        operationalSign: "positive",
+      },
+    },
+    {
+      name: "saldo negativo + receita confirmada + com pendencias + sem impacto de cartao + forecast degradado",
+      email: "dash-tt-4@test.dev",
+      bankBalance: -200,
+      postedIncome: 300,
+      draftIncome: 0,
+      overdueBill: 250,
+      dueSoonBill: 100,
+      openPurchase: 0,
+      pendingInvoice: 0,
+      forecastProjectedBalance: null,
+      expected: {
+        bankSign: "negative",
+        incomeMode: "confirmed",
+        hasPending: true,
+        cardImpacts: false,
+        forecastMode: "degraded",
+        operationalSign: "negative",
+      },
+    },
+  ])("truth table: $name", async (scenario) => {
+    const token = await registerAndLogin(scenario.email);
+    const userId = await getUserIdByEmail(scenario.email);
+
+    const bankAccountRes = await createBankAccount(token, { balance: 0, name: "Conta Base" });
+    await dbQuery("UPDATE bank_accounts SET balance = $1 WHERE id = $2", [
+      scenario.bankBalance,
+      bankAccountRes.body.id,
+    ]);
+
+    if (scenario.overdueBill > 0) {
+      await createBill(token, { dueDate: isoDate(-2), amount: scenario.overdueBill });
+    }
+    if (scenario.dueSoonBill > 0) {
+      await createBill(token, { dueDate: isoDate(3), amount: scenario.dueSoonBill });
+    }
+
+    let cardId = null;
+    if (scenario.openPurchase > 0 || scenario.pendingInvoice > 0) {
+      const cardRes = await createCreditCard(token, { name: "Cartao TT" });
+      cardId = cardRes.body.id;
+    }
+    if (scenario.openPurchase > 0 && cardId) {
+      await createPurchase(token, cardId, { amount: scenario.openPurchase });
+    }
+    if (scenario.pendingInvoice > 0 && cardId) {
+      await dbQuery(
+        `INSERT INTO bills (user_id, title, amount, due_date, bill_type, credit_card_id)
+         VALUES ($1, 'Fatura TT', $2, $3, 'credit_card_invoice', $4)`,
+        [userId, scenario.pendingInvoice, isoDate(5), cardId],
+      );
+    }
+
+    if (scenario.postedIncome > 0 || scenario.draftIncome > 0) {
+      const sourceRes = await createIncomeSource(token);
+      const sourceId = sourceRes.body.id;
+
+      if (scenario.postedIncome > 0) {
+        await request(app)
+          .post(`/income-sources/${sourceId}/statements`)
+          .set("Authorization", `Bearer ${token}`)
+          .send({
+            referenceMonth: currentMonth(),
+            netAmount: scenario.postedIncome,
+            paymentDate: isoDate(-3),
+          });
+
+        await dbQuery(
+          `UPDATE income_statements SET status = 'posted'
+           WHERE income_source_id = $1 AND reference_month = $2 AND net_amount = $3`,
+          [sourceId, currentMonth(), scenario.postedIncome],
+        );
+      }
+
+      if (scenario.draftIncome > 0) {
+        await request(app)
+          .post(`/income-sources/${sourceId}/statements`)
+          .set("Authorization", `Bearer ${token}`)
+          .send({
+            referenceMonth: currentMonth(),
+            netAmount: scenario.draftIncome,
+            paymentDate: isoDate(4),
+          });
+      }
+    }
+
+    if (scenario.forecastProjectedBalance !== null) {
+      await upsertForecastForUser(userId, scenario.forecastProjectedBalance);
+    }
+
+    const res = await getSnapshot(token);
+
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body).sort()).toEqual(DASHBOARD_TOP_LEVEL_KEYS);
+    expect(Object.keys(res.body.bills).sort()).toEqual(DASHBOARD_BILLS_KEYS);
+    expect(Object.keys(res.body.cards).sort()).toEqual(DASHBOARD_CARDS_KEYS);
+    expect(Object.keys(res.body.income).sort()).toEqual(DASHBOARD_INCOME_KEYS);
+    expect(Object.keys(res.body.consignado).sort()).toEqual(DASHBOARD_CONSIGNADO_KEYS);
+
+    const bankIsPositive = res.body.bankBalance > 0;
+    expect(bankIsPositive).toBe(scenario.expected.bankSign === "positive");
+
+    if (scenario.expected.incomeMode === "confirmed") {
+      expect(res.body.income.receivedThisMonth).toBeGreaterThan(0);
+      expect(res.body.income.pendingThisMonth).toBe(0);
+    } else {
+      // Fallback operacional aqui significa sem valor confirmado, apenas draft pendente.
+      expect(res.body.income.receivedThisMonth).toBe(0);
+      expect(res.body.income.pendingThisMonth).toBeGreaterThan(0);
+    }
+
+    const pendingExposure =
+      res.body.bills.overdueTotal + res.body.bills.dueSoonTotal + res.body.bills.upcomingTotal;
+    expect(pendingExposure > 0).toBe(scenario.expected.hasPending);
+
+    const cardExposure = res.body.cards.openPurchasesTotal + res.body.cards.pendingInvoicesTotal;
+    expect(cardExposure > 0).toBe(scenario.expected.cardImpacts);
+
+    if (scenario.expected.forecastMode === "available") {
+      expect(res.body.forecast).not.toBeNull();
+      expect(typeof res.body.forecast.projectedBalance).toBe("number");
+      expect(typeof res.body.forecast.month).toBe("string");
+    } else {
+      expect(res.body.forecast).toBeNull();
+    }
+
+    const operationalPosition =
+      res.body.bankBalance +
+      res.body.income.receivedThisMonth -
+      res.body.bills.overdueTotal -
+      res.body.bills.dueSoonTotal -
+      res.body.cards.openPurchasesTotal -
+      res.body.cards.pendingInvoicesTotal;
+    expect(operationalPosition > 0).toBe(scenario.expected.operationalSign === "positive");
 
     const parsed = DashboardSnapshotResponseSchema.safeParse(res.body);
     expect(parsed.success).toBe(true);
