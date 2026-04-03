@@ -208,10 +208,10 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   const shouldShowShortTermBalance = hasDueSoonBills && !hasOverdueBills;
 
   const bankTileSecondary = hasOverdueBills
-    ? `Saldo técnico: ${money(technicalBalance)}`
+    ? `Saldo realizado após vencidas: ${money(technicalBalance)}`
     : shouldShowShortTermBalance
-      ? `Saldo em 7 dias: ${money(shortTermBalance)}`
-      : "Saldo disponível";
+      ? `Saldo projetado em 7 dias: ${money(shortTermBalance)}`
+      : "Saldo realizado";
 
   const bankTileDetails: string[] = [];
   if (hasOverdueBills) {
@@ -221,12 +221,12 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   }
   if (hasDueSoonBills) {
     bankTileDetails.push(
-      `${dueSoonCount} em 7 dias somam ${money(dueSoonTotal)}`,
+      `${dueSoonCount} ${dueSoonCount > 1 ? "obrigações" : "obrigação"} em 7 dias somam ${money(dueSoonTotal)}`,
     );
   }
 
   const bankTile: TileProps = {
-    label: "Conta",
+    label: "Saldo em conta",
     primary: money(bankBalance),
     secondary: bankTileSecondary,
     tertiary: bankTileDetails.length > 0 ? bankTileDetails.join(" • ") : undefined,
@@ -255,16 +255,16 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   const billsTertiaryTokens: string[] = [];
   if (dueSoonCount > 0) {
     billsTertiaryTokens.push(
-      `Urgência 7d: ${dueSoonCount} conta${dueSoonCount > 1 ? "s" : ""} • ${money(dueSoonTotal)}`,
+      `Urgência 7d: ${dueSoonCount} ${dueSoonCount > 1 ? "obrigações" : "obrigação"} • ${money(dueSoonTotal)}`,
     );
   }
   if (hasUpcomingBills) {
     billsTertiaryTokens.push(
-      `${upcomingCount} próxima${upcomingCount > 1 ? "s" : ""}`,
+      `${upcomingCount} ${upcomingCount > 1 ? "obrigações" : "obrigação"} futura${upcomingCount > 1 ? "s" : ""}`,
     );
   }
   const billsTile: TileProps = {
-    label: "Contas a pagar",
+    label: "Obrigações de contas",
     primary: shouldHighlightImmediateBills || hasUpcomingBills ? money(billsPrimaryAmount) : "—",
     secondary:
       overdueCount > 0
@@ -272,8 +272,8 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
         : dueSoonCount > 0
           ? `${dueSoonCount} em 7 dias`
           : hasUpcomingBills
-            ? `${upcomingCount} próxima${upcomingCount > 1 ? "s" : ""}`
-          : "Nenhuma pendente",
+            ? `${upcomingCount} ${upcomingCount > 1 ? "obrigações" : "obrigação"} futura${upcomingCount > 1 ? "s" : ""}`
+          : "Sem obrigação pendente",
     tertiary: billsTertiaryTokens.length > 0 ? `+ ${billsTertiaryTokens.join(" • ")}` : undefined,
     actionLabel: dueSoonCount > 0 && onOpenDueSoonBills ? "Ver contas em 7 dias" : undefined,
     onActionClick: dueSoonCount > 0 && onOpenDueSoonBills ? onOpenDueSoonBills : undefined,
@@ -284,14 +284,14 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   const hasCardCycle = cardCycleTotal > 0;
   const hasOpenInvoices = openInvoicesTotal > 0;
   const cardTile: TileProps = {
-    label: "Cartão",
+    label: "Obrigações de cartão",
     primary: hasOpenInvoices ? money(openInvoicesTotal) : hasCardCycle ? money(cardCycleTotal) : "—",
     secondary:
       hasOpenInvoices
         ? `Faturas a pagar: ${money(openInvoicesTotal)}`
         : hasCardCycle
           ? `Gastos no ciclo: ${money(cardCycleTotal)}`
-          : "Sem movimentação",
+          : "Sem ciclo e sem fatura",
     tertiary:
       hasOpenInvoices && hasCardCycle
         ? `Gastos no ciclo: ${money(cardCycleTotal)}`
@@ -303,10 +303,10 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   const hasConfirmedIncome = receivedThisMonth > 0;
   const hasProjectedIncome = projectedThisMonth > 0;
   const incomeTile: TileProps = {
-    label: "Renda do mês",
+    label: "Renda do mês (realizada e prevista)",
     primary: money(receivedThisMonth),
-    secondary: "Recebido",
-    tertiary: `Previsto: ${money(projectedThisMonth)}`,
+    secondary: "Realizado no mês",
+    tertiary: `Previsto no mês: ${money(projectedThisMonth)}`,
     accent:
       hasConfirmedIncome
         ? "success"
@@ -318,15 +318,15 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
   // ── Tile 5: Forecast ──────────────────────────────────────────────────────
   const forecastTile: TileProps = forecast
     ? {
-        label: "Projeção",
+        label: "Saldo projetado",
         primary: money(forecast.projectedBalance),
-        secondary: "Fechamento do mês",
+        secondary: "Fechamento previsto do mês",
         accent: forecast.projectedBalance < 0 ? "danger" : forecast.projectedBalance < 200 ? "warning" : "default",
       }
     : {
-        label: "Projeção",
+        label: "Saldo projetado",
         primary: "—",
-        secondary: "Sem dados suficientes",
+        secondary: "Sem base para projeção",
         accent: "muted",
       };
 
