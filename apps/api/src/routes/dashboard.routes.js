@@ -2,7 +2,7 @@ import { Router } from "express";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { DashboardSnapshotResponseSchema } from "../domain/contracts/dashboard-response.schema.ts";
 import { respondValidated } from "./respond-validated.js";
-import { getDashboardSnapshot } from "../services/dashboard.service.js";
+import { getDashboardSnapshot } from "../services/dashboard.service.ts";
 
 const router = Router();
 
