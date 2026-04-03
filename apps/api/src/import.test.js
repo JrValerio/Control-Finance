@@ -1259,6 +1259,33 @@ describe("transaction imports", () => {
     expect(second.body.rows[0].normalized).toBeNull();
   });
 
+  it("POST /transactions/import/dry-run marca duplicate para linhas equivalentes repetidas no mesmo arquivo", async () => {
+    const token = await registerAndLogin("import-dedupe-in-file@controlfinance.dev");
+    await makeProUser("import-dedupe-in-file@controlfinance.dev");
+
+    const csv = csvFile(
+      [
+        "date,type,value,description,notes,category",
+        "2026-03-01,Entrada,850,Freelance,PIX 123,",
+        "2026-03-01,Entrada,850,Freelance,PIX 123,",
+      ].join("\n"),
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.summary.totalRows).toBe(2);
+    expect(response.body.summary.validRows).toBe(1);
+    expect(response.body.summary.duplicateRows).toBe(1);
+
+    const duplicateRow = response.body.rows.find((row) => row.status === "duplicate");
+    expect(duplicateRow).toBeTruthy();
+    expect(duplicateRow.statusDetail).toBe("Ja existe uma linha equivalente no arquivo de importacao.");
+  });
+
   it("POST /transactions/import/dry-run marca conflito quando credito bancario bate com historico de renda", async () => {
     const email = "import-income-conflict@controlfinance.dev";
     const token = await registerAndLogin(email);
@@ -1375,8 +1402,16 @@ describe("transaction imports", () => {
       .send({ importId: dryB.body.importId });
 
     expect(commitB.status).toBe(200);
-    // a linha duplicada foi inserida (sessao B nao sabia da A no momento do dry-run)
-    // mas o fingerprint agora esta no banco — proximo dry-run vai detectar
+    expect(commitB.body.imported).toBe(0);
+
+    const persisted = await dbQuery(
+      `SELECT COUNT(*)::int AS count FROM transactions WHERE user_id = (SELECT id FROM users WHERE email = $1) AND deleted_at IS NULL`,
+      ["import-dedupe-commit@controlfinance.dev"],
+    );
+
+    expect(Number(persisted.rows[0].count)).toBe(1);
+
+    // proximo dry-run continua detectando o lancamento como duplicado
     const check = await request(app)
       .post("/transactions/import/dry-run")
       .set("Authorization", `Bearer ${token}`)
