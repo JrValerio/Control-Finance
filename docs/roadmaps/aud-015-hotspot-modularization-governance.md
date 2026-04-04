@@ -20,6 +20,14 @@ Executar modularização mínima de hotspots com escopo cirúrgico, preservando 
 - Preservar APIs públicas e comportamento externo.
 - Adicionar testes regressivos focados no recorte alterado.
 
+## Hotspot selecionado (alvo único)
+
+- Arquivo alvo: `apps/api/src/services/credit-card-invoices.service.js`.
+- Critério operacional de escolha: arquivo de serviço com alta densidade de responsabilidades (parse, inferência de período, persistência e observabilidade) e cobertura funcional já existente via endpoint público.
+- Fronteira extraída nesta fatia: resolução/inferência de período da fatura para módulo interno dedicado (`credit-card-invoice-period-inference.service.js`).
+- Contrato público que deve permanecer intocado: rotas de `credit-cards invoices` e shape de resposta retornado pelo parse/list/link.
+- Métrica simples de melhora desta fatia: bloco de inferência removido da função principal de parse e isolado em módulo testável próprio, sem alteração de API.
+
 ## Escopo que não entra
 
 - Refactor estrutural amplo do domínio inteiro.
@@ -35,7 +43,20 @@ Executar modularização mínima de hotspots com escopo cirúrgico, preservando 
 - Testes regressivos do recorte passam localmente e no CI.
 - Mudança claramente delimitada à AUD-015.
 
+## Prova de preservação de contrato
+
+- Teste regressivo focado no comportamento público do endpoint:
+	- `apps/api/src/credit-card-invoices.test.js`
+- Teste dedicado da fronteira interna extraída:
+	- `apps/api/src/services/credit-card-invoice-period-inference.service.test.js`
+- Check visível da fatia:
+	- `hotspot-credit-card-invoices` (CI)
+
 ## Rollback
 
 - Reversão única da fatia.
 - Caso necessário, restaurar implementação anterior do hotspot em um único revert.
+- Rollback exato da integração:
+	- remover script `test:hotspot:credit-card-invoices` de `apps/api/package.json`.
+	- remover job `hotspot-credit-card-invoices` de `.github/workflows/ci.yml`.
+	- reverter extração do módulo `apps/api/src/services/credit-card-invoice-period-inference.service.js`.
