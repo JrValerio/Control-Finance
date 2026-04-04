@@ -32,6 +32,18 @@ Implementar um slice minimo e verificavel para processamento de PDF escaneado co
 - Metricas de OCR registram uso e falha sem labels livres.
 - Teste automatizado cobre pelo menos: sucesso OCR e timeout/falha OCR.
 
+## Contrato minimo de status
+
+- Shape esperado em metadados de parse: `ocrRuntime: { status, reasonCode, ocrEnabled, ocrAttempted, timeoutMs }`.
+- Status permitidos nesta fatia: `success | failed | timeout`.
+- Erros tecnicos consumiveis por codigo publico: `INVOICE_OCR_TIMEOUT`, `INVOICE_OCR_FAILED`, `INVOICE_OCR_DISABLED`.
+
+## Tipo de timeout nesta fatia
+
+- Timeout logico/controlado do pipeline OCR no runtime atual.
+- Implementacao por limite configuravel (`IMPORT_OCR_TIMEOUT_MS`) aplicado por pagina durante `worker.recognize`.
+- Nao inclui (nesta fatia) timeout de fila assíncrona ou de infraestrutura externa.
+
 ## Risco principal e mitigacao
 
 - Risco: crescimento de escopo ao misturar runtime + UX + async.

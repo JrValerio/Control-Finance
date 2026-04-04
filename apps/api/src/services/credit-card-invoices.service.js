@@ -1,10 +1,11 @@
 import { dbQuery } from "../db/index.js";
-import { extractTextFromPdfWithOcr } from "../domain/imports/pdf-ocr.js";
+import { extractTextFromPdfWithOcrRuntime } from "../domain/imports/pdf-ocr.js";
 import { parseBRL, parseDMY, parseItauInvoice } from "../domain/imports/itau-invoice.parser.js";
 import { trackDomainFlowError, trackDomainFlowSuccess } from "../observability/domain-metrics.js";
 
 const CREDIT_CARD_INVOICE_BILL_TYPE = "credit_card_invoice";
 const CREDIT_CARD_INVOICE_PARSE_FLOW = "credit_card_invoice_parse";
+const CREDIT_CARD_INVOICE_OCR_RUNTIME_FLOW = "credit_card_invoice_ocr_runtime";
 const KNOWN_INVOICE_ISSUER_METRIC_KEYS = new Set([
   "itau",
   "nubank",
@@ -17,6 +18,7 @@ const KNOWN_INVOICE_ISSUER_METRIC_KEYS = new Set([
   "xp",
   "unknown",
 ]);
+const KNOWN_OCR_RUNTIME_STATUS_KEYS = new Set(["success", "failed", "timeout"]);
 
 const createError = (status, message, extra = {}) => {
   const error = new Error(message);
@@ -64,6 +66,48 @@ const extractRawExcerpt = (text) => collapseWhitespace(text).slice(0, 800);
 const resolveIssuerMetricKey = (issuer) => {
   const normalizedIssuer = String(issuer || "").trim().toLowerCase();
   return KNOWN_INVOICE_ISSUER_METRIC_KEYS.has(normalizedIssuer) ? normalizedIssuer : "unknown";
+};
+
+const resolveOcrRuntimeStatusMetricKey = (status) => {
+  const normalizedStatus = String(status || "").trim().toLowerCase();
+  return KNOWN_OCR_RUNTIME_STATUS_KEYS.has(normalizedStatus) ? normalizedStatus : "failed";
+};
+
+const resolveOcrRuntimeMetadata = (ocrRuntime) => ({
+  status: String(ocrRuntime?.status || "failed").trim().toLowerCase() || "failed",
+  reasonCode: String(ocrRuntime?.reasonCode || "unknown").trim().toLowerCase() || "unknown",
+  ocrEnabled: ocrRuntime?.ocrEnabled === true,
+  ocrAttempted: ocrRuntime?.ocrAttempted === true,
+  timeoutMs: Number.isInteger(ocrRuntime?.timeoutMs) ? ocrRuntime.timeoutMs : null,
+});
+
+const resolveParseErrorFromOcrRuntime = (ocrRuntimeMetadata) => {
+  if (ocrRuntimeMetadata?.status === "timeout") {
+    return {
+      publicCode: "INVOICE_OCR_TIMEOUT",
+      message: "Nao foi possivel extrair dados da fatura porque o OCR excedeu o tempo limite configurado.",
+    };
+  }
+
+  if (ocrRuntimeMetadata?.status !== "failed") {
+    return null;
+  }
+
+  if (ocrRuntimeMetadata.reasonCode === "ocr_disabled") {
+    return {
+      publicCode: "INVOICE_OCR_DISABLED",
+      message: "Nao foi possivel extrair dados da fatura porque o OCR para PDF escaneado esta desativado.",
+    };
+  }
+
+  if (ocrRuntimeMetadata.ocrAttempted) {
+    return {
+      publicCode: "INVOICE_OCR_FAILED",
+      message: "Nao foi possivel extrair dados da fatura porque o OCR falhou ao processar o PDF escaneado.",
+    };
+  }
+
+  return null;
 };
 
 const detectInvoiceIssuer = (rawText) => {
@@ -306,11 +350,29 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
   const card = cardRows[0];
 
   // Extract text from PDF
-  let rawText;
+  let extractionResult;
   try {
-    rawText = await extractTextFromPdfWithOcr(fileBuffer);
+    extractionResult = await extractTextFromPdfWithOcrRuntime(fileBuffer);
   } catch {
-    throw createError(422, "Nao foi possivel ler o PDF. Verifique se o arquivo nao esta corrompido.");
+    throw createError(422, "Nao foi possivel ler o PDF. Verifique se o arquivo nao esta corrompido.", {
+      publicCode: "INVOICE_PDF_READ_FAILED",
+    });
+  }
+
+  const rawText = String(extractionResult?.text || "");
+  const ocrRuntimeMetadata = resolveOcrRuntimeMetadata(extractionResult?.ocrRuntime);
+  const ocrRuntimeStatusMetricKey = resolveOcrRuntimeStatusMetricKey(ocrRuntimeMetadata.status);
+
+  if (ocrRuntimeStatusMetricKey === "success") {
+    trackDomainFlowSuccess({
+      flow: CREDIT_CARD_INVOICE_OCR_RUNTIME_FLOW,
+      operation: `status_${ocrRuntimeStatusMetricKey}`,
+    });
+  } else {
+    trackDomainFlowError({
+      flow: CREDIT_CARD_INVOICE_OCR_RUNTIME_FLOW,
+      operation: `status_${ocrRuntimeStatusMetricKey}`,
+    });
   }
 
   const strategyResult = parseCreditCardInvoiceByStrategy(rawText);
@@ -322,6 +384,12 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
       flow: CREDIT_CARD_INVOICE_PARSE_FLOW,
       operation: `issuer_${parsedIssuerMetricKey}`,
     });
+    const ocrRuntimeParseError = resolveParseErrorFromOcrRuntime(ocrRuntimeMetadata);
+    if (ocrRuntimeParseError) {
+      throw createError(422, ocrRuntimeParseError.message, {
+        publicCode: ocrRuntimeParseError.publicCode,
+      });
+    }
     throw createError(422, "Nao foi possivel extrair dados da fatura. Verifique se o PDF contem vencimento e total da fatura.", {
       publicCode: "INVOICE_PARSE_FAILED",
     });
@@ -384,6 +452,7 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
       strategy: strategyResult.strategy,
       name: strategyResult.parserName,
     },
+    ocrRuntime: ocrRuntimeMetadata,
     issuerDetection: strategyResult.issuerDetection,
     reviewContext: {
       needsReview,

@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  extractTextFromPdfWithOcrRuntime,
   extractTextFromPdfWithOcr,
   isImportOcrEnabled,
+  resolveImportOcrTimeoutMs,
   shouldRunPdfOcrFallback,
 } from "./pdf-ocr.js";
 
@@ -10,6 +12,12 @@ describe("pdf OCR fallback", () => {
     expect(isImportOcrEnabled(undefined)).toBe(false);
     expect(isImportOcrEnabled("false")).toBe(false);
     expect(isImportOcrEnabled("true")).toBe(true);
+  });
+
+  it("IMPORT_OCR_TIMEOUT_MS usa default e respeita limite minimo", () => {
+    expect(resolveImportOcrTimeoutMs(undefined)).toBe(20000);
+    expect(resolveImportOcrTimeoutMs("100")).toBe(20000);
+    expect(resolveImportOcrTimeoutMs("2500")).toBe(2500);
   });
 
   it("nao roda OCR quando texto nativo do PDF ja parece utilizavel", () => {
@@ -65,6 +73,26 @@ describe("pdf OCR fallback", () => {
     expect(text).toBe("abc 123");
     expect(fakeParser.getScreenshot).not.toHaveBeenCalled();
     expect(loadCreateWorkerFn).not.toHaveBeenCalled();
+  });
+
+  it("retorna status failed quando OCR seria necessario mas esta desligado", async () => {
+    const fakeParser = {
+      getText: vi.fn().mockResolvedValue({ text: "abc 123" }),
+      getScreenshot: vi.fn(),
+      destroy: vi.fn().mockResolvedValue(undefined),
+    };
+    const PDFParseCtor = vi.fn(() => fakeParser);
+
+    const result = await extractTextFromPdfWithOcrRuntime(Buffer.from("fake-pdf"), {
+      PDFParseCtor,
+      ocrEnabled: false,
+    });
+
+    expect(result.text).toBe("abc 123");
+    expect(result.ocrRuntime.status).toBe("failed");
+    expect(result.ocrRuntime.reasonCode).toBe("ocr_disabled");
+    expect(result.ocrRuntime.ocrAttempted).toBe(false);
+    expect(fakeParser.getScreenshot).not.toHaveBeenCalled();
   });
 
   it("propaga erro quando getText lanca e ainda destroi o parser", async () => {
@@ -151,6 +179,40 @@ describe("pdf OCR fallback", () => {
     expect(text).toContain("PGTO INSS");
     expect(fakeParser.getScreenshot).toHaveBeenCalled();
     expect(createWorkerFn).toHaveBeenCalled();
+    expect(fakeWorker.terminate).toHaveBeenCalled();
+  });
+
+  it("retorna status timeout quando OCR ultrapassa timeout configurado", async () => {
+    const fakeParser = {
+      getText: vi.fn().mockResolvedValue({ text: "abc 123" }),
+      getScreenshot: vi.fn().mockResolvedValue({
+        pages: [{ data: Buffer.from("fake-image") }],
+      }),
+      destroy: vi.fn().mockResolvedValue(undefined),
+    };
+    const fakeWorker = {
+      recognize: vi.fn().mockImplementation(
+        () =>
+          new Promise(() => {
+            // never resolves
+          }),
+      ),
+      terminate: vi.fn().mockResolvedValue(undefined),
+    };
+    const PDFParseCtor = vi.fn(() => fakeParser);
+    const createWorkerFn = vi.fn().mockResolvedValue(fakeWorker);
+
+    const result = await extractTextFromPdfWithOcrRuntime(Buffer.from("fake-pdf"), {
+      PDFParseCtor,
+      createWorkerFn,
+      ocrEnabled: true,
+      ocrTimeoutMs: 5,
+    });
+
+    expect(result.text).toBe("abc 123");
+    expect(result.ocrRuntime.status).toBe("timeout");
+    expect(result.ocrRuntime.reasonCode).toBe("ocr_timeout");
+    expect(result.ocrRuntime.ocrAttempted).toBe(true);
     expect(fakeWorker.terminate).toHaveBeenCalled();
   });
 });
