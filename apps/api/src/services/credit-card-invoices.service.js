@@ -6,6 +6,9 @@ import { trackDomainFlowError, trackDomainFlowSuccess } from "../observability/d
 const CREDIT_CARD_INVOICE_BILL_TYPE = "credit_card_invoice";
 const CREDIT_CARD_INVOICE_PARSE_FLOW = "credit_card_invoice_parse";
 const CREDIT_CARD_INVOICE_OCR_RUNTIME_FLOW = "credit_card_invoice_ocr_runtime";
+const CREDIT_CARD_INVOICE_CLASSIFICATION_CONFIRMATION_FLOW = "credit_card_invoice_classification_confirmation";
+const HIGH_CONFIDENCE_SCORE = 0.9;
+const LOW_CONFIDENCE_SCORE = 0.45;
 const KNOWN_INVOICE_ISSUER_METRIC_KEYS = new Set([
   "itau",
   "nubank",
@@ -25,6 +28,25 @@ const createError = (status, message, extra = {}) => {
   error.status = status;
   Object.assign(error, extra);
   return error;
+};
+
+const normalizeJsonObject = (value) => {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      return {};
+    }
+  }
+
+  return {};
 };
 
 const normalizeUserId = (value) => {
@@ -108,6 +130,32 @@ const resolveParseErrorFromOcrRuntime = (ocrRuntimeMetadata) => {
   }
 
   return null;
+};
+
+const resolveInvoiceClassificationSignals = ({ parseConfidence, parseMetadata }) => {
+  const normalizedParseConfidence = String(parseConfidence || "").trim().toLowerCase() === "high" ? "high" : "low";
+  const normalizedParseMetadata = normalizeJsonObject(parseMetadata);
+  const reviewContext = normalizeJsonObject(normalizedParseMetadata.reviewContext);
+  const reasonCodes = Array.isArray(reviewContext.reasonCodes)
+    ? reviewContext.reasonCodes
+      .map((value) => String(value || "").trim().toLowerCase())
+      .filter(Boolean)
+    : [];
+
+  const classificationAmbiguous =
+    reviewContext.needsReview === true || normalizedParseConfidence !== "high" || reasonCodes.length > 0;
+
+  const reasonCode = classificationAmbiguous
+    ? reasonCodes[0] || (normalizedParseConfidence === "low" ? "parse_confidence_low" : "manual_review_required")
+    : "not_ambiguous";
+
+  return {
+    classificationConfidence: normalizedParseConfidence === "high" ? HIGH_CONFIDENCE_SCORE : LOW_CONFIDENCE_SCORE,
+    classificationAmbiguous,
+    reasonCode,
+    requiresUserConfirmation: classificationAmbiguous,
+    parseMetadata: normalizedParseMetadata,
+  };
 };
 
 const detectInvoiceIssuer = (rawText) => {
@@ -308,32 +356,42 @@ const inferPeriod = (dueDate, closingDay) => {
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
-const formatInvoice = (row) => ({
-  id: Number(row.id),
-  userId: Number(row.user_id),
-  creditCardId: Number(row.credit_card_id),
-  issuer: row.issuer,
-  cardLast4: row.card_last4 ?? null,
-  periodStart: typeof row.period_start === "string"
-    ? row.period_start
-    : row.period_start?.toISOString().slice(0, 10) ?? null,
-  periodEnd: typeof row.period_end === "string"
-    ? row.period_end
-    : row.period_end?.toISOString().slice(0, 10) ?? null,
-  dueDate: typeof row.due_date === "string"
-    ? row.due_date
-    : row.due_date?.toISOString().slice(0, 10) ?? null,
-  totalAmount: Number(row.total_amount),
-  minimumPayment: row.minimum_payment != null ? Number(row.minimum_payment) : null,
-  financedBalance: row.financed_balance != null ? Number(row.financed_balance) : null,
-  parseConfidence: row.parse_confidence,
-  parseMetadata: row.parse_metadata ?? {},
-  needsReview:
-    row.parse_metadata?.reviewContext?.needsReview === true || row.parse_confidence === "low",
-  linkedBillId: row.linked_bill_id ? Number(row.linked_bill_id) : null,
-  createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at?.toISOString(),
-  updatedAt: typeof row.updated_at === "string" ? row.updated_at : row.updated_at?.toISOString(),
-});
+const formatInvoice = (row) => {
+  const classificationSignals = resolveInvoiceClassificationSignals({
+    parseConfidence: row.parse_confidence,
+    parseMetadata: row.parse_metadata,
+  });
+
+  return {
+    id: Number(row.id),
+    userId: Number(row.user_id),
+    creditCardId: Number(row.credit_card_id),
+    issuer: row.issuer,
+    cardLast4: row.card_last4 ?? null,
+    periodStart: typeof row.period_start === "string"
+      ? row.period_start
+      : row.period_start?.toISOString().slice(0, 10) ?? null,
+    periodEnd: typeof row.period_end === "string"
+      ? row.period_end
+      : row.period_end?.toISOString().slice(0, 10) ?? null,
+    dueDate: typeof row.due_date === "string"
+      ? row.due_date
+      : row.due_date?.toISOString().slice(0, 10) ?? null,
+    totalAmount: Number(row.total_amount),
+    minimumPayment: row.minimum_payment != null ? Number(row.minimum_payment) : null,
+    financedBalance: row.financed_balance != null ? Number(row.financed_balance) : null,
+    parseConfidence: row.parse_confidence,
+    parseMetadata: classificationSignals.parseMetadata,
+    needsReview: classificationSignals.classificationAmbiguous,
+    classificationConfidence: classificationSignals.classificationConfidence,
+    classificationAmbiguous: classificationSignals.classificationAmbiguous,
+    reasonCode: classificationSignals.reasonCode,
+    requiresUserConfirmation: classificationSignals.requiresUserConfirmation,
+    linkedBillId: row.linked_bill_id ? Number(row.linked_bill_id) : null,
+    createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at?.toISOString(),
+    updatedAt: typeof row.updated_at === "string" ? row.updated_at : row.updated_at?.toISOString(),
+  };
+};
 
 // ─── Parse PDF ────────────────────────────────────────────────────────────────
 
@@ -525,12 +583,28 @@ export const linkBillToInvoiceForUser = async (rawUserId, rawCardId, rawInvoiceI
 
   // Invoice ownership
   const { rows: invRows } = await dbQuery(
-    `SELECT id, linked_bill_id, total_amount FROM credit_card_invoices
+    `SELECT id, linked_bill_id, total_amount, parse_confidence, parse_metadata FROM credit_card_invoices
       WHERE id = $1 AND credit_card_id = $2 AND user_id = $3`,
     [invoiceId, cardId, userId]
   );
   if (!invRows.length) throw createError(404, "Fatura nao encontrada.");
   if (invRows[0].linked_bill_id) throw createError(409, "Fatura ja esta vinculada a uma pendencia.");
+
+  const classificationSignals = resolveInvoiceClassificationSignals({
+    parseConfidence: invRows[0].parse_confidence,
+    parseMetadata: invRows[0].parse_metadata,
+  });
+  const explicitAmbiguousConfirmation = input?.confirmAmbiguousClassification === true;
+
+  if (classificationSignals.requiresUserConfirmation && !explicitAmbiguousConfirmation) {
+    trackDomainFlowError({
+      flow: CREDIT_CARD_INVOICE_CLASSIFICATION_CONFIRMATION_FLOW,
+      operation: "auto_accept_blocked",
+    });
+    throw createError(422, "Confirmacao explicita obrigatoria para fatura com classificacao ambigua.", {
+      publicCode: "AMBIGUOUS_CLASSIFICATION_CONFIRMATION_REQUIRED",
+    });
+  }
 
   // Bill ownership + same card
   const { rows: billRows } = await dbQuery(
@@ -577,6 +651,11 @@ export const linkBillToInvoiceForUser = async (rawUserId, rawCardId, rawInvoiceI
       RETURNING *`,
     [billId, invoiceId, userId]
   );
+
+  trackDomainFlowSuccess({
+    flow: CREDIT_CARD_INVOICE_CLASSIFICATION_CONFIRMATION_FLOW,
+    operation: classificationSignals.requiresUserConfirmation ? "manual_confirmation" : "auto_accept",
+  });
 
   return formatInvoice(updated[0]);
 };

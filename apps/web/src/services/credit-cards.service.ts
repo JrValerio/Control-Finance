@@ -114,9 +114,17 @@ export interface CreditCardInvoicePdf {
   parseConfidence: InvoiceParseConfidence;
   parseMetadata: Record<string, unknown>;
   needsReview?: boolean;
+  classificationConfidence?: number;
+  classificationAmbiguous?: boolean;
+  reasonCode?: string;
+  requiresUserConfirmation?: boolean;
   linkedBillId: number | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface LinkBillToInvoicePdfOptions {
+  confirmAmbiguousClassification?: boolean;
 }
 
 const normalizeString = (value: unknown) => (typeof value === "string" ? value.trim() : "");
@@ -293,11 +301,17 @@ export const creditCardsService = {
   linkBillToInvoicePdf: async (
     cardId: number,
     invoiceId: number,
-    billId: number
+    billId: number,
+    options: LinkBillToInvoicePdfOptions = {},
   ): Promise<CreditCardInvoicePdf> => {
     const { data } = await api.post<CreditCardInvoicePdf>(
       `/credit-cards/${cardId}/invoices/${invoiceId}/link-bill`,
-      { billId }
+      {
+        billId,
+        ...(options.confirmAmbiguousClassification === true
+          ? { confirmAmbiguousClassification: true }
+          : {}),
+      }
     );
     return data;
   },
