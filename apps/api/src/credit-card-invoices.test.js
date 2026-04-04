@@ -52,6 +52,13 @@ TOTAL DA FATURA    R$ 1.247,80
 PAGAMENTO MÍNIMO R$ 124,78
 `.trim();
 
+const VALID_NUBANK_TEXT = `
+NUBANK
+Cartao final 9988
+VENCIMENTO  20/03/2026
+TOTAL DA FATURA    R$ 540,35
+`.trim();
+
 const INVALID_TEXT = `Este texto nao tem nenhum dado de fatura.`;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -134,6 +141,8 @@ describe("credit-card-invoices", () => {
     expect(res.body.periodEnd).toBe("2026-03-07");
     expect(res.body.minimumPayment).toBe(124.78);
     expect(res.body.parseConfidence).toBe("high");
+    expect(res.body.needsReview).toBe(false);
+    expect(res.body.parseMetadata?.parser?.name).toBe("itau_parser_v1");
     expect(res.body.linkedBillId).toBeNull();
   });
 
@@ -149,10 +158,50 @@ describe("credit-card-invoices", () => {
 
     expect(res.status).toBe(201);
     expect(res.body.parseConfidence).toBe("low");
+    expect(res.body.needsReview).toBe(true);
     expect(res.body.periodStart).not.toBeNull();
     expect(res.body.periodEnd).not.toBeNull();
     expect(res.body.parseMetadata.fieldsSources.periodStart).toBe("inference:closing_day");
     expect(res.body.parseMetadata.inferenceContext.closingDay).toBe(7);
+    expect(res.body.parseMetadata.reviewContext.reasonCodes).toContain("period_inferred_from_closing_day");
+  });
+
+  it("POST parse-pdf usa fallback por emissor reconhecido nao-itau com needsReview", async () => {
+    const token = await registerAndLogin("inv-nubank-fallback@test.dev");
+    mockExtractText.mockResolvedValue(VALID_NUBANK_TEXT);
+
+    const cardRes = await createCard(token, { closingDay: 10, dueDay: 20 });
+    const cardId = cardRes.body.id;
+
+    const res = await uploadInvoice(token, cardId);
+
+    expect(res.status).toBe(201);
+    expect(res.body.issuer).toBe("nubank");
+    expect(res.body.cardLast4).toBe("9988");
+    expect(res.body.totalAmount).toBe(540.35);
+    expect(res.body.dueDate).toBe("2026-03-20");
+    expect(res.body.parseConfidence).toBe("low");
+    expect(res.body.needsReview).toBe(true);
+    expect(res.body.parseMetadata?.parser?.strategy).toBe("generic_fallback");
+    expect(res.body.parseMetadata?.reviewContext?.reasonCodes).toContain("issuer_parser_fallback");
+    expect(res.body.parseMetadata?.reviewContext?.reasonCodes).toContain("period_inferred_from_closing_day");
+  });
+
+  it("POST parse-pdf contabiliza domain metric por emissor", async () => {
+    const token = await registerAndLogin("inv-metric-by-issuer@test.dev");
+    mockExtractText.mockResolvedValue(VALID_NUBANK_TEXT);
+
+    const cardRes = await createCard(token);
+    const cardId = cardRes.body.id;
+
+    const parseRes = await uploadInvoice(token, cardId);
+    expect(parseRes.status).toBe(201);
+
+    const metricsRes = await request(app).get("/metrics");
+    expect(metricsRes.status).toBe(200);
+    expect(metricsRes.text).toMatch(
+      /domain_financial_flow_events_total\{flow="credit_card_invoice_parse",operation="issuer_nubank",outcome="success"\}\s+([0-9.]+)/,
+    );
   });
 
   it("POST parse-pdf retorna 422 INVOICE_PARSE_FAILED para texto ilegivel", async () => {

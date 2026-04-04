@@ -1,8 +1,22 @@
 import { dbQuery } from "../db/index.js";
 import { extractTextFromPdfWithOcr } from "../domain/imports/pdf-ocr.js";
-import { parseItauInvoice } from "../domain/imports/itau-invoice.parser.js";
+import { parseBRL, parseDMY, parseItauInvoice } from "../domain/imports/itau-invoice.parser.js";
+import { trackDomainFlowError, trackDomainFlowSuccess } from "../observability/domain-metrics.js";
 
 const CREDIT_CARD_INVOICE_BILL_TYPE = "credit_card_invoice";
+const CREDIT_CARD_INVOICE_PARSE_FLOW = "credit_card_invoice_parse";
+const KNOWN_INVOICE_ISSUER_METRIC_KEYS = new Set([
+  "itau",
+  "nubank",
+  "bradesco",
+  "santander",
+  "bb",
+  "caixa",
+  "inter",
+  "c6",
+  "xp",
+  "unknown",
+]);
 
 const createError = (status, message, extra = {}) => {
   const error = new Error(message);
@@ -36,6 +50,162 @@ const normalizeInvoiceId = (value) => {
 };
 
 const toMoney = (value) => Number(Number(value || 0).toFixed(2));
+
+const normalizeTextForDetection = (text) =>
+  String(text || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const collapseWhitespace = (text) => String(text || "").replace(/\s+/g, " ").trim();
+
+const extractRawExcerpt = (text) => collapseWhitespace(text).slice(0, 800);
+
+const resolveIssuerMetricKey = (issuer) => {
+  const normalizedIssuer = String(issuer || "").trim().toLowerCase();
+  return KNOWN_INVOICE_ISSUER_METRIC_KEYS.has(normalizedIssuer) ? normalizedIssuer : "unknown";
+};
+
+const detectInvoiceIssuer = (rawText) => {
+  const normalizedText = normalizeTextForDetection(rawText);
+  const detectionRules = [
+    { issuer: "itau", confidence: "high", patterns: ["itau", "banco itau"] },
+    { issuer: "nubank", confidence: "high", patterns: ["nubank", "nu pagamentos"] },
+    { issuer: "bradesco", confidence: "high", patterns: ["bradesco", "banco bradesco"] },
+    { issuer: "santander", confidence: "high", patterns: ["santander"] },
+    { issuer: "bb", confidence: "high", patterns: ["banco do brasil", "bb cartoes"] },
+    { issuer: "caixa", confidence: "high", patterns: ["caixa economica", "caixa"] },
+    { issuer: "inter", confidence: "high", patterns: ["banco inter", "inter"] },
+    { issuer: "c6", confidence: "high", patterns: ["c6 bank", "c6"] },
+    { issuer: "xp", confidence: "high", patterns: ["xp", "xp investimentos"] },
+  ];
+
+  for (const rule of detectionRules) {
+    if (rule.patterns.some((pattern) => normalizedText.includes(pattern))) {
+      return {
+        issuer: rule.issuer,
+        confidence: rule.confidence,
+        source: "text_signature",
+      };
+    }
+  }
+
+  return {
+    issuer: "unknown",
+    confidence: "low",
+    source: "fallback_unknown",
+  };
+};
+
+const extractGenericDueDate = (text) => {
+  const patterns = [
+    /VENCIMENTO\s+(\d{2}\/\d{2}\/\d{4})/i,
+    /DATA\s+DE\s+VENCIMENTO\s+(\d{2}\/\d{2}\/\d{4})/i,
+    /PAGUE\s+AT[EÉ]\s+(\d{2}\/\d{2}\/\d{4})/i,
+    /VENCE\s+EM\s+(\d{2}\/\d{2}\/\d{4})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = String(text || "").match(pattern);
+    if (match) {
+      const dueDate = parseDMY(match[1]);
+      if (dueDate) {
+        return { value: dueDate, source: "regex:GENERIC_VENCIMENTO" };
+      }
+    }
+  }
+
+  return null;
+};
+
+const extractGenericTotalAmount = (text) => {
+  const patterns = [
+    /TOTAL\s+DA\s+FATURA\s+R\$\s*([\d.,]+)/i,
+    /VALOR\s+TOTAL\s+DA\s+FATURA\s+R\$\s*([\d.,]+)/i,
+    /FATURA\s+TOTAL\s+R\$\s*([\d.,]+)/i,
+    /TOTAL\s+A\s+PAGAR\s+R\$\s*([\d.,]+)/i,
+    /VALOR\s+DO\s+DOCUMENTO\s+R\$\s*([\d.,]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = String(text || "").match(pattern);
+    if (match) {
+      const totalAmount = parseBRL(match[1]);
+      if (totalAmount !== null) {
+        return { value: totalAmount, source: "regex:GENERIC_TOTAL_AMOUNT" };
+      }
+    }
+  }
+
+  return null;
+};
+
+const extractGenericCardLast4 = (text) => {
+  const patterns = [
+    /\*{4}\s*(\d{4})/,
+    /final\s+(\d{4})/i,
+    /cartao\s+(?:final|numero)?\s*\*+(\d{4})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = String(text || "").match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  return null;
+};
+
+const parseGenericCreditCardInvoice = ({ rawText, issuer }) => {
+  const totalResult = extractGenericTotalAmount(rawText);
+  const dueDateResult = extractGenericDueDate(rawText);
+
+  if (!totalResult || !dueDateResult) {
+    return null;
+  }
+
+  return {
+    totalAmount: totalResult.value,
+    dueDate: dueDateResult.value,
+    periodStart: null,
+    periodEnd: null,
+    minimumPayment: null,
+    financedBalance: null,
+    cardLast4: extractGenericCardLast4(rawText),
+    issuer,
+    fieldsSources: {
+      totalAmount: totalResult.source,
+      dueDate: dueDateResult.source,
+      periodStart: null,
+      periodEnd: null,
+    },
+    rawExcerpt: extractRawExcerpt(rawText),
+  };
+};
+
+const parseCreditCardInvoiceByStrategy = (rawText) => {
+  const issuerDetection = detectInvoiceIssuer(rawText);
+
+  if (issuerDetection.issuer === "itau") {
+    return {
+      parsed: parseItauInvoice(rawText),
+      strategy: "issuer_specific",
+      parserName: "itau_parser_v1",
+      issuerDetection,
+    };
+  }
+
+  return {
+    parsed: parseGenericCreditCardInvoice({
+      rawText,
+      issuer: issuerDetection.issuer,
+    }),
+    strategy: "generic_fallback",
+    parserName: "generic_invoice_parser_v1",
+    issuerDetection,
+  };
+};
 
 // ─── Period inference ─────────────────────────────────────────────────────────
 
@@ -114,6 +284,8 @@ const formatInvoice = (row) => ({
   financedBalance: row.financed_balance != null ? Number(row.financed_balance) : null,
   parseConfidence: row.parse_confidence,
   parseMetadata: row.parse_metadata ?? {},
+  needsReview:
+    row.parse_metadata?.reviewContext?.needsReview === true || row.parse_confidence === "low",
   linkedBillId: row.linked_bill_id ? Number(row.linked_bill_id) : null,
   createdAt: typeof row.created_at === "string" ? row.created_at : row.created_at?.toISOString(),
   updatedAt: typeof row.updated_at === "string" ? row.updated_at : row.updated_at?.toISOString(),
@@ -141,10 +313,16 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
     throw createError(422, "Nao foi possivel ler o PDF. Verifique se o arquivo nao esta corrompido.");
   }
 
-  // Parse
-  const parsed = parseItauInvoice(rawText);
+  const strategyResult = parseCreditCardInvoiceByStrategy(rawText);
+  const parsed = strategyResult.parsed;
+  const parsedIssuerMetricKey = resolveIssuerMetricKey(strategyResult.issuerDetection?.issuer);
+
   if (!parsed) {
-    throw createError(422, "Nao foi possivel extrair dados da fatura. Verifique se o PDF e um extrato do Itau.", {
+    trackDomainFlowError({
+      flow: CREDIT_CARD_INVOICE_PARSE_FLOW,
+      operation: `issuer_${parsedIssuerMetricKey}`,
+    });
+    throw createError(422, "Nao foi possivel extrair dados da fatura. Verifique se o PDF contem vencimento e total da fatura.", {
       publicCode: "INVOICE_PARSE_FAILED",
     });
   }
@@ -179,9 +357,38 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
     inferenceContext.closingDay = closingDay;
   }
 
+  const reviewReasonCodes = [];
+
+  if (parseConfidence === "low") {
+    reviewReasonCodes.push("period_inferred_from_closing_day");
+  }
+
+  if (strategyResult.strategy === "generic_fallback") {
+    reviewReasonCodes.push("issuer_parser_fallback");
+  }
+
+  if (strategyResult.issuerDetection?.confidence === "low") {
+    reviewReasonCodes.push("issuer_detection_low_confidence");
+  }
+
+  if (parsed.issuer === "unknown") {
+    reviewReasonCodes.push("issuer_not_recognized");
+  }
+
+  const needsReview = parseConfidence === "low" || reviewReasonCodes.length > 0;
+
   const parseMetadata = {
     rawExcerpt: parsed.rawExcerpt,
     fieldsSources,
+    parser: {
+      strategy: strategyResult.strategy,
+      name: strategyResult.parserName,
+    },
+    issuerDetection: strategyResult.issuerDetection,
+    reviewContext: {
+      needsReview,
+      reasonCodes: [...new Set(reviewReasonCodes)],
+    },
     ...(Object.keys(inferenceContext).length > 0 ? { inferenceContext } : {}),
   };
 
@@ -202,6 +409,11 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
       JSON.stringify(parseMetadata),
     ]
   );
+
+  trackDomainFlowSuccess({
+    flow: CREDIT_CARD_INVOICE_PARSE_FLOW,
+    operation: `issuer_${parsedIssuerMetricKey}`,
+  });
 
   return formatInvoice(rows[0]);
 };
