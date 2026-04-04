@@ -64,6 +64,9 @@ describe("transaction imports", () => {
       .set("Authorization", `Bearer ${token}`);
 
     expect(response.status).toBe(200);
+    expect(response.headers.deprecation).toBe("true");
+    expect(response.headers.sunset).toBe("Fri, 31 Jul 2026 23:59:59 GMT");
+    expect(response.headers["x-contract-status"]).toBe("deprecated");
     expect(response.body).toEqual({
       total: 0,
       last30Days: 0,
@@ -256,6 +259,7 @@ describe("transaction imports", () => {
       .set("Authorization", `Bearer ${tokenUserA}`);
 
     expect(response.status).toBe(200);
+    expect(response.headers.deprecation).toBeUndefined();
     expect(response.body.pagination).toEqual({
       limit: 20,
       offset: 0,

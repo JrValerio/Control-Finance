@@ -45,6 +45,8 @@ import {
 } from "../services/transactions-import-rules.service.js";
 
 const router = Router();
+
+const IMPORT_METRICS_SUNSET_UTC = "Fri, 31 Jul 2026 23:59:59 GMT";
 const IMPORT_MAX_FILE_SIZE_BYTES = Number(
   process.env.IMPORT_CSV_MAX_FILE_SIZE_BYTES || 2 * 1024 * 1024,
 );
@@ -268,6 +270,11 @@ router.get("/imports/metrics", async (req, res, next) => {
   const requestId = req.requestId || null;
 
   try {
+    // Compatibility-first prune: mark endpoint as deprecated before hard removal.
+    res.setHeader("Deprecation", "true");
+    res.setHeader("Sunset", IMPORT_METRICS_SUNSET_UTC);
+    res.setHeader("X-Contract-Status", "deprecated");
+
     const metrics = await getTransactionsImportMetricsByUser(req.user.id);
 
     logImportEvent("import.metrics.success", {
