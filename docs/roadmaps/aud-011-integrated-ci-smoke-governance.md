@@ -24,6 +24,14 @@ Adicionar um recorte minimo e executavel de smoke integrado no CI para jornadas 
 - Executar smoke em pipeline de CI com resultado bloqueante para regressao no recorte definido.
 - Produzir saida operacional minima para diagnostico de falha (pass/fail por jornada).
 
+## Jornada critica minima (operacional)
+
+- Fluxo escolhido: criar uma pendencia financeira e validar reflexo imediato no resumo de pendencias.
+- Entrada minima: usuario autenticado + payload de `POST /bills` com `title`, `amount` e `dueDate` validos.
+- Condicao de sucesso: `POST /bills` retorna 201 e `GET /bills/summary` retorna `pendingCount=1` com `pendingTotal` coerente.
+- Condicao de falha bloqueante: qualquer divergencia nesses asserts reprova o check dedicado no CI.
+- Evidencia operacional no CI: log do job de smoke + artifact `smoke-critical-finance-journey-log`.
+
 ## Escopo que nao entra
 
 - Expansao ampla de cobertura end-to-end.
@@ -35,6 +43,7 @@ Adicionar um recorte minimo e executavel de smoke integrado no CI para jornadas 
 
 - Job de smoke opcional em paralelo ate estabilizar, conforme plano executavel.
 - Reversao unica da fatia sem alterar contratos funcionais.
+- Rollback exato da integracao: remover o job `smoke-critical-finance-journey` de `.github/workflows/ci.yml` e o script `test:smoke:critical` de `apps/api/package.json`.
 
 ## Criterios verificaveis minimos
 
