@@ -19,6 +19,14 @@ Consolidar, em recorte mínimo, regras financeiras críticas em módulo de domí
 - Preservar contratos públicos, payloads e semântica observável.
 - Adicionar teste(s) de invariantes/regressão focados no recorte.
 
+## Fronteira crítica selecionada (alvo único)
+
+- Arquivo alvo: `apps/api/src/services/credit-card-invoices.service.js`.
+- Critério operacional de escolha: regra financeira crítica usada em dois pontos sensíveis do fluxo (shape de resposta de fatura e bloqueio de confirmação no link de pendência), com risco direto de inconsistência sem fronteira canônica.
+- Fronteira consolidada nesta fatia: resolução de sinais de classificação ambígua (`classificationAmbiguous`, `reasonCode`, `requiresUserConfirmation`, `classificationConfidence`) em módulo interno dedicado (`credit-card-invoice-classification.service.js`).
+- Contrato público que deve permanecer intocado: rotas de `credit-cards invoices` e shape de resposta retornado pelo parse/list/link.
+- Métrica simples de melhora desta fatia: regra única de classificação removida do serviço principal e isolada em módulo testável próprio, sem alteração de API.
+
 ## Escopo que não entra
 
 - Refactor estrutural amplo do domínio inteiro.
@@ -34,7 +42,20 @@ Consolidar, em recorte mínimo, regras financeiras críticas em módulo de domí
 - Testes focados verdes no recorte alterado.
 - Mudança delimitada à AUD-016.
 
+## Prova de preservação de contrato
+
+- Teste regressivo focado no comportamento público do endpoint:
+	- `apps/api/src/credit-card-invoices.test.js`
+- Teste dedicado da fronteira interna consolidada:
+	- `apps/api/src/services/credit-card-invoice-classification.service.test.js`
+- Check visível da fatia:
+	- `domain-invoice-classification` (CI)
+
 ## Rollback
 
 - Reversão única da fatia.
 - Caso necessário, restaurar implementação anterior da regra consolidada em um único revert.
+- Rollback exato da integração:
+	- remover script `test:domain:invoice-classification` de `apps/api/package.json`.
+	- remover job `domain-invoice-classification` de `.github/workflows/ci.yml`.
+	- reverter extração do módulo `apps/api/src/services/credit-card-invoice-classification.service.js`.
