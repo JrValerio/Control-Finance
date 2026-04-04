@@ -11,6 +11,15 @@
  */
 
 export const securityHeadersMiddleware = (req, res, next) => {
+  const baselineHeaders = {
+    "Cross-Origin-Embedder-Policy": "require-corp",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "SAMEORIGIN",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Permitted-Cross-Domain-Policies": "none",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+  };
+
   // Default COOP policy: restrict popup communication for general security
   let coopPolicy = "same-origin";
 
@@ -23,8 +32,9 @@ export const securityHeadersMiddleware = (req, res, next) => {
   // Set COOP header
   res.setHeader("Cross-Origin-Opener-Policy", coopPolicy);
 
-  // Set COEP header: require CORS headers on cross-origin resources
-  res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+  Object.entries(baselineHeaders).forEach(([name, value]) => {
+    res.setHeader(name, value);
+  });
 
   next();
 };
