@@ -18,6 +18,8 @@ import {
   trackDryRunUtilityGateDecisionMetrics,
 } from "../observability/import-observability.js";
 import {
+  classifyDocumentObservabilityReasonClass,
+  trackDocumentObservabilityEvent,
   trackDomainFlowError,
   trackDomainFlowSuccess,
 } from "../observability/domain-metrics.js";
@@ -454,12 +456,23 @@ router.post("/import/dry-run", importRateLimiter, requireFeature("csv_import"), 
   const requestId = req.requestId || null;
 
   upload.single("file")(req, res, async (error) => {
+    trackDocumentObservabilityEvent({
+      source: "transactions_import",
+      signal: "parse_attempt",
+    });
+
     if (error) {
       let normalizedError = error;
 
       if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
         normalizedError = createError(413, "Arquivo muito grande.");
       }
+
+      trackDocumentObservabilityEvent({
+        source: "transactions_import",
+        signal: "parse_failure",
+        reasonClass: classifyDocumentObservabilityReasonClass(normalizedError),
+      });
 
       logImportEvent("import.dry_run.error", {
         requestId,
@@ -528,6 +541,12 @@ router.post("/import/dry-run", importRateLimiter, requireFeature("csv_import"), 
 
       return res.status(200).json(dryRunResult);
     } catch (serviceError) {
+      trackDocumentObservabilityEvent({
+        source: "transactions_import",
+        signal: "parse_failure",
+        reasonClass: classifyDocumentObservabilityReasonClass(serviceError),
+      });
+
       logImportEvent("import.dry_run.error", {
         requestId,
         userId,
@@ -570,6 +589,10 @@ router.post("/import/commit", importRateLimiter, requireFeature("csv_import"), a
     const invalidRows = Number(observability.invalidRows) || 0;
 
     trackCommitSuccessMetrics({ rowsImported: commitResult.imported });
+    trackDocumentObservabilityEvent({
+      source: "transactions_import",
+      signal: "sensitive_mutation_success",
+    });
     trackDomainFlowSuccess({
       flow: "transactions_import",
       operation: "commit",
