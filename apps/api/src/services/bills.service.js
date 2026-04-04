@@ -577,8 +577,13 @@ const UTILITY_TYPES_PLACEHOLDER = UTILITY_BILL_TYPES.map((_, i) => `$${i + 2}`).
  */
 export const getUtilityBillsPanelForUser = async (userId) => {
   const uid = normalizeUserId(userId);
-  const today = new Date().toISOString().slice(0, 10);
-  const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const todayDate = new Date();
+  const in7DaysDate = new Date(todayDate);
+  in7DaysDate.setDate(in7DaysDate.getDate() + 7);
+
+  // Use local calendar dates to keep bucket boundaries consistent with mapBillRow.
+  const today = toISODate(todayDate);
+  const in7Days = toISODate(in7DaysDate);
 
   const { rows } = await dbQuery(
     `SELECT * FROM bills
