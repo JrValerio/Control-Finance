@@ -16,6 +16,7 @@
     "lint": "eslint src --max-warnings 0",
     "test:observability:documents": "vitest run src/document-financial-observability.test.js",
     "test:semantic:dashboard": "vitest run src/dashboard.test.js",
+    "test:contracts:dashboard-shared-map": "vitest run src/domain/contracts/dashboard-semantic-source-map.contract.test.ts",
     "test:hotspot:credit-card-invoices": "vitest run src/services/credit-card-invoice-period-inference.service.test.js src/credit-card-invoices.test.js",
     "test:domain:invoice-classification": "vitest run src/services/credit-card-invoice-classification.service.test.js src/credit-card-invoices.test.js",
     "test:golden": "vitest run src/credit-card-invoices.golden.test.js",

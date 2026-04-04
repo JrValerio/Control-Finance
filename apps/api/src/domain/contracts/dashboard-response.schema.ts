@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CoreFinancialSemanticContractSchema } from "./core-financial-semantic-contract.schema";
+import { DASHBOARD_SEMANTIC_SOURCE_MAP as DASHBOARD_CANONICAL_SEMANTIC_SOURCE_MAP } from "./dashboard-semantic-source-map.contract";
 
 const DashboardBillsSchema = z.object({
   overdueCount: z.number().int().nonnegative(),
@@ -33,19 +34,17 @@ const DashboardConsignadoSchema = z.object({
 });
 
 export const DashboardSemanticSourceMapSchema = z.object({
-  realized: z.tuple([z.literal("dashboard.income.receivedThisMonth")]),
-  currentPosition: z.tuple([z.literal("dashboard.bankBalance")]),
+  realized: z.tuple([z.literal(DASHBOARD_CANONICAL_SEMANTIC_SOURCE_MAP.realized[0])]),
+  currentPosition: z.tuple([z.literal(DASHBOARD_CANONICAL_SEMANTIC_SOURCE_MAP.currentPosition[0])]),
   projection: z.tuple([
-    z.literal("dashboard.income.pendingThisMonth"),
-    z.literal("dashboard.forecast.projectedBalance"),
+    z.literal(DASHBOARD_CANONICAL_SEMANTIC_SOURCE_MAP.projection[0]),
+    z.literal(DASHBOARD_CANONICAL_SEMANTIC_SOURCE_MAP.projection[1]),
   ]),
 });
 
-export const DASHBOARD_SEMANTIC_SOURCE_MAP = DashboardSemanticSourceMapSchema.parse({
-  realized: ["dashboard.income.receivedThisMonth"],
-  currentPosition: ["dashboard.bankBalance"],
-  projection: ["dashboard.income.pendingThisMonth", "dashboard.forecast.projectedBalance"],
-});
+export const DASHBOARD_SEMANTIC_SOURCE_MAP = DashboardSemanticSourceMapSchema.parse(
+  DASHBOARD_CANONICAL_SEMANTIC_SOURCE_MAP,
+);
 
 export const DashboardSnapshotResponseSchema = z.object({
   bankBalance: z.number(),

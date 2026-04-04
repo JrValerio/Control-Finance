@@ -203,4 +203,14 @@ describe("dashboardService", () => {
 
     expect(() => buildDashboardContractView(snapshot)).toThrow(/DASHBOARD_SEMANTIC_DRIFT/);
   });
+
+  it("falha quando semanticSourceMap diverge da fonte canonica compartilhada", () => {
+    const snapshot = buildSnapshot();
+    snapshot.semanticSourceMap = {
+      ...snapshot.semanticSourceMap,
+      projection: [...snapshot.semanticSourceMap.projection].reverse(),
+    } as unknown as DashboardSnapshot["semanticSourceMap"];
+
+    expect(() => buildDashboardContractView(snapshot)).toThrow(/DASHBOARD_SEMANTIC_DRIFT/);
+  });
 });
