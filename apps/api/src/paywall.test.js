@@ -299,18 +299,20 @@ describe("paywall bypass (PAYWALL_BYPASS_ENABLED)", () => {
   });
 
   it("bypass NAO se aplica quando NODE_ENV=production", async () => {
-    const token = await registerAndLogin(BYPASS_EMAIL);
-    const userId = await getUserIdByEmail(BYPASS_EMAIL);
-    await dbQuery(`UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [userId]);
-
     const originalEnabled = process.env.PAYWALL_BYPASS_ENABLED;
     const originalEmails  = process.env.PAYWALL_BYPASS_EMAILS;
     const originalEnv     = process.env.NODE_ENV;
+    const originalJwtSecret = process.env.JWT_SECRET;
     process.env.PAYWALL_BYPASS_ENABLED = "true";
     process.env.PAYWALL_BYPASS_EMAILS  = BYPASS_EMAIL;
     process.env.NODE_ENV = "production";
+    process.env.JWT_SECRET = "control-finance-production-jwt-secret-123456";
 
     try {
+      const token = await registerAndLogin(BYPASS_EMAIL);
+      const userId = await getUserIdByEmail(BYPASS_EMAIL);
+      await dbQuery(`UPDATE users SET trial_ends_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [userId]);
+
       const res = await request(testApp)
         .get("/trial-gated")
         .set("Authorization", `Bearer ${token}`);
@@ -319,6 +321,7 @@ describe("paywall bypass (PAYWALL_BYPASS_ENABLED)", () => {
       process.env.PAYWALL_BYPASS_ENABLED = originalEnabled;
       process.env.PAYWALL_BYPASS_EMAILS  = originalEmails;
       process.env.NODE_ENV = originalEnv;
+      process.env.JWT_SECRET = originalJwtSecret;
     }
   });
 });

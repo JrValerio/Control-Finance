@@ -212,6 +212,11 @@ CORS_ORIGIN=http://localhost:5173
 TRUST_PROXY=1
 ```
 
+Regras de JWT:
+
+* em `production`, o boot falha se `JWT_SECRET` estiver ausente, placeholder ou com menos de 32 caracteres
+* em `development/test`, sem `JWT_SECRET` explicito o runtime usa fallback deterministico apenas para manter ambiente local/CI previsivel
+
 ### Hardening de auth
 
 ```env

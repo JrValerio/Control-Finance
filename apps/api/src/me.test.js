@@ -108,9 +108,11 @@ describe("GET /me", () => {
     // Get token by logging via the profile directly (no password, use the google-only route manually)
     // We test by directly checking the service behavior via GET /me using a valid JWT
     const jwt = await import("jsonwebtoken");
+    const jwtSecret = String(process.env.JWT_SECRET || "");
+    expect(jwtSecret.length).toBeGreaterThan(0);
     const token = jwt.default.sign(
       { sub: String(userId), email },
-      process.env.JWT_SECRET || "control-finance-dev-secret",
+      jwtSecret,
       { expiresIn: "1h" },
     );
 
