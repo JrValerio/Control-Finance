@@ -75,6 +75,9 @@ const SUPPORT_LEVEL_HINTS: Record<string, string> = {
   not_supported: "Sem fluxo operacional nesta fatia do produto.",
 };
 
+const SUPPORT_MATRIX_UNAVAILABLE_MESSAGE =
+  "Matriz de suporte indisponível no momento. Siga com revisão manual: documentos podem ser bloqueados para extração e execução automática nesta fatia.";
+
 const extractFileExtension = (fileName: string) => {
   const lastDotIndex = fileName.lastIndexOf(".");
 
@@ -419,7 +422,16 @@ const TaxUploadModal = ({
                       })}
                     </div>
                   </section>
-                ) : null}
+                ) : (
+                  <section
+                    className="rounded border border-amber-200 bg-amber-50 px-3 py-3"
+                    role="alert"
+                    aria-label="Matriz de suporte indisponível"
+                  >
+                    <p className="text-sm font-semibold text-amber-800">Matriz de suporte indisponível</p>
+                    <p className="mt-1 text-xs text-amber-700">{SUPPORT_MATRIX_UNAVAILABLE_MESSAGE}</p>
+                  </section>
+                )}
 
                 <div className="flex flex-col gap-2">
                   <label htmlFor="tax-document-file" className="text-sm font-semibold text-cf-text-primary">

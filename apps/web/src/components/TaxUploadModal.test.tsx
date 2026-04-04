@@ -67,6 +67,26 @@ describe("TaxUploadModal", () => {
     );
   });
 
+  it("mostra fallback restritivo quando a matriz de suporte está indisponível", () => {
+    render(
+      <TaxUploadModal
+        isOpen
+        taxYear={2026}
+        stage="idle"
+        supportMatrix={[]}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Matriz de suporte indisponível")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Matriz de suporte indisponível no momento. Siga com revisão manual: documentos podem ser bloqueados para extração e execução automática nesta fatia.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("expõe matriz de suporte com estados suportado, restrito e não suportado", () => {
     render(
       <TaxUploadModal
