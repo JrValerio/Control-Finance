@@ -23,6 +23,23 @@ Adicionar observabilidade minima para parsing documental e mutacoes financeiras 
 - Adicionar teste(s) de instrumentacao para impedir regressao silenciosa do contrato.
 - Publicar evidencias operacionais minimas (dashboard/alerta) no recorte da fatia.
 
+## Contrato minimo de sinais (v1)
+
+- Sinais desta fatia:
+	- `parse_attempt` para tentativa de parsing documental no recorte de importacao.
+	- `parse_failure` para falha de parsing com classificacao controlada de motivo.
+	- `sensitive_mutation_success` para mutacao financeira sensivel concluida no commit da importacao.
+- Metrica principal:
+	- `document_financial_observability_events_total{source,signal,reason_class}`
+- Labels permitidas (baixa cardinalidade):
+	- `source`: `transactions_import`, `tax_documents`, `unknown`
+	- `signal`: `parse_attempt`, `parse_failure`, `sensitive_mutation_success`
+	- `reason_class`: `none`, `validation`, `limit`, `internal`
+
+## Evidencia operacional escolhida
+
+- Saida operacional verificavel via endpoint `/metrics` + check dedicado no CI (`document-financial-observability`) com log/artifact.
+
 ## Escopo que nao entra
 
 - Reforma ampla de observabilidade da aplicacao inteira.
@@ -33,6 +50,10 @@ Adicionar observabilidade minima para parsing documental e mutacoes financeiras 
 
 - Reversao unica da fatia.
 - Rollback por dashboards/alerts versionados, conforme plano executavel.
+- Rollback exato da integracao:
+	- remover script `test:observability:documents` de `apps/api/package.json`
+	- remover job `document-financial-observability` de `.github/workflows/ci.yml`
+	- remover teste `apps/api/src/document-financial-observability.test.js`
 
 ## Criterios verificaveis minimos
 

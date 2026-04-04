@@ -115,3 +115,31 @@ jobs:
         with:
           name: http-hardening-baseline-log
           path: http-hardening-baseline.log
+
+  document_financial_observability:
+    name: document-financial-observability
+    runs-on: ubuntu-latest
+    needs: [api]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Observability contract (documents)
+        run: npm -w apps/api run test:observability:documents | tee document-financial-observability.log
+
+      - name: Upload observability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-financial-observability-log
+          path: document-financial-observability.log
