@@ -515,6 +515,35 @@ describe("Tax API foundation", () => {
     expect(response.body.supportedTaxYears).toContain(2026);
     expect(typeof response.body.apiVersion).toBe("string");
     expect(response.body.apiVersion.length).toBeGreaterThan(0);
+    expect(typeof response.body.documentSupportMatrixVersion).toBe("string");
+    expect(response.body.documentSupportMatrixVersion.length).toBeGreaterThan(0);
+    expect(Array.isArray(response.body.documentSupportMatrix)).toBe(true);
+    expect(response.body.documentSupportMatrix).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          documentType: "income_report_bank",
+          sourceType: "income",
+          supportLevel: "supported",
+          supportsExtraction: true,
+          allowsExecution: true,
+        }),
+        expect.objectContaining({
+          documentType: "bank_statement_support",
+          sourceType: "support",
+          supportLevel: "restricted",
+          supportsExtraction: false,
+          allowsExecution: false,
+        }),
+        expect.objectContaining({
+          documentType: "unknown",
+          sourceType: "unknown",
+          supportLevel: "not_supported",
+          supportsExtraction: false,
+          allowsSuggestion: false,
+          allowsExecution: false,
+        }),
+      ]),
+    );
   });
 
   it("GET /tax/documents retorna lista paginada vazia para o exercicio informado", async () => {

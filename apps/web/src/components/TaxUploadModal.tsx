@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type MouseEvent } from "react";
-import type { TaxDocumentDetail } from "../services/tax.service";
+import type { TaxDocumentDetail, TaxDocumentSupportMatrixItem } from "../services/tax.service";
 
 export type TaxUploadStage = "idle" | "uploading" | "processing" | "preview" | "success" | "error";
 
@@ -11,6 +11,8 @@ interface TaxUploadModalProps {
   errorMessage?: string;
   previewDocument?: TaxDocumentDetail | null;
   previewFactCount?: number;
+  supportMatrix?: TaxDocumentSupportMatrixItem[];
+  supportMatrixVersion?: string;
   onClose: () => void;
   onSubmit: (payload: {
     file: File;
@@ -61,6 +63,21 @@ const PREVIEW_STATUS_LABELS: Record<string, string> = {
   failed: "Falhou",
 };
 
+const SUPPORT_LEVEL_LABELS: Record<string, string> = {
+  supported: "Suportado",
+  restricted: "Restrito",
+  not_supported: "Não suportado",
+};
+
+const SUPPORT_LEVEL_HINTS: Record<string, string> = {
+  supported: "Extração e execução automática liberadas.",
+  restricted: "Aceita ingestão para revisão manual, sem execução automática nesta fatia.",
+  not_supported: "Sem fluxo operacional nesta fatia do produto.",
+};
+
+const SUPPORT_MATRIX_UNAVAILABLE_MESSAGE =
+  "Matriz de suporte indisponível no momento. Siga com revisão manual: documentos podem ser bloqueados para extração e execução automática nesta fatia.";
+
 const extractFileExtension = (fileName: string) => {
   const lastDotIndex = fileName.lastIndexOf(".");
 
@@ -104,6 +121,8 @@ const TaxUploadModal = ({
   errorMessage = "",
   previewDocument = null,
   previewFactCount = 0,
+  supportMatrix = [],
+  supportMatrixVersion = "",
   onClose,
   onSubmit,
   onConfirmPreview,
@@ -139,6 +158,39 @@ const TaxUploadModal = ({
 
     return "";
   }, [stage, statusMessage]);
+
+  const groupedSupportMatrix = useMemo(() => {
+    const groups: Record<string, TaxDocumentSupportMatrixItem[]> = {
+      supported: [],
+      restricted: [],
+      not_supported: [],
+    };
+
+    supportMatrix.forEach((item) => {
+      const level =
+        item.supportLevel === "supported" ||
+        item.supportLevel === "restricted" ||
+        item.supportLevel === "not_supported"
+          ? item.supportLevel
+          : "not_supported";
+
+      if (item.documentType === "unknown") {
+        return;
+      }
+
+      groups[level].push(item);
+    });
+
+    (Object.keys(groups) as Array<keyof typeof groups>).forEach((level) => {
+      groups[level].sort((left, right) => {
+        const leftLabel = PREVIEW_DOCUMENT_TYPE_LABELS[left.documentType] ?? left.documentType;
+        const rightLabel = PREVIEW_DOCUMENT_TYPE_LABELS[right.documentType] ?? right.documentType;
+        return leftLabel.localeCompare(rightLabel, "pt-BR");
+      });
+    });
+
+    return groups;
+  }, [supportMatrix]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -333,6 +385,53 @@ const TaxUploadModal = ({
                 <div className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-3">
                   <p className="text-sm text-cf-text-primary">{helperText}</p>
                 </div>
+
+                {supportMatrix.length > 0 ? (
+                  <section className="rounded border border-cf-border bg-cf-surface px-3 py-3" aria-label="Matriz de suporte documental">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-cf-text-primary">Matriz real de suporte documental</p>
+                      {supportMatrixVersion ? (
+                        <span className="rounded border border-cf-border bg-cf-bg-subtle px-2 py-0.5 text-[11px] font-medium text-cf-text-secondary">
+                          v{supportMatrixVersion}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-xs text-cf-text-secondary">
+                      Transparência da fatia atual: suportado, restrito e não suportado.
+                    </p>
+
+                    <div className="mt-3 space-y-3">
+                      {(["supported", "restricted", "not_supported"] as const).map((level) => {
+                        const items = groupedSupportMatrix[level];
+
+                        return (
+                          <div key={level} className="rounded border border-cf-border bg-cf-bg-subtle px-3 py-2.5">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-cf-text-primary">
+                              {SUPPORT_LEVEL_LABELS[level]} ({items.length})
+                            </p>
+                            <p className="mt-0.5 text-xs text-cf-text-secondary">{SUPPORT_LEVEL_HINTS[level]}</p>
+                            <p className="mt-1.5 text-xs text-cf-text-primary">
+                              {items.length > 0
+                                ? items
+                                    .map((item) => PREVIEW_DOCUMENT_TYPE_LABELS[item.documentType] ?? item.documentType)
+                                    .join("; ")
+                                : "Nenhum tipo nesta categoria."}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : (
+                  <section
+                    className="rounded border border-amber-200 bg-amber-50 px-3 py-3"
+                    role="alert"
+                    aria-label="Matriz de suporte indisponível"
+                  >
+                    <p className="text-sm font-semibold text-amber-800">Matriz de suporte indisponível</p>
+                    <p className="mt-1 text-xs text-amber-700">{SUPPORT_MATRIX_UNAVAILABLE_MESSAGE}</p>
+                  </section>
+                )}
 
                 <div className="flex flex-col gap-2">
                   <label htmlFor="tax-document-file" className="text-sm font-semibold text-cf-text-primary">

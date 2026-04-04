@@ -15,6 +15,7 @@ import {
 
 vi.mock("../services/tax.service", () => ({
   taxService: {
+    getBootstrap: vi.fn(),
     listDocuments: vi.fn(),
     uploadDocument: vi.fn(),
     reprocessDocument: vi.fn(),
@@ -181,6 +182,36 @@ const renderPage = (
 describe("TaxPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(taxService.getBootstrap).mockResolvedValue({
+      module: "tax",
+      scope: "irpf_mvp",
+      apiVersion: "1.0.0-test",
+      documentSupportMatrixVersion: "2026-04-03.aud-001",
+      supportedTaxYears: [2026],
+      documentTypes: ["income_report_bank", "income_report_employer", "clt_payslip", "income_report_inss", "medical_statement", "education_receipt", "loan_statement", "bank_statement_support", "unknown"],
+      documentSupportMatrix: [
+        {
+          documentType: "income_report_bank",
+          sourceType: "income",
+          supportLevel: "supported",
+          supportsExtraction: true,
+          allowsSuggestion: true,
+          allowsExecution: true,
+        },
+        {
+          documentType: "bank_statement_support",
+          sourceType: "support",
+          supportLevel: "restricted",
+          supportsExtraction: false,
+          allowsSuggestion: true,
+          allowsExecution: false,
+        },
+      ],
+      documentProcessingStatuses: ["uploaded", "classified", "extracted", "normalized", "failed"],
+      factTypes: ["taxable_income"],
+      reviewStatuses: ["pending", "approved", "corrected", "rejected"],
+      ruleFamilies: ["obligation"],
+    });
     vi.mocked(taxService.listDocuments).mockResolvedValue({
       items: [buildDocument()],
       page: 1,
