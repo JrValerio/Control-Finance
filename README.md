@@ -228,7 +228,15 @@ AUTH_BRUTE_FORCE_LOCK_MS=
 TAX_DOCUMENTS_STORAGE_ADAPTER=local
 TAX_DOCUMENTS_STORAGE_DIR=
 TAX_DOCUMENT_MAX_FILE_SIZE_BYTES=10485760
+TAX_SENSITIVE_EXCERPT_REDACTION_ENABLED=true
 ```
+
+`TAX_SENSITIVE_EXCERPT_REDACTION_ENABLED` controla a redacao de trechos textuais sensiveis em `tax_document_extractions.raw_json.classification`:
+
+* `true` (padrao): remove `textPreviewLines` na persistencia
+* `false`: rollback controlado para manter payload legado sem redacao
+
+Em producao, manter `true` como padrao e usar `false` apenas de forma excepcional, temporaria e com registro operacional.
 
 ### IA
 
