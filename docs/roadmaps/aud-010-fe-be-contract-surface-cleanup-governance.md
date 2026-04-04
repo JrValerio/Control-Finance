@@ -6,6 +6,8 @@ Fonte oficial de sequenciamento: docs/roadmaps/audit-backlog-executable-plan-202
 
 Classificar a superficie publica de contrato FE/BE (endpoints e payloads expostos), identificar o que esta sem owner/uso ativo e iniciar poda controlada sem quebrar fluxo ativo.
 
+Recorte desta PR: superficie publica ativa do bloco de importacao de transacoes (nao e limpeza estrutural ampla de codigo morto).
+
 ## Contrato herdado (nao regredir)
 
 - AUD-007: transparencia de status/erro em OCR continua obrigatoria.
@@ -19,6 +21,21 @@ Classificar a superficie publica de contrato FE/BE (endpoints e payloads exposto
 - Primeira poda segura de superficie sem uso, com compatibilidade monitorada.
 - Testes de compatibilidade para evitar quebra de fluxo ativo.
 
+## Taxonomia operacional (obrigatoria)
+
+- ativo: endpoint consumido por fluxo FE/BE vigente ou contrato publico em uso.
+- deprecado: endpoint ainda existente por compatibilidade, com substituto conhecido e remocao planejada.
+- candidato_a_remocao: sem consumidor ativo comprovado no recorte e com rollback simples.
+
+## Shape minimo do inventario
+
+- endpoint/contrato
+- owner
+- consumidor conhecido
+- status
+- acao proposta
+- evidencia tecnica (referencia de uso/busca)
+
 ## Escopo que nao entra
 
 - Reabertura semantica de AUD-007/AUD-008/AUD-009.
@@ -30,6 +47,7 @@ Classificar a superficie publica de contrato FE/BE (endpoints e payloads exposto
 
 - Reversao unica da fatia.
 - Restauracao rapida por alias curto para endpoint deprecado, se houver impacto inesperado.
+- Nesta fatia, a primeira poda segura sera por depreciacao compat (sem remocao hard).
 
 ## Criterios verificaveis minimos
 
