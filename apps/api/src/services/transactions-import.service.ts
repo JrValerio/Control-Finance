@@ -1058,6 +1058,15 @@ const persistImportSession = async (userId: number | string, payload: unknown) =
   };
 };
 
+const stripSensitiveImportPayloadFields = (payload: unknown) => {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return payload;
+  }
+
+  const { normalizedRows, ...retainedPayload } = payload as Record<string, unknown>;
+  return retainedPayload;
+};
+
 const normalizeImportId = (value: unknown): string => {
   if (typeof value === "undefined" || value === null || value === "") {
     throw createError(400, "importId e obrigatorio.");
@@ -1436,14 +1445,19 @@ export const commitTransactionsImportForUser = async (
     const sessionUpdateResult = await transactionClient.query(
       `
         UPDATE transaction_import_sessions
-        SET committed_at = NOW()
+        SET committed_at = NOW(),
+            payload_json = $3::jsonb
         WHERE id = $1
           AND user_id = $2
           AND committed_at IS NULL
           AND expires_at > NOW()
         RETURNING id
       `,
-      [normalizedImportId, userId],
+      [
+        normalizedImportId,
+        userId,
+        JSON.stringify(stripSensitiveImportPayloadFields(payload)),
+      ],
     );
 
     const updatedSessions = Number(sessionUpdateResult.rowCount || 0);

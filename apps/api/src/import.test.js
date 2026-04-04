@@ -1127,6 +1127,54 @@ describe("transaction imports", () => {
     expect(persistedSessionResult.rows[0].committed_at).toBeTruthy();
   });
 
+  it("COMPLIANCE AUD-019: POST /transactions/import/commit remove normalizedRows do payload persistido", async () => {
+    const token = await registerAndLogin("aud019-retention@controlfinance.dev");
+    await makeProUser("aud019-retention@controlfinance.dev");
+
+    const dryRunCsv = csvFile(
+      [
+        "date,type,value,description,notes,category",
+        "2026-03-01,Entrada,1000,Salario,,",
+        "2026-03-05,Saida,220.5,Mercado,,",
+      ].join("\n"),
+    );
+
+    const dryRunResponse = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", dryRunCsv.buffer, {
+        filename: dryRunCsv.fileName,
+        contentType: "text/csv",
+      });
+
+    expect(dryRunResponse.status).toBe(200);
+    expect(dryRunResponse.body.summary.validRows).toBe(2);
+
+    const commitResponse = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ importId: dryRunResponse.body.importId });
+
+    expect(commitResponse.status).toBe(200);
+
+    const persistedSessionResult = await dbQuery(
+      `
+        SELECT committed_at, payload_json
+        FROM transaction_import_sessions
+        WHERE id = $1
+      `,
+      [dryRunResponse.body.importId],
+    );
+
+    expect(persistedSessionResult.rows[0].committed_at).toBeTruthy();
+    expect(persistedSessionResult.rows[0].payload_json.summary).toMatchObject({
+      totalRows: 2,
+      validRows: 2,
+      invalidRows: 0,
+    });
+    expect(persistedSessionResult.rows[0].payload_json.normalizedRows).toBeUndefined();
+  });
+
   it("POST /transactions/import/commit retorna 404 para sessao de outro usuario", async () => {
     const ownerToken = await registerAndLogin("import-commit-owner@controlfinance.dev");
     await makeProUser("import-commit-owner@controlfinance.dev");
