@@ -14,6 +14,7 @@
     "typecheck:auth": "tsc -p tsconfig.auth.json --noEmit",
     "preview": "vite preview",
     "test": "vitest",
+    "test:semantic:dashboard": "vitest run src/services/dashboard.service.test.ts src/components/OperationalSummaryPanel.test.tsx",
     "test:run": "vitest run"
   },
   "dependencies": {

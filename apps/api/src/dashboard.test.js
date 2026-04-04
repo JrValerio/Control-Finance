@@ -6,7 +6,10 @@ import { setupTestDb, registerAndLogin } from "./test-helpers.js";
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
 import { resetWriteRateLimiterState } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
-import { DashboardSnapshotResponseSchema } from "./domain/contracts/dashboard-response.schema.ts";
+import {
+  DASHBOARD_SEMANTIC_SOURCE_MAP,
+  DashboardSnapshotResponseSchema,
+} from "./domain/contracts/dashboard-response.schema.ts";
 
 // ─── Date helpers (UTC-safe) ──────────────────────────────────────────────────
 
@@ -80,6 +83,7 @@ const DASHBOARD_TOP_LEVEL_KEYS = [
   "income",
   "forecast",
   "semanticCore",
+  "semanticSourceMap",
   "consignado",
 ].sort();
 
@@ -100,6 +104,12 @@ const DASHBOARD_CONSIGNADO_KEYS = ["monthlyTotal", "contractsCount", "comprometi
 
 const DASHBOARD_SEMANTIC_CORE_KEYS = [
   "semanticsVersion",
+  "realized",
+  "currentPosition",
+  "projection",
+].sort();
+
+const DASHBOARD_SEMANTIC_SOURCE_MAP_KEYS = [
   "realized",
   "currentPosition",
   "projection",
@@ -463,6 +473,10 @@ describe("dashboard snapshot", () => {
     expect(Object.keys(res.body.income).sort()).toEqual(DASHBOARD_INCOME_KEYS);
     expect(Object.keys(res.body.consignado).sort()).toEqual(DASHBOARD_CONSIGNADO_KEYS);
     expect(Object.keys(res.body.semanticCore).sort()).toEqual(DASHBOARD_SEMANTIC_CORE_KEYS);
+    expect(Object.keys(res.body.semanticSourceMap).sort()).toEqual(
+      DASHBOARD_SEMANTIC_SOURCE_MAP_KEYS,
+    );
+    expect(res.body.semanticSourceMap).toEqual(DASHBOARD_SEMANTIC_SOURCE_MAP);
     expect(Object.keys(res.body.semanticCore.realized).sort()).toEqual(
       DASHBOARD_SEMANTIC_REALIZED_KEYS,
     );
@@ -512,6 +526,11 @@ describe("dashboard snapshot", () => {
           adjustedProjectedBalance: 0,
           expectedInflow: null,
         },
+      },
+      semanticSourceMap: {
+        realized: ["dashboard.income.receivedThisMonth"],
+        currentPosition: ["dashboard.bankBalance"],
+        projection: ["dashboard.income.pendingThisMonth", "dashboard.forecast.projectedBalance"],
       },
       consignado: {
         monthlyTotal: 0,

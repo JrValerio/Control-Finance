@@ -16,6 +16,53 @@ export interface DashboardFinancialContractView {
 }
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const DRIFT_EPSILON = 0.005;
+
+const DASHBOARD_CANONICAL_SOURCE_MAP: DashboardSnapshot["semanticSourceMap"] = {
+  realized: ["dashboard.income.receivedThisMonth"],
+  currentPosition: ["dashboard.bankBalance"],
+  projection: ["dashboard.income.pendingThisMonth", "dashboard.forecast.projectedBalance"],
+};
+
+const isCloseEnough = (a: number, b: number): boolean => Math.abs(a - b) <= DRIFT_EPSILON;
+
+const assertDashboardSemanticContract = (snapshot: DashboardSnapshot): void => {
+  const semanticCore = snapshot.semanticCore;
+
+  if (semanticCore.semanticsVersion !== "v1") {
+    throw new Error("DASHBOARD_SEMANTIC_DRIFT: unsupported semanticsVersion for dashboard slice");
+  }
+
+  if (
+    JSON.stringify(snapshot.semanticSourceMap) !==
+    JSON.stringify(DASHBOARD_CANONICAL_SOURCE_MAP)
+  ) {
+    throw new Error("DASHBOARD_SEMANTIC_DRIFT: semanticSourceMap does not match canonical dashboard mapping");
+  }
+
+  if (!isCloseEnough(snapshot.bankBalance, semanticCore.currentPosition.bankBalance)) {
+    throw new Error("DASHBOARD_SEMANTIC_DRIFT: dashboard.bankBalance diverges from semanticCore.currentPosition.bankBalance");
+  }
+
+  if (!isCloseEnough(snapshot.income.receivedThisMonth, semanticCore.realized.confirmedInflowTotal)) {
+    throw new Error("DASHBOARD_SEMANTIC_DRIFT: dashboard.income.receivedThisMonth diverges from semanticCore.realized.confirmedInflowTotal");
+  }
+
+  const expectedProjectionInflow =
+    snapshot.income.pendingThisMonth > 0 ? snapshot.income.pendingThisMonth : null;
+
+  if (expectedProjectionInflow !== semanticCore.projection.expectedInflow) {
+    throw new Error("DASHBOARD_SEMANTIC_DRIFT: dashboard.income.pendingThisMonth diverges from semanticCore.projection.expectedInflow");
+  }
+
+  const expectedProjectedBalance = snapshot.forecast
+    ? snapshot.forecast.projectedBalance
+    : snapshot.bankBalance;
+
+  if (!isCloseEnough(expectedProjectedBalance, semanticCore.projection.projectedBalance)) {
+    throw new Error("DASHBOARD_SEMANTIC_DRIFT: dashboard.forecast.projectedBalance diverges from semanticCore.projection.projectedBalance");
+  }
+};
 
 const toAsOfISOString = (
   asOf: CoreFinancialSemanticContract["currentPosition"]["asOf"],
@@ -61,6 +108,8 @@ export const buildDashboardContractView = (
   snapshot: DashboardSnapshot,
   now: Date = new Date(),
 ): DashboardFinancialContractView => {
+  assertDashboardSemanticContract(snapshot);
+
   const semanticCore = snapshot.semanticCore;
   const confirmedInflow = semanticCore.realized.confirmedInflowTotal;
   const expectedInflow = semanticCore.projection.expectedInflow ?? 0;
@@ -142,7 +191,10 @@ export const dashboardService = {
 
     const requestPromise = api
       .get<DashboardSnapshot>("/dashboard/snapshot", withApiRequestContext(context))
-      .then(({ data }) => data)
+      .then(({ data }) => {
+        assertDashboardSemanticContract(data);
+        return data;
+      })
       .finally(() => {
         if (snapshotInFlightRequest === requestPromise) {
           snapshotInFlightRequest = null;
