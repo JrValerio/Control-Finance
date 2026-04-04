@@ -1,4 +1,5 @@
 import { api, withApiRequestContext, type ApiRequestContext } from "./api";
+import { DASHBOARD_SEMANTIC_SOURCE_MAP } from "@control/contracts";
 import type {
   BalanceSnapshot,
   CoreFinancialSemanticContract,
@@ -18,12 +19,6 @@ export interface DashboardFinancialContractView {
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 const DRIFT_EPSILON = 0.005;
 
-const DASHBOARD_CANONICAL_SOURCE_MAP: DashboardSnapshot["semanticSourceMap"] = {
-  realized: ["dashboard.income.receivedThisMonth"],
-  currentPosition: ["dashboard.bankBalance"],
-  projection: ["dashboard.income.pendingThisMonth", "dashboard.forecast.projectedBalance"],
-};
-
 const isCloseEnough = (a: number, b: number): boolean => Math.abs(a - b) <= DRIFT_EPSILON;
 
 const assertDashboardSemanticContract = (snapshot: DashboardSnapshot): void => {
@@ -35,7 +30,7 @@ const assertDashboardSemanticContract = (snapshot: DashboardSnapshot): void => {
 
   if (
     JSON.stringify(snapshot.semanticSourceMap) !==
-    JSON.stringify(DASHBOARD_CANONICAL_SOURCE_MAP)
+    JSON.stringify(DASHBOARD_SEMANTIC_SOURCE_MAP)
   ) {
     throw new Error("DASHBOARD_SEMANTIC_DRIFT: semanticSourceMap does not match canonical dashboard mapping");
   }

@@ -18,6 +18,14 @@ Consolidar fonte unica de contrato para schemas e enums compartilhados entre API
 - Preservar payloads e comportamento publico observavel.
 - Adicionar testes/checks focados para impedir regressao de contrato.
 
+## Fronteira selecionada (alvo unico)
+
+- Tipo de recorte: schema de payload (semanticSourceMap do dashboard).
+- Duplicidade atual atacada: mapa canonico repetido em API (`dashboard-response.schema.ts`) e Web (`dashboard.service.ts`).
+- Fonte canonica unica nesta fatia: `apps/api/src/domain/contracts/dashboard-semantic-source-map.contract.ts`.
+- Contrato publico preservado: shape de `semanticSourceMap` no endpoint `GET /dashboard/snapshot` permanece equivalente.
+- Criterio operacional de conclusao: API e Web consomem a mesma constante canonica no recorte escolhido.
+
 ## Escopo que nao entra
 
 - Reorganizacao ampla de dominio.
@@ -32,7 +40,22 @@ Consolidar fonte unica de contrato para schemas e enums compartilhados entre API
 - Teste/check focado detectando drift no recorte alterado.
 - Mudanca delimitada a AUD-017 com diff cirurgico.
 
+## Prova de equivalencia e anti-drift
+
+- Teste dedicado da fronteira canonica no API:
+	- `apps/api/src/domain/contracts/dashboard-semantic-source-map.contract.test.ts`
+- Teste de anti-drift no Web consumindo a fonte compartilhada:
+	- `apps/web/src/services/dashboard.service.test.ts`
+- Check visivel da fatia:
+	- `shared-contract-schemas-dashboard-map` (CI)
+
 ## Rollback
 
 - Reversao unica da fatia.
 - Caso necessario, restaurar contrato anterior em um unico revert mantendo comportamento publico.
+- Rollback exato da integracao:
+	- remover `apps/api/src/domain/contracts/dashboard-semantic-source-map.contract.ts`.
+	- remover script `test:contracts:dashboard-shared-map` de `apps/api/package.json`.
+	- remover script `test:contracts:dashboard-shared-map` de `apps/web/package.json`.
+	- remover job `shared-contract-schemas-dashboard-map` de `.github/workflows/ci.yml`.
+	- restaurar mapa local anterior em `apps/web/src/services/dashboard.service.ts` e em `apps/api/src/domain/contracts/dashboard-response.schema.ts`.

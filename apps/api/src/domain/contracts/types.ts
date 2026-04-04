@@ -73,3 +73,7 @@ export type {
   TaxDocumentPreviewSourceType,
   TaxDocumentPreviewTextSource,
 } from "./tax-document-preview-response.schema";
+
+export {
+  DASHBOARD_SEMANTIC_SOURCE_MAP,
+} from "./dashboard-semantic-source-map.contract";
