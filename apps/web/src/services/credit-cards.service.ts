@@ -113,6 +113,7 @@ export interface CreditCardInvoicePdf {
   financedBalance: number | null;
   parseConfidence: InvoiceParseConfidence;
   parseMetadata: Record<string, unknown>;
+  needsReview?: boolean;
   linkedBillId: number | null;
   createdAt: string;
   updatedAt: string;
