@@ -2,6 +2,7 @@ import { dbQuery } from "../db/index.js";
 import { extractTextFromPdfWithOcrRuntime } from "../domain/imports/pdf-ocr.js";
 import { parseBRL, parseDMY, parseItauInvoice } from "../domain/imports/itau-invoice.parser.js";
 import { trackDomainFlowError, trackDomainFlowSuccess } from "../observability/domain-metrics.js";
+import { resolveCreditCardInvoicePeriod } from "./credit-card-invoice-period-inference.service.js";
 
 const CREDIT_CARD_INVOICE_BILL_TYPE = "credit_card_invoice";
 const CREDIT_CARD_INVOICE_PARSE_FLOW = "credit_card_invoice_parse";
@@ -299,61 +300,6 @@ const parseCreditCardInvoiceByStrategy = (rawText) => {
   };
 };
 
-// ─── Period inference ─────────────────────────────────────────────────────────
-
-/**
- * Infer period_start and period_end from dueDate and card's closing_day.
- *
- * Logic:
- *   - period_end   = closing_day of the month BEFORE dueDate's month
- *   - period_start = day after the previous closing (closing_day + 1 of month M-2)
- *
- * Example: closing_day=7, dueDate=2026-03-15
- *   period_end   = 2026-03-07
- *   period_start = 2026-02-08
- */
-const inferPeriod = (dueDate, closingDay) => {
-  const due = new Date(`${dueDate}T00:00:00`);
-  if (isNaN(due.getTime())) return null;
-
-  // period_end: closing_day of the same month as dueDate
-  const endYear = due.getUTCFullYear();
-  const endMonth = due.getUTCMonth() + 1; // 1-based
-  const daysInEndMonth = new Date(Date.UTC(endYear, endMonth, 0)).getUTCDate();
-  const endDay = Math.min(closingDay, daysInEndMonth);
-
-  const periodEndDate = new Date(Date.UTC(endYear, endMonth - 1, endDay));
-
-  // If period_end >= due_date, use the previous month's closing
-  if (periodEndDate >= due) {
-    periodEndDate.setUTCMonth(periodEndDate.getUTCMonth() - 1);
-    const prevMonthDays = new Date(
-      Date.UTC(periodEndDate.getUTCFullYear(), periodEndDate.getUTCMonth() + 1, 0)
-    ).getUTCDate();
-    periodEndDate.setUTCDate(Math.min(closingDay, prevMonthDays));
-  }
-
-  // period_start: day after closing_day of the month before period_end
-  const periodStartDate = new Date(periodEndDate);
-  periodStartDate.setUTCMonth(periodStartDate.getUTCMonth() - 1);
-  const prevMonthDays = new Date(
-    Date.UTC(periodStartDate.getUTCFullYear(), periodStartDate.getUTCMonth() + 1, 0)
-  ).getUTCDate();
-  const startClosingDay = Math.min(closingDay, prevMonthDays);
-  periodStartDate.setUTCDate(startClosingDay + 1);
-
-  const toISO = (d) =>
-    `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-
-  const start = toISO(periodStartDate);
-  const end = toISO(periodEndDate);
-
-  // Sanity check
-  if (start >= end) return null;
-
-  return { start, end };
-};
-
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
 const formatInvoice = (row) => {
@@ -453,39 +399,23 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
     });
   }
 
-  // Resolve period
-  let periodStart = parsed.periodStart;
-  let periodEnd = parsed.periodEnd;
-  let parseConfidence = "high";
-  const fieldsSources = { ...parsed.fieldsSources };
-  const inferenceContext = {};
+  const periodResolution = resolveCreditCardInvoicePeriod({
+    parsedPeriodStart: parsed.periodStart,
+    parsedPeriodEnd: parsed.periodEnd,
+    dueDate: parsed.dueDate,
+    closingDay: Number(card.closing_day),
+    fieldsSources: parsed.fieldsSources,
+  });
 
-  if (!periodStart || !periodEnd) {
-    const closingDay = Number(card.closing_day);
-    if (!Number.isInteger(closingDay) || closingDay < 1 || closingDay > 31) {
-      throw createError(422,
-        "Periodo da fatura nao encontrado no PDF e o cartao nao tem dia de fechamento cadastrado.",
-        { publicCode: "INVOICE_PERIOD_INFERENCE_FAILED" }
-      );
-    }
-    const inferred = inferPeriod(parsed.dueDate, closingDay);
-    if (!inferred) {
-      throw createError(422,
-        "Nao foi possivel inferir o periodo da fatura a partir do dia de fechamento do cartao.",
-        { publicCode: "INVOICE_PERIOD_INFERENCE_FAILED" }
-      );
-    }
-    periodStart = inferred.start;
-    periodEnd = inferred.end;
-    parseConfidence = "low";
-    fieldsSources.periodStart = "inference:closing_day";
-    fieldsSources.periodEnd = "inference:closing_day";
-    inferenceContext.closingDay = closingDay;
-  }
+  const periodStart = periodResolution.periodStart;
+  const periodEnd = periodResolution.periodEnd;
+  const parseConfidence = periodResolution.parseConfidence;
+  const fieldsSources = periodResolution.fieldsSources;
+  const inferenceContext = periodResolution.inferenceContext;
 
   const reviewReasonCodes = [];
 
-  if (parseConfidence === "low") {
+  if (periodResolution.inferredByClosingDay) {
     reviewReasonCodes.push("period_inferred_from_closing_day");
   }
 
