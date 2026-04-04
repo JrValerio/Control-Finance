@@ -2,14 +2,13 @@ import { dbQuery } from "../db/index.js";
 import { extractTextFromPdfWithOcrRuntime } from "../domain/imports/pdf-ocr.js";
 import { parseBRL, parseDMY, parseItauInvoice } from "../domain/imports/itau-invoice.parser.js";
 import { trackDomainFlowError, trackDomainFlowSuccess } from "../observability/domain-metrics.js";
+import { resolveInvoiceClassificationSignals } from "./credit-card-invoice-classification.service.js";
 import { resolveCreditCardInvoicePeriod } from "./credit-card-invoice-period-inference.service.js";
 
 const CREDIT_CARD_INVOICE_BILL_TYPE = "credit_card_invoice";
 const CREDIT_CARD_INVOICE_PARSE_FLOW = "credit_card_invoice_parse";
 const CREDIT_CARD_INVOICE_OCR_RUNTIME_FLOW = "credit_card_invoice_ocr_runtime";
 const CREDIT_CARD_INVOICE_CLASSIFICATION_CONFIRMATION_FLOW = "credit_card_invoice_classification_confirmation";
-const HIGH_CONFIDENCE_SCORE = 0.9;
-const LOW_CONFIDENCE_SCORE = 0.45;
 const KNOWN_INVOICE_ISSUER_METRIC_KEYS = new Set([
   "itau",
   "nubank",
@@ -29,25 +28,6 @@ const createError = (status, message, extra = {}) => {
   error.status = status;
   Object.assign(error, extra);
   return error;
-};
-
-const normalizeJsonObject = (value) => {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        return parsed;
-      }
-    } catch {
-      return {};
-    }
-  }
-
-  return {};
 };
 
 const normalizeUserId = (value) => {
@@ -131,32 +111,6 @@ const resolveParseErrorFromOcrRuntime = (ocrRuntimeMetadata) => {
   }
 
   return null;
-};
-
-const resolveInvoiceClassificationSignals = ({ parseConfidence, parseMetadata }) => {
-  const normalizedParseConfidence = String(parseConfidence || "").trim().toLowerCase() === "high" ? "high" : "low";
-  const normalizedParseMetadata = normalizeJsonObject(parseMetadata);
-  const reviewContext = normalizeJsonObject(normalizedParseMetadata.reviewContext);
-  const reasonCodes = Array.isArray(reviewContext.reasonCodes)
-    ? reviewContext.reasonCodes
-      .map((value) => String(value || "").trim().toLowerCase())
-      .filter(Boolean)
-    : [];
-
-  const classificationAmbiguous =
-    reviewContext.needsReview === true || normalizedParseConfidence !== "high" || reasonCodes.length > 0;
-
-  const reasonCode = classificationAmbiguous
-    ? reasonCodes[0] || (normalizedParseConfidence === "low" ? "parse_confidence_low" : "manual_review_required")
-    : "not_ambiguous";
-
-  return {
-    classificationConfidence: normalizedParseConfidence === "high" ? HIGH_CONFIDENCE_SCORE : LOW_CONFIDENCE_SCORE,
-    classificationAmbiguous,
-    reasonCode,
-    requiresUserConfirmation: classificationAmbiguous,
-    parseMetadata: normalizedParseMetadata,
-  };
 };
 
 const detectInvoiceIssuer = (rawText) => {

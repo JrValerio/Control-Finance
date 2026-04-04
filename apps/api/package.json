@@ -17,6 +17,7 @@
     "test:observability:documents": "vitest run src/document-financial-observability.test.js",
     "test:semantic:dashboard": "vitest run src/dashboard.test.js",
     "test:hotspot:credit-card-invoices": "vitest run src/services/credit-card-invoice-period-inference.service.test.js src/credit-card-invoices.test.js",
+    "test:domain:invoice-classification": "vitest run src/services/credit-card-invoice-classification.service.test.js src/credit-card-invoices.test.js",
     "test:golden": "vitest run src/credit-card-invoices.golden.test.js",
     "test:hardening:http": "vitest run src/http-hardening-baseline.test.js",
     "test:smoke:critical": "vitest run src/smoke-critical-finance-journey.test.js",
