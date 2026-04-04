@@ -30,3 +30,15 @@ Quando a classificacao for ambigua, o sistema nao decide sozinho; ele sinaliza e
 - Ambiguidade produz status explicitamente revisavel e nao auto-decisionado.
 - Contrato permanece aditivo para consumidores existentes.
 - Teste automatizado cobre ao menos um caso de auto-aceite e um caso de confirmacao manual obrigatoria.
+
+## Shape minimo esperado do contrato
+
+- `classificationConfidence`: score numerico normalizado para decisao operacional.
+- `classificationAmbiguous`: sinal booleano de ambiguidade.
+- `reasonCode`: motivo tecnico principal da classificacao ambigua.
+- `requiresUserConfirmation`: gate booleano para confirmacao explicita.
+
+## Fallback seguro desta fatia
+
+- Em ambiguidade, bloquear auto-aceite.
+- Exigir confirmacao explicita do usuario para seguir com o vinculo/acao.

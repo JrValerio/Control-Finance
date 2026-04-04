@@ -161,6 +161,10 @@ describe("credit-card-invoices", () => {
     expect(res.body.minimumPayment).toBe(124.78);
     expect(res.body.parseConfidence).toBe("high");
     expect(res.body.needsReview).toBe(false);
+    expect(res.body.classificationConfidence).toBe(0.9);
+    expect(res.body.classificationAmbiguous).toBe(false);
+    expect(res.body.reasonCode).toBe("not_ambiguous");
+    expect(res.body.requiresUserConfirmation).toBe(false);
     expect(res.body.parseMetadata?.parser?.name).toBe("itau_parser_v1");
     expect(res.body.parseMetadata?.ocrRuntime?.status).toBe("success");
     expect(res.body.linkedBillId).toBeNull();
@@ -179,6 +183,10 @@ describe("credit-card-invoices", () => {
     expect(res.status).toBe(201);
     expect(res.body.parseConfidence).toBe("low");
     expect(res.body.needsReview).toBe(true);
+    expect(res.body.classificationConfidence).toBe(0.45);
+    expect(res.body.classificationAmbiguous).toBe(true);
+    expect(res.body.reasonCode).toBe("period_inferred_from_closing_day");
+    expect(res.body.requiresUserConfirmation).toBe(true);
     expect(res.body.periodStart).not.toBeNull();
     expect(res.body.periodEnd).not.toBeNull();
     expect(res.body.parseMetadata.fieldsSources.periodStart).toBe("inference:closing_day");
@@ -455,6 +463,62 @@ describe("credit-card-invoices", () => {
 
     expect(res.status).toBe(422);
     expect(res.body.message).toBe("Valor da pendencia difere do total da fatura.");
+  });
+
+  it("POST link-bill exige confirmacao explicita para fatura ambigua", async () => {
+    const token = await registerAndLogin("inv-link-ambiguous-confirm@test.dev");
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(ITAU_TEXT_NO_PERIOD));
+
+    const cardRes = await createCard(token, { closingDay: 7, dueDay: 15 });
+    const cardId = cardRes.body.id;
+
+    const invoiceRes = await uploadInvoice(token, cardId);
+    expect(invoiceRes.status).toBe(201);
+    expect(invoiceRes.body.classificationAmbiguous).toBe(true);
+    expect(invoiceRes.body.requiresUserConfirmation).toBe(true);
+
+    const billRes = await request(app)
+      .post("/bills")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        title: "Fatura ambigua",
+        amount: 850,
+        dueDate: "2026-03-15",
+        billType: "credit_card_invoice",
+      });
+
+    await dbQuery(
+      `UPDATE bills SET credit_card_id = $1, bill_type = 'credit_card_invoice' WHERE id = $2`,
+      [cardId, billRes.body.id],
+    );
+
+    const linkWithoutConfirmationRes = await request(app)
+      .post(`/credit-cards/${cardId}/invoices/${invoiceRes.body.id}/link-bill`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ billId: billRes.body.id });
+
+    expect(linkWithoutConfirmationRes.status).toBe(422);
+    expect(linkWithoutConfirmationRes.body.code).toBe("AMBIGUOUS_CLASSIFICATION_CONFIRMATION_REQUIRED");
+
+    const linkWithConfirmationRes = await request(app)
+      .post(`/credit-cards/${cardId}/invoices/${invoiceRes.body.id}/link-bill`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        billId: billRes.body.id,
+        confirmAmbiguousClassification: true,
+      });
+
+    expect(linkWithConfirmationRes.status).toBe(200);
+    expect(linkWithConfirmationRes.body.linkedBillId).toBe(billRes.body.id);
+
+    const metricsRes = await request(app).get("/metrics");
+    expect(metricsRes.status).toBe(200);
+    expect(metricsRes.text).toMatch(
+      /domain_financial_flow_events_total\{flow="credit_card_invoice_classification_confirmation",operation="auto_accept_blocked",outcome="error"\}\s+([0-9.]+)/,
+    );
+    expect(metricsRes.text).toMatch(
+      /domain_financial_flow_events_total\{flow="credit_card_invoice_classification_confirmation",operation="manual_confirmation",outcome="success"\}\s+([0-9.]+)/,
+    );
   });
 
   it("POST link-bill retorna 409 quando a mesma pendencia ja esta vinculada a outra fatura", async () => {
