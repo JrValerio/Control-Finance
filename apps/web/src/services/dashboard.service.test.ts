@@ -61,6 +61,11 @@ const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSna
           income.pendingThisMonth > 0 ? income.pendingThisMonth : null,
       },
     },
+    semanticSourceMap: overrides.semanticSourceMap ?? {
+      realized: ["dashboard.income.receivedThisMonth"],
+      currentPosition: ["dashboard.bankBalance"],
+      projection: ["dashboard.income.pendingThisMonth", "dashboard.forecast.projectedBalance"],
+    },
     consignado: {
       monthlyTotal: 0,
       contractsCount: 0,
@@ -77,7 +82,7 @@ describe("dashboardService", () => {
 
   it("normaliza snapshot com agregados de proximas contas", async () => {
     getMock.mockResolvedValueOnce({
-      data: {
+      data: buildSnapshot({
         bankBalance: 1200,
         bills: {
           overdueCount: 1,
@@ -100,12 +105,7 @@ describe("dashboardService", () => {
           projectedBalance: 900,
           month: "2026-04",
         },
-        consignado: {
-          monthlyTotal: 0,
-          contractsCount: 0,
-          comprometimentoPct: null,
-        },
-      },
+      }),
     });
 
     const result = await dashboardService.getSnapshot();
@@ -144,13 +144,17 @@ describe("dashboardService", () => {
     expect(invoiceObligations[0].amount).toBe(780);
   });
 
-  it("buildDashboardContractView prioriza semanticCore para renda e posicao atual", () => {
+  it("buildDashboardContractView consome contrato semantico canonico alinhado", () => {
     const snapshot = buildSnapshot({
-      bankBalance: 1200,
+      bankBalance: 850,
       income: {
-        receivedThisMonth: 10,
-        pendingThisMonth: 20,
-        referenceMonth: "2026-03",
+        receivedThisMonth: 2300,
+        pendingThisMonth: 300,
+        referenceMonth: "2026-04",
+      },
+      forecast: {
+        projectedBalance: 900,
+        month: "2026-04",
       },
       semanticCore: {
         semanticsVersion: "v1",
@@ -191,5 +195,12 @@ describe("dashboardService", () => {
         sourceId: "2026-04",
       }),
     ]);
+  });
+
+  it("falha quando detecta drift entre payload legado e contrato semantico canonico", () => {
+    const snapshot = buildSnapshot();
+    snapshot.semanticCore.currentPosition.bankBalance = snapshot.bankBalance + 1;
+
+    expect(() => buildDashboardContractView(snapshot)).toThrow(/DASHBOARD_SEMANTIC_DRIFT/);
   });
 });

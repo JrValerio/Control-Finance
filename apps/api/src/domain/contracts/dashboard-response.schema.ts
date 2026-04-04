@@ -32,6 +32,21 @@ const DashboardConsignadoSchema = z.object({
   comprometimentoPct: z.number().nullable(),
 });
 
+export const DashboardSemanticSourceMapSchema = z.object({
+  realized: z.tuple([z.literal("dashboard.income.receivedThisMonth")]),
+  currentPosition: z.tuple([z.literal("dashboard.bankBalance")]),
+  projection: z.tuple([
+    z.literal("dashboard.income.pendingThisMonth"),
+    z.literal("dashboard.forecast.projectedBalance"),
+  ]),
+});
+
+export const DASHBOARD_SEMANTIC_SOURCE_MAP = DashboardSemanticSourceMapSchema.parse({
+  realized: ["dashboard.income.receivedThisMonth"],
+  currentPosition: ["dashboard.bankBalance"],
+  projection: ["dashboard.income.pendingThisMonth", "dashboard.forecast.projectedBalance"],
+});
+
 export const DashboardSnapshotResponseSchema = z.object({
   bankBalance: z.number(),
   bills: DashboardBillsSchema,
@@ -39,7 +54,9 @@ export const DashboardSnapshotResponseSchema = z.object({
   income: DashboardIncomeSchema,
   forecast: DashboardForecastSchema.nullable(),
   semanticCore: CoreFinancialSemanticContractSchema,
+  semanticSourceMap: DashboardSemanticSourceMapSchema,
   consignado: DashboardConsignadoSchema,
 });
 
 export type DashboardSnapshotResponse = z.infer<typeof DashboardSnapshotResponseSchema>;
+export type DashboardSemanticSourceMap = z.infer<typeof DashboardSemanticSourceMapSchema>;

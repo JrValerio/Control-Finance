@@ -1,4 +1,8 @@
 import { dbQuery } from "../db/index.js";
+import {
+  DASHBOARD_SEMANTIC_SOURCE_MAP,
+  type DashboardSemanticSourceMap,
+} from "../domain/contracts/dashboard-response.schema.ts";
 
 type NumericLike = number | string | null | undefined;
 
@@ -70,6 +74,7 @@ interface DashboardSnapshot {
       expectedInflow: number | null;
     };
   };
+  semanticSourceMap: DashboardSemanticSourceMap;
   consignado: {
     monthlyTotal: number;
     contractsCount: number;
@@ -303,5 +308,6 @@ export const getDashboardSnapshot = async (
   return {
     ...baseSnapshot,
     semanticCore: buildDashboardSemanticCore(baseSnapshot, now),
+    semanticSourceMap: DASHBOARD_SEMANTIC_SOURCE_MAP,
   };
 };

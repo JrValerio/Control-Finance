@@ -162,7 +162,7 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
     );
   }
 
-  const { forecast, consignado, semanticCore } = snapshot;
+  const { consignado, semanticCore } = snapshot;
   const { obligations } = buildDashboardContractView(snapshot);
 
   const nowTimestamp = Date.now();
@@ -317,19 +317,12 @@ const OperationalSummaryPanel = ({ onOpenDueSoonBills }: OperationalSummaryPanel
 
   // ── Tile 5: Forecast ──────────────────────────────────────────────────────
   const projectionBalance = semanticCore.projection.projectedBalance;
-  const forecastTile: TileProps = forecast
-    ? {
-        label: "Saldo projetado",
-        primary: money(projectionBalance),
-        secondary: "Fechamento previsto do mês",
-        accent: projectionBalance < 0 ? "danger" : projectionBalance < 200 ? "warning" : "default",
-      }
-    : {
-        label: "Saldo projetado",
-        primary: "—",
-        secondary: "Sem base para projeção",
-        accent: "muted",
-      };
+  const forecastTile: TileProps = {
+    label: "Saldo projetado",
+    primary: money(projectionBalance),
+    secondary: "Fechamento previsto do mês (contrato canônico)",
+    accent: projectionBalance < 0 ? "danger" : projectionBalance < 200 ? "warning" : "default",
+  };
 
   // ── Tile 6: Consignado ────────────────────────────────────────────────────
   const consignadoAccent: TileProps["accent"] =

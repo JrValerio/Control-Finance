@@ -65,6 +65,11 @@ const buildSnapshot = (overrides: Partial<DashboardSnapshot> = {}): DashboardSna
           income.pendingThisMonth > 0 ? income.pendingThisMonth : null,
       },
     },
+    semanticSourceMap: overrides.semanticSourceMap ?? {
+      realized: ["dashboard.income.receivedThisMonth"],
+      currentPosition: ["dashboard.bankBalance"],
+      projection: ["dashboard.income.pendingThisMonth", "dashboard.forecast.projectedBalance"],
+    },
     consignado: {
       monthlyTotal: 0,
       contractsCount: 0,
@@ -364,14 +369,14 @@ describe("OperationalSummaryPanel", () => {
   it("prioriza semanticCore no consumo de saldo e renda", async () => {
     vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
       buildSnapshot({
-        bankBalance: 1000,
+        bankBalance: 850,
         income: {
-          receivedThisMonth: 50,
-          pendingThisMonth: 20,
+          receivedThisMonth: 1200,
+          pendingThisMonth: 350,
           referenceMonth: "2026-04",
         },
         forecast: {
-          projectedBalance: 400,
+          projectedBalance: 200,
           month: "2026-04",
         },
         bills: {
@@ -415,7 +420,43 @@ describe("OperationalSummaryPanel", () => {
     expect(screen.getByText("R$ 1.200,00")).toBeInTheDocument();
     expect(screen.getByText("Previsto no mês: R$ 350,00")).toBeInTheDocument();
     expect(screen.getByText("R$ 200,00")).toBeInTheDocument();
-    expect(screen.queryByText("R$ 50,00")).not.toBeInTheDocument();
-    expect(screen.queryByText("R$ 400,00")).not.toBeInTheDocument();
+  });
+
+  it("usa saldo projetado canônico mesmo quando forecast legado está ausente", async () => {
+    vi.mocked(dashboardService.getSnapshot).mockResolvedValueOnce(
+      buildSnapshot({
+        bankBalance: 640,
+        forecast: null,
+        semanticCore: {
+          semanticsVersion: "v1",
+          realized: {
+            confirmedInflowTotal: 0,
+            settledOutflowTotal: 0,
+            netAmount: 0,
+            referenceMonth: "2026-04",
+          },
+          currentPosition: {
+            bankBalance: 640,
+            technicalBalance: 640,
+            asOf: "2026-04-15T00:00:00.000Z",
+          },
+          projection: {
+            referenceMonth: "2026-04",
+            projectedBalance: 640,
+            adjustedProjectedBalance: 640,
+            expectedInflow: null,
+          },
+        },
+      }),
+    );
+
+    render(<OperationalSummaryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Fechamento previsto do mês (contrato canônico)")).toBeInTheDocument();
+    });
+
+    expect(screen.getAllByText("R$ 640,00").length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText("Sem base para projeção")).not.toBeInTheDocument();
   });
 });

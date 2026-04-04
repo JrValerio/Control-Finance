@@ -15,6 +15,7 @@
     "db:seed": "node src/db/seed.js",
     "lint": "eslint src --max-warnings 0",
     "test:observability:documents": "vitest run src/document-financial-observability.test.js",
+    "test:semantic:dashboard": "vitest run src/dashboard.test.js",
     "test:golden": "vitest run src/credit-card-invoices.golden.test.js",
     "test:hardening:http": "vitest run src/http-hardening-baseline.test.js",
     "test:smoke:critical": "vitest run src/smoke-critical-finance-journey.test.js",
