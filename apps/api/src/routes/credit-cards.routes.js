@@ -18,6 +18,11 @@ import {
   listCreditCardInvoicesForUser,
   linkBillToInvoiceForUser,
 } from "../services/credit-card-invoices.service.js";
+import {
+  enqueueCreditCardInvoiceImportJobForUser,
+  getCreditCardInvoiceImportJobForUser,
+  retryCreditCardInvoiceImportJobForUser,
+} from "../services/credit-card-invoice-import-jobs.service.js";
 
 const INVOICE_PDF_MAX_BYTES =
   Number.isInteger(Number(process.env.INVOICE_PDF_MAX_SIZE_BYTES)) &&
@@ -151,6 +156,56 @@ router.post("/:id/invoices/parse-pdf", creditCardsWriteRateLimiter, (req, res, n
       return next(error);
     }
   });
+});
+
+router.post("/:id/invoices/parse-pdf-async", creditCardsWriteRateLimiter, (req, res, next) => {
+  invoiceUpload.single("file")(req, res, async (uploadError) => {
+    if (uploadError) {
+      if (uploadError instanceof multer.MulterError && uploadError.code === "LIMIT_FILE_SIZE") {
+        const err = new Error(`Arquivo muito grande. Limite: ${INVOICE_PDF_MAX_MB} MB.`);
+        err.status = 413;
+        return next(err);
+      }
+      return next(uploadError);
+    }
+    try {
+      ensureInvoicePdfFile(req.file);
+      const job = await enqueueCreditCardInvoiceImportJobForUser(
+        req.user.id,
+        req.params.id,
+        req.file.buffer,
+      );
+      return res.status(202).json(job);
+    } catch (error) {
+      return next(error);
+    }
+  });
+});
+
+router.get("/:id/invoices/import-jobs/:jobId", async (req, res, next) => {
+  try {
+    const job = await getCreditCardInvoiceImportJobForUser(
+      req.user.id,
+      req.params.id,
+      req.params.jobId,
+    );
+    res.status(200).json(job);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:id/invoices/import-jobs/:jobId/retry", creditCardsWriteRateLimiter, async (req, res, next) => {
+  try {
+    const job = await retryCreditCardInvoiceImportJobForUser(
+      req.user.id,
+      req.params.id,
+      req.params.jobId,
+    );
+    res.status(202).json(job);
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.get("/:id/invoices", async (req, res, next) => {
