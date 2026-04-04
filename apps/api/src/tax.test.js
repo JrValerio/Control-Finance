@@ -1390,6 +1390,7 @@ describe("Tax API foundation", () => {
       fgtsBase: 8500,
     });
     expect(Array.isArray(extractionResult.rows[0]?.raw_json?.extraction?.rubrics)).toBe(true);
+    expect(extractionResult.rows[0]?.raw_json?.classification?.textPreviewLines).toBeUndefined();
 
     const factsResult = await dbQuery(
       `SELECT fact_type, subcategory, amount, dedupe_strength, conflict_code
@@ -1443,6 +1444,73 @@ describe("Tax API foundation", () => {
         conflict_code: null,
       }),
     ]);
+  });
+
+  it("POST /tax/documents/:id/reprocess permite rollback da redacao sensivel por feature flag", async () => {
+    const previousRedactionFlag = process.env.TAX_SENSITIVE_EXCERPT_REDACTION_ENABLED;
+    process.env.TAX_SENSITIVE_EXCERPT_REDACTION_ENABLED = "false";
+
+    try {
+      const token = await registerAndLogin("tax-documents-reprocess-clt-redaction-flag@test.dev");
+      const uploadResponse = await request(app)
+        .post("/tax/documents")
+        .set("Authorization", `Bearer ${token}`)
+        .field("taxYear", "2026")
+        .attach(
+          "file",
+          Buffer.from(
+            [
+              "CONTRACHEQUE MARCO 2025",
+              "Empregador ACME TECNOLOGIA LTDA",
+              "CNPJ 12.345.678/0001-90",
+              "Empregado JOAO DA SILVA",
+              "CPF 123.456.789-00",
+              "Admissao 01/02/2020",
+              "Cargo ANALISTA DE SISTEMAS",
+              "Competencia 03/2025",
+              "Vencimentos",
+              "Salario Base 7.500,00",
+              "Horas Extras 1.000,00",
+              "Descontos",
+              "INSS 876,00",
+              "IRRF 423,35",
+              "Liquido 7.200,65",
+            ].join("\n"),
+            "utf8",
+          ),
+          {
+            filename: "holerite-clt-flag-off.csv",
+            contentType: "text/csv",
+          },
+        );
+
+      expect(uploadResponse.status).toBe(201);
+
+      const reprocessResponse = await request(app)
+        .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+        .set("Authorization", `Bearer ${token}`);
+
+      expect(reprocessResponse.status).toBe(200);
+
+      const extractionResult = await dbQuery(
+        `SELECT raw_json
+         FROM tax_document_extractions
+         WHERE document_id = $1
+         ORDER BY id DESC
+         LIMIT 1`,
+        [uploadResponse.body.document.id],
+      );
+
+      expect(Array.isArray(extractionResult.rows[0]?.raw_json?.classification?.textPreviewLines)).toBe(
+        true,
+      );
+    } finally {
+      if (typeof previousRedactionFlag === "undefined") {
+        delete process.env.TAX_SENSITIVE_EXCERPT_REDACTION_ENABLED;
+      } else {
+        process.env.TAX_SENSITIVE_EXCERPT_REDACTION_ENABLED = previousRedactionFlag;
+      }
+    }
   });
 
   it("GET /tax/income-statement-clt/:taxYear agrega meses aprovados de holerite CLT", async () => {

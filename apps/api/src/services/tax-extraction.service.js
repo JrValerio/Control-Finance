@@ -1,6 +1,7 @@
 import { dbQuery, withDbTransaction } from "../db/index.js";
 import { runTaxExtractorForDocument } from "../domain/tax/tax-document-extractors.js";
 import { createTaxError, normalizeTaxUserId } from "../domain/tax/tax.validation.js";
+import { trackDomainFlowRecords } from "../observability/domain-metrics.js";
 import { classifyStoredTaxDocument } from "./tax-classification.service.js";
 import { getTaxDocumentByIdForUser } from "./tax-documents.service.js";
 import {
@@ -10,6 +11,24 @@ import {
 
 const CLASSIFIER_ONLY_EXTRACTOR_NAME = "classifier-only";
 const CLASSIFIER_ONLY_EXTRACTOR_VERSION = "1.0.0";
+const EXTRACTION_FLOW = "tax_documents_extraction";
+const REDACTION_OPERATION = "redact_text_preview_lines";
+
+const isSensitiveExcerptRedactionEnabled = (env = process.env) => {
+  const flagValue = env.TAX_SENSITIVE_EXCERPT_REDACTION_ENABLED;
+
+  if (typeof flagValue === "undefined") {
+    return true;
+  }
+
+  const normalizedFlagValue = String(flagValue).trim().toLowerCase();
+
+  if (["false", "0", "no", "nao", "off"].includes(normalizedFlagValue)) {
+    return false;
+  }
+
+  return true;
+};
 
 const normalizeDocumentId = (value) => {
   const parsedValue = Number(value);
@@ -61,6 +80,31 @@ const mapPersistedExtraction = (row) => ({
   warnings: Array.isArray(row.warnings_json) ? row.warnings_json : [],
 });
 
+const buildPersistedClassificationPayload = (
+  classificationPayload,
+  { env = process.env } = {},
+) => {
+  if (!classificationPayload || typeof classificationPayload !== "object") {
+    return {};
+  }
+
+  if (!isSensitiveExcerptRedactionEnabled(env)) {
+    return { ...classificationPayload };
+  }
+
+  const { textPreviewLines, ...safePayload } = classificationPayload;
+
+  if (Array.isArray(textPreviewLines) && textPreviewLines.length > 0) {
+    trackDomainFlowRecords({
+      flow: EXTRACTION_FLOW,
+      operation: REDACTION_OPERATION,
+      records: textPreviewLines.length,
+    });
+  }
+
+  return safePayload;
+};
+
 const buildExtractionPreview = ({
   classification,
   extractorResult,
@@ -74,11 +118,11 @@ const buildExtractionPreview = ({
   confidenceScore: classification.confidenceScore,
   rawJson: extractorResult
     ? {
-        classification: classification.classificationPayload,
+        classification: buildPersistedClassificationPayload(classification.classificationPayload),
         extraction: extractorResult.payload,
       }
     : {
-        classification: classification.classificationPayload,
+        classification: buildPersistedClassificationPayload(classification.classificationPayload),
       },
   warnings,
 });
@@ -96,11 +140,11 @@ const persistSuccessfulProcessing = async ({
     extractorResult?.extractorVersion || CLASSIFIER_ONLY_EXTRACTOR_VERSION;
   const rawJson = extractorResult
     ? {
-        classification: classification.classificationPayload,
+        classification: buildPersistedClassificationPayload(classification.classificationPayload),
         extraction: extractorResult.payload,
       }
     : {
-        classification: classification.classificationPayload,
+        classification: buildPersistedClassificationPayload(classification.classificationPayload),
       };
 
   let persistedExtraction = null;
