@@ -1,38 +1,74 @@
-import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
+import { trackDomainFlowError, trackDomainFlowSuccess } from "../observability/domain-metrics.js";
+import {
+  TAX_DOCUMENT_STORAGE_ADAPTER_LOCAL,
+  TAX_DOCUMENT_STORAGE_POLICY_VERSION,
+  TAX_DOCUMENT_STORAGE_SUPPORTED_ADAPTERS,
+  resolveTaxDocumentStorageAdapterName,
+  sanitizeTaxDocumentFileExtension,
+} from "./tax-document-storage.policy.js";
+import {
+  createLocalTaxDocumentStorageAdapter,
+  resolveLocalTaxDocumentsStorageDir,
+} from "./tax-document-storage-local.adapter.js";
 
-const DEFAULT_STORAGE_DIR = path.join(os.tmpdir(), "control-finance", "tax-documents");
+const STORAGE_FLOW = "tax_documents_storage";
 
-const sanitizeFileExtension = (originalFileName) => {
-  const extension = path.extname(String(originalFileName || "")).toLowerCase();
+const assertStorageAdapterContract = (adapter, adapterName) => {
+  const requiredMethods = [
+    "resolveAbsolutePath",
+    "saveDocument",
+    "readDocument",
+    "deleteDocument",
+  ];
 
-  if (!extension) {
-    return ".bin";
+  for (const methodName of requiredMethods) {
+    if (typeof adapter?.[methodName] !== "function") {
+      throw new Error(
+        `Invalid tax storage adapter '${adapterName}': missing method '${methodName}'.`,
+      );
+    }
   }
 
-  return /^[.][a-z0-9]{1,10}$/.test(extension) ? extension : ".bin";
+  return adapter;
 };
 
-const normalizeStorageSegments = (storageKey) => {
-  const normalizedKey = String(storageKey || "").replaceAll("\\", "/");
-  const segments = normalizedKey.split("/").filter(Boolean);
-
-  if (segments.some((segment) => segment === "." || segment === "..")) {
-    throw new Error("storageKey invalido.");
+const createStorageAdapter = (adapterName, env = process.env) => {
+  if (adapterName === TAX_DOCUMENT_STORAGE_ADAPTER_LOCAL) {
+    return createLocalTaxDocumentStorageAdapter(env);
   }
 
-  return segments;
+  throw new Error(
+    `Unsupported TAX_DOCUMENTS_STORAGE_ADAPTER '${adapterName}'. Supported values: ${[
+      ...TAX_DOCUMENT_STORAGE_SUPPORTED_ADAPTERS,
+    ].join(", ")}.`,
+  );
 };
 
-export const resolveTaxDocumentsStorageDir = () => {
-  const configuredDirectory = String(process.env.TAX_DOCUMENTS_STORAGE_DIR || "").trim();
+const resolveTaxDocumentStorageAdapter = (env = process.env) => {
+  const adapterName = resolveTaxDocumentStorageAdapterName(env);
+  const adapter = assertStorageAdapterContract(createStorageAdapter(adapterName, env), adapterName);
 
-  if (!configuredDirectory) {
-    return DEFAULT_STORAGE_DIR;
+  return {
+    adapterName,
+    adapter,
+  };
+};
+
+export const resolveTaxDocumentStoragePolicy = (env = process.env) => ({
+  version: TAX_DOCUMENT_STORAGE_POLICY_VERSION,
+  adapterName: resolveTaxDocumentStorageAdapterName(env),
+  supportedAdapters: [...TAX_DOCUMENT_STORAGE_SUPPORTED_ADAPTERS],
+});
+
+export const resolveTaxDocumentsStorageDir = (env = process.env) => {
+  const adapterName = resolveTaxDocumentStorageAdapterName(env);
+
+  if (adapterName === TAX_DOCUMENT_STORAGE_ADAPTER_LOCAL) {
+    return resolveLocalTaxDocumentsStorageDir(env);
   }
 
-  return path.resolve(configuredDirectory);
+  return path.resolve(resolveLocalTaxDocumentsStorageDir(env));
 };
 
 export const buildTaxDocumentStorageDescriptor = ({
@@ -40,7 +76,7 @@ export const buildTaxDocumentStorageDescriptor = ({
   sha256,
   originalFileName,
 }) => {
-  const storedFileName = `${sha256}${sanitizeFileExtension(originalFileName)}`;
+  const storedFileName = `${sha256}${sanitizeTaxDocumentFileExtension(originalFileName)}`;
   const storageKey = path.posix.join(String(userId), storedFileName);
 
   return {
@@ -50,10 +86,8 @@ export const buildTaxDocumentStorageDescriptor = ({
 };
 
 export const resolveTaxDocumentAbsolutePath = (storageKey) => {
-  const storageRoot = resolveTaxDocumentsStorageDir();
-  const segments = normalizeStorageSegments(storageKey);
-
-  return path.join(storageRoot, ...segments);
+  const { adapter } = resolveTaxDocumentStorageAdapter();
+  return adapter.resolveAbsolutePath(storageKey);
 };
 
 export const saveTaxDocumentBuffer = async ({
@@ -62,35 +96,55 @@ export const saveTaxDocumentBuffer = async ({
   originalFileName,
   buffer,
 }) => {
+  const { adapter } = resolveTaxDocumentStorageAdapter();
   const descriptor = buildTaxDocumentStorageDescriptor({
     userId,
     sha256,
     originalFileName,
   });
-  const absolutePath = resolveTaxDocumentAbsolutePath(descriptor.storageKey);
 
-  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
-  await fs.writeFile(absolutePath, buffer);
+  try {
+    const persisted = await adapter.saveDocument({
+      storageKey: descriptor.storageKey,
+      buffer,
+    });
 
-  return {
-    ...descriptor,
-    absolutePath,
-  };
+    trackDomainFlowSuccess({ flow: STORAGE_FLOW, operation: "save" });
+
+    return {
+      ...descriptor,
+      absolutePath:
+        typeof persisted?.absolutePath === "string"
+          ? persisted.absolutePath
+          : adapter.resolveAbsolutePath(descriptor.storageKey),
+    };
+  } catch (error) {
+    trackDomainFlowError({ flow: STORAGE_FLOW, operation: "save" });
+    throw error;
+  }
 };
 
 export const readStoredTaxDocumentBuffer = async (storageKey) => {
-  const absolutePath = resolveTaxDocumentAbsolutePath(storageKey);
-  return fs.readFile(absolutePath);
+  const { adapter } = resolveTaxDocumentStorageAdapter();
+
+  try {
+    const buffer = await adapter.readDocument({ storageKey });
+    trackDomainFlowSuccess({ flow: STORAGE_FLOW, operation: "read" });
+    return buffer;
+  } catch (error) {
+    trackDomainFlowError({ flow: STORAGE_FLOW, operation: "read" });
+    throw error;
+  }
 };
 
 export const deleteStoredTaxDocument = async (storageKey) => {
-  const absolutePath = resolveTaxDocumentAbsolutePath(storageKey);
+  const { adapter } = resolveTaxDocumentStorageAdapter();
 
   try {
-    await fs.unlink(absolutePath);
+    await adapter.deleteDocument({ storageKey });
+    trackDomainFlowSuccess({ flow: STORAGE_FLOW, operation: "delete" });
   } catch (error) {
-    if (error?.code !== "ENOENT") {
-      throw error;
-    }
+    trackDomainFlowError({ flow: STORAGE_FLOW, operation: "delete" });
+    throw error;
   }
 };
