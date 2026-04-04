@@ -213,6 +213,12 @@ export interface ImportDryRunBillSuggestion {
   customerCode?: string | null;
 }
 
+export interface ImportDryRunUtilityBillImportDecision {
+  scope: "generic_boleto";
+  decision: "blocked" | "supported";
+  reasonCode: string;
+}
+
 const IMPORT_DRY_RUN_BILL_TYPES = new Set([
   "energy",
   "water",
@@ -230,6 +236,7 @@ export interface ImportDryRunResult {
   summary: ImportDryRunSummary;
   rows: ImportDryRunRow[];
   documentType?: string | null;
+  utilityBillImportDecision?: ImportDryRunUtilityBillImportDecision | null;
   suggestion?: ImportDryRunSuggestion | null;
   suggestions?: ImportDryRunSuggestion[];
 }
@@ -393,6 +400,11 @@ interface ImportDryRunApiResponse {
   importId?: unknown;
   expiresAt?: unknown;
   documentType?: unknown;
+  utilityBillImportDecision?: {
+    scope?: unknown;
+    decision?: unknown;
+    reasonCode?: unknown;
+  } | null;
   suggestion?: unknown;
   suggestions?: unknown[];
   summary?: {
@@ -562,6 +574,42 @@ const normalizeImportDryRunProfileDeduction = (
       normalizedType === "loan" || normalizedType === "card" || normalizedType === "other"
         ? normalizedType
         : null,
+  };
+};
+
+const normalizeImportDryRunUtilityBillImportDecision = (
+  raw: unknown,
+): ImportDryRunUtilityBillImportDecision | null => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+
+  const parsed = raw as {
+    scope?: unknown;
+    decision?: unknown;
+    reasonCode?: unknown;
+  };
+
+  const scope = String(parsed.scope || "").trim();
+  const decision = String(parsed.decision || "").trim();
+  const reasonCode = String(parsed.reasonCode || "").trim();
+
+  if (scope !== "generic_boleto") {
+    return null;
+  }
+
+  if (decision !== "blocked" && decision !== "supported") {
+    return null;
+  }
+
+  if (!reasonCode) {
+    return null;
+  }
+
+  return {
+    scope: "generic_boleto",
+    decision,
+    reasonCode,
   };
 };
 
@@ -1046,6 +1094,9 @@ export const transactionsService = {
         typeof responseBody.documentType === "string" && responseBody.documentType.trim()
           ? responseBody.documentType.trim()
           : null,
+      utilityBillImportDecision: normalizeImportDryRunUtilityBillImportDecision(
+        responseBody.utilityBillImportDecision,
+      ),
       suggestion: normalizeImportDryRunSuggestion(responseBody.suggestion),
       suggestions: Array.isArray(responseBody.suggestions)
         ? responseBody.suggestions

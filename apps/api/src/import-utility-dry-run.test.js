@@ -97,6 +97,11 @@ describe("transaction imports utility bills dry-run", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.documentType).toBe("utility_bill_telecom");
+    expect(response.body.utilityBillImportDecision).toEqual({
+      scope: "generic_boleto",
+      decision: "blocked",
+      reasonCode: "unsupported_auto_transaction_import",
+    });
     expect(response.body.summary).toEqual({
       totalRows: 0,
       validRows: 0,
@@ -124,6 +129,8 @@ describe("transaction imports utility bills dry-run", () => {
 
     const metrics = getImportMetricsSnapshot();
     expect(metrics.import_dry_run_semantic_drift_total).toBe(0);
+    expect(metrics.import_dry_run_utility_gate_blocked_total).toBe(1);
+    expect(metrics.import_dry_run_utility_gate_supported_total).toBe(0);
   });
 
   it("POST /transactions/import/dry-run retorna documentType e suggestion para utility_bill_gas", async () => {
@@ -151,6 +158,11 @@ describe("transaction imports utility bills dry-run", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.documentType).toBe("utility_bill_gas");
+    expect(response.body.utilityBillImportDecision).toEqual({
+      scope: "generic_boleto",
+      decision: "blocked",
+      reasonCode: "unsupported_auto_transaction_import",
+    });
     expect(response.body.summary).toEqual({
       totalRows: 0,
       validRows: 0,
@@ -178,6 +190,8 @@ describe("transaction imports utility bills dry-run", () => {
 
     const metrics = getImportMetricsSnapshot();
     expect(metrics.import_dry_run_semantic_drift_total).toBe(0);
+    expect(metrics.import_dry_run_utility_gate_blocked_total).toBe(1);
+    expect(metrics.import_dry_run_utility_gate_supported_total).toBe(0);
   });
 
   it("POST /transactions/import/dry-run incrementa metrica quando suggestion diverge do documentType utilitario", async () => {
@@ -205,6 +219,11 @@ describe("transaction imports utility bills dry-run", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.documentType).toBe("utility_bill_gas");
+    expect(response.body.utilityBillImportDecision).toEqual({
+      scope: "generic_boleto",
+      decision: "blocked",
+      reasonCode: "unsupported_auto_transaction_import",
+    });
     expect(response.body.suggestion).toMatchObject({
       billType: "water",
     });
@@ -212,5 +231,7 @@ describe("transaction imports utility bills dry-run", () => {
     const metrics = getImportMetricsSnapshot();
     expect(metrics.import_dry_run_total).toBe(1);
     expect(metrics.import_dry_run_semantic_drift_total).toBe(1);
+    expect(metrics.import_dry_run_utility_gate_blocked_total).toBe(1);
+    expect(metrics.import_dry_run_utility_gate_supported_total).toBe(0);
   });
 });
