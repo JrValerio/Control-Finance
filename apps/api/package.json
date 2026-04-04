@@ -14,6 +14,7 @@
     "db:backfill:categories-normalized": "node src/db/backfill-categories-normalized.js",
     "db:seed": "node src/db/seed.js",
     "lint": "eslint src --max-warnings 0",
+    "test:golden": "vitest run src/credit-card-invoices.golden.test.js",
     "test": "vitest run",
     "test:run": "vitest run"
   },
