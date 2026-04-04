@@ -32,9 +32,7 @@ describe("smoke critical finance journey", () => {
 
   it("creates pending bill and reflects the amount in /bills/summary", async () => {
     const token = await registerAndLogin("smoke-critical-journey@controlfinance.dev");
-    const dueDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .slice(0, 10);
+    const dueDate = "2099-12-01";
 
     const createResponse = await request(app)
       .post("/bills")
