@@ -3,6 +3,8 @@ import { logError, logInfo } from "./logger.js";
 const METRIC_NAMES = {
   dryRunTotal: "import_dry_run_total",
   dryRunSemanticDriftTotal: "import_dry_run_semantic_drift_total",
+  dryRunUtilityGateBlockedTotal: "import_dry_run_utility_gate_blocked_total",
+  dryRunUtilityGateSupportedTotal: "import_dry_run_utility_gate_supported_total",
   commitTotal: "import_commit_total",
   commitSuccessTotal: "import_commit_success_total",
   commitFailTotal: "import_commit_fail_total",
@@ -13,6 +15,8 @@ const METRIC_NAMES = {
 const importMetricsState = {
   [METRIC_NAMES.dryRunTotal]: 0,
   [METRIC_NAMES.dryRunSemanticDriftTotal]: 0,
+  [METRIC_NAMES.dryRunUtilityGateBlockedTotal]: 0,
+  [METRIC_NAMES.dryRunUtilityGateSupportedTotal]: 0,
   [METRIC_NAMES.commitTotal]: 0,
   [METRIC_NAMES.commitSuccessTotal]: 0,
   [METRIC_NAMES.commitFailTotal]: 0,
@@ -60,6 +64,10 @@ export const getImportMetricsSnapshot = () => {
     import_dry_run_total: importMetricsState[METRIC_NAMES.dryRunTotal],
     import_dry_run_semantic_drift_total:
       importMetricsState[METRIC_NAMES.dryRunSemanticDriftTotal],
+    import_dry_run_utility_gate_blocked_total:
+      importMetricsState[METRIC_NAMES.dryRunUtilityGateBlockedTotal],
+    import_dry_run_utility_gate_supported_total:
+      importMetricsState[METRIC_NAMES.dryRunUtilityGateSupportedTotal],
     import_commit_total: importMetricsState[METRIC_NAMES.commitTotal],
     import_commit_success_total: importMetricsState[METRIC_NAMES.commitSuccessTotal],
     import_commit_fail_total: importMetricsState[METRIC_NAMES.commitFailTotal],
@@ -86,6 +94,17 @@ export const trackDryRunSemanticDriftMetrics = ({ driftDetected = false } = {}) 
   }
 
   incrementMetric(METRIC_NAMES.dryRunSemanticDriftTotal);
+};
+
+export const trackDryRunUtilityGateDecisionMetrics = ({ decision = null } = {}) => {
+  if (decision === "blocked") {
+    incrementMetric(METRIC_NAMES.dryRunUtilityGateBlockedTotal);
+    return;
+  }
+
+  if (decision === "supported") {
+    incrementMetric(METRIC_NAMES.dryRunUtilityGateSupportedTotal);
+  }
 };
 
 export const trackCommitAttemptMetrics = () => {

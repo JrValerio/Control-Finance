@@ -206,6 +206,11 @@ describe("ImportCsvModal", () => {
     transactionsService.dryRunImportCsv.mockResolvedValueOnce(
       buildDryRunResponse({
         documentType: "utility_bill_telecom",
+        utilityBillImportDecision: {
+          scope: "generic_boleto",
+          decision: "blocked",
+          reasonCode: "unsupported_auto_transaction_import",
+        },
         summary: {
           totalRows: 0,
           validRows: 0,
@@ -238,7 +243,7 @@ describe("ImportCsvModal", () => {
     });
 
     expect(
-      screen.getByText(/energia, água, gás, internet, telefone e TV/i),
+      screen.getByText(/importação automática de transações para boleto genérico está bloqueada/i),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Criar pendência" })).toBeInTheDocument();
   });

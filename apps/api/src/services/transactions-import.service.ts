@@ -80,6 +80,12 @@ type ImportFile = {
   mimetype?: string;
 };
 
+type UtilityBillImportDecision = {
+  scope: "generic_boleto";
+  decision: "blocked" | "supported";
+  reasonCode: string;
+};
+
 const CATEGORY_ENTRY = TRANSACTION_TYPE_ENTRY;
 const CATEGORY_EXIT = TRANSACTION_TYPE_EXIT;
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
@@ -97,6 +103,27 @@ const HEADER_ERROR_MESSAGE =
   "CSV invalido. Cabecalho esperado: date,type,value,description,notes,category";
 const IMPORT_FORMAT_ERROR_MESSAGE =
   "Arquivo nao reconhecido. Envie um CSV manual com cabecalho date,type,value,description,notes,category ou um CSV, OFX ou PDF de extrato.";
+const UTILITY_BILL_DOCUMENT_TYPES = new Set([
+  "utility_bill_energy",
+  "utility_bill_water",
+  "utility_bill_gas",
+  "utility_bill_telecom",
+]);
+
+const resolveUtilityBillImportDecision = (documentType: unknown): UtilityBillImportDecision | null => {
+  const normalizedDocumentType =
+    typeof documentType === "string" ? documentType.trim().toLowerCase() : "";
+
+  if (!normalizedDocumentType || !UTILITY_BILL_DOCUMENT_TYPES.has(normalizedDocumentType)) {
+    return null;
+  }
+
+  return {
+    scope: "generic_boleto",
+    decision: "blocked",
+    reasonCode: "unsupported_auto_transaction_import",
+  };
+};
 
 const extractFitId = (notes: unknown): string | null => {
   const match = String(notes || "").match(/^FITID\s+(\S+)/);
@@ -1097,6 +1124,7 @@ export const dryRunTransactionsImportForUser = async (
     suggestion,
     suggestions = [],
   } = await parseImportFileRows(importFile);
+  const utilityBillImportDecision = resolveUtilityBillImportDecision(documentType);
   const [categoryMap, categories, importRules] = await Promise.all([
     loadCategoryMapForUser(userId),
     loadCategoriesForUser(userId),
@@ -1186,12 +1214,14 @@ export const dryRunTransactionsImportForUser = async (
     summary,
     fileName: importFile?.originalname || null,
     documentType,
+    utilityBillImportDecision,
   });
 
   return {
     importId: persistedSession.importId,
     expiresAt: persistedSession.expiresAt,
     documentType,
+    utilityBillImportDecision,
     suggestion: suggestion || null,
     suggestions,
     summary,

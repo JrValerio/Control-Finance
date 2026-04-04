@@ -98,4 +98,26 @@ describe("transactions service import dry-run", () => {
       billType: null,
     });
   });
+
+  it("normaliza utilityBillImportDecision quando o backend retorna gate binario", async () => {
+    postMock.mockResolvedValueOnce({
+      data: {
+        ...BASE_DRY_RUN_RESPONSE,
+        utilityBillImportDecision: {
+          scope: "generic_boleto",
+          decision: "blocked",
+          reasonCode: "unsupported_auto_transaction_import",
+        },
+      },
+    });
+
+    const file = new File(["dummy"], "telecom.pdf", { type: "application/pdf" });
+    const result = await transactionsService.dryRunImportCsv(file);
+
+    expect(result.utilityBillImportDecision).toEqual({
+      scope: "generic_boleto",
+      decision: "blocked",
+      reasonCode: "unsupported_auto_transaction_import",
+    });
+  });
 });

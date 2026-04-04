@@ -15,6 +15,7 @@ import {
   trackCommitSuccessMetrics,
   trackDryRunMetrics,
   trackDryRunSemanticDriftMetrics,
+  trackDryRunUtilityGateDecisionMetrics,
 } from "../observability/import-observability.js";
 import {
   trackDomainFlowError,
@@ -475,9 +476,16 @@ router.post("/import/dry-run", importRateLimiter, requireFeature("csv_import"), 
       const validRows = Number(dryRunResult.summary?.validRows) || 0;
       const invalidRows = Number(dryRunResult.summary?.invalidRows) || 0;
       const semanticDrift = detectUtilityDryRunSemanticDrift(dryRunResult);
+      const utilityGateDecision =
+        dryRunResult?.utilityBillImportDecision?.decision === "supported"
+          ? "supported"
+          : dryRunResult?.utilityBillImportDecision?.decision === "blocked"
+            ? "blocked"
+            : null;
 
       trackDryRunMetrics({ rowsTotal });
       trackDryRunSemanticDriftMetrics({ driftDetected: semanticDrift.driftDetected });
+      trackDryRunUtilityGateDecisionMetrics({ decision: utilityGateDecision });
 
       if (semanticDrift.driftDetected) {
         logImportEvent("import.dry_run.semantic_drift", {
@@ -500,6 +508,7 @@ router.post("/import/dry-run", importRateLimiter, requireFeature("csv_import"), 
         rowsTotal,
         validRows,
         invalidRows,
+        utilityBillImportDecision: dryRunResult?.utilityBillImportDecision || null,
         elapsedMs: elapsedTimer(),
         statusCode: 200,
       });

@@ -296,6 +296,20 @@ const ImportCsvModal = ({
     );
   }, [dryRunResult]);
 
+  const isUtilityBillAutoImportBlocked = useMemo(() => {
+    if (!isUtilityBill) {
+      return false;
+    }
+
+    const decision = dryRunResult?.utilityBillImportDecision?.decision;
+
+    if (decision === "supported") {
+      return false;
+    }
+
+    return true;
+  }, [dryRunResult, isUtilityBill]);
+
   const profileSuggestions = useMemo(() => {
     const suggestionsFromResponse = Array.isArray(dryRunResult?.suggestions)
       ? dryRunResult.suggestions
@@ -1040,9 +1054,9 @@ const ImportCsvModal = ({
               </div>
             ) : null}
 
-            {isUtilityBill ? (
+            {isUtilityBillAutoImportBlocked ? (
               <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
-                Boleto detectado. O suporte completo à importação de contas de energia, água, gás, internet, telefone e TV chegará em breve. Por enquanto, nenhuma transação é extraída.
+                Boleto utilitário detectado. A importação automática de transações para boleto genérico está bloqueada por gate binário nesta versão. Use os dados detectados abaixo para criar a pendência manualmente.
               </div>
             ) : null}
 
