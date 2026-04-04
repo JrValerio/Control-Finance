@@ -9,10 +9,17 @@ import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 
 // ─── Mock pdf-ocr so tests run without real PDF toolchain ─────────────────────
 
-const mockExtractText = vi.hoisted(() => vi.fn());
+const mockExtractTextWithRuntime = vi.hoisted(() => vi.fn());
 
 vi.mock("./domain/imports/pdf-ocr.js", () => ({
-  extractTextFromPdfWithOcr: mockExtractText,
+  extractTextFromPdfWithOcrRuntime: mockExtractTextWithRuntime,
+  extractTextFromPdfWithOcr: vi.fn(async (...args) => {
+    const result = await mockExtractTextWithRuntime(...args);
+    if (typeof result === "string") {
+      return result;
+    }
+    return String(result?.text || "");
+  }),
   isImportOcrEnabled: () => false,
   shouldRunPdfOcrFallback: () => false,
 }));
@@ -61,6 +68,18 @@ TOTAL DA FATURA    R$ 540,35
 
 const INVALID_TEXT = `Este texto nao tem nenhum dado de fatura.`;
 
+const createOcrRuntimeResult = (text, runtimeOverrides = {}) => ({
+  text,
+  ocrRuntime: {
+    status: "success",
+    reasonCode: "direct_text_sufficient",
+    ocrEnabled: false,
+    ocrAttempted: false,
+    timeoutMs: null,
+    ...runtimeOverrides,
+  },
+});
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const createCard = (token, overrides = {}) =>
@@ -85,7 +104,7 @@ const resetState = async () => {
   resetImportRateLimiterState();
   resetWriteRateLimiterState();
   resetHttpMetricsForTests();
-  mockExtractText.mockReset();
+  mockExtractTextWithRuntime.mockReset();
   await dbQuery("DELETE FROM credit_card_invoices");
   await dbQuery("DELETE FROM credit_card_purchases");
   await dbQuery("DELETE FROM bills");
@@ -124,7 +143,7 @@ describe("credit-card-invoices", () => {
 
   it("POST parse-pdf retorna 201 com campos corretos para fatura valida", async () => {
     const token = await registerAndLogin("inv-parse-ok@test.dev");
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT));
 
     const cardRes = await createCard(token);
     const cardId = cardRes.body.id;
@@ -143,12 +162,13 @@ describe("credit-card-invoices", () => {
     expect(res.body.parseConfidence).toBe("high");
     expect(res.body.needsReview).toBe(false);
     expect(res.body.parseMetadata?.parser?.name).toBe("itau_parser_v1");
+    expect(res.body.parseMetadata?.ocrRuntime?.status).toBe("success");
     expect(res.body.linkedBillId).toBeNull();
   });
 
   it("POST parse-pdf infere periodo quando ausente no PDF (parse_confidence=low)", async () => {
     const token = await registerAndLogin("inv-infer@test.dev");
-    mockExtractText.mockResolvedValue(ITAU_TEXT_NO_PERIOD);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(ITAU_TEXT_NO_PERIOD));
 
     // closing_day=7, dueDate=15/03/2026 → period_end=07/03/2026, period_start=08/02/2026
     const cardRes = await createCard(token, { closingDay: 7, dueDay: 15 });
@@ -168,7 +188,7 @@ describe("credit-card-invoices", () => {
 
   it("POST parse-pdf usa fallback por emissor reconhecido nao-itau com needsReview", async () => {
     const token = await registerAndLogin("inv-nubank-fallback@test.dev");
-    mockExtractText.mockResolvedValue(VALID_NUBANK_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_NUBANK_TEXT));
 
     const cardRes = await createCard(token, { closingDay: 10, dueDay: 20 });
     const cardId = cardRes.body.id;
@@ -189,7 +209,7 @@ describe("credit-card-invoices", () => {
 
   it("POST parse-pdf contabiliza domain metric por emissor", async () => {
     const token = await registerAndLogin("inv-metric-by-issuer@test.dev");
-    mockExtractText.mockResolvedValue(VALID_NUBANK_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_NUBANK_TEXT));
 
     const cardRes = await createCard(token);
     const cardId = cardRes.body.id;
@@ -206,7 +226,7 @@ describe("credit-card-invoices", () => {
 
   it("POST parse-pdf retorna 422 INVOICE_PARSE_FAILED para texto ilegivel", async () => {
     const token = await registerAndLogin("inv-parse-fail@test.dev");
-    mockExtractText.mockResolvedValue(INVALID_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(INVALID_TEXT));
 
     const cardRes = await createCard(token);
     const cardId = cardRes.body.id;
@@ -217,10 +237,37 @@ describe("credit-card-invoices", () => {
     expect(res.body.code).toBe("INVOICE_PARSE_FAILED");
   });
 
+  it("POST parse-pdf retorna 422 INVOICE_OCR_TIMEOUT com metrica de timeout", async () => {
+    const token = await registerAndLogin("inv-ocr-timeout@test.dev");
+    mockExtractTextWithRuntime.mockResolvedValue(
+      createOcrRuntimeResult("abc 123", {
+        status: "timeout",
+        reasonCode: "ocr_timeout",
+        ocrEnabled: true,
+        ocrAttempted: true,
+        timeoutMs: 1200,
+      }),
+    );
+
+    const cardRes = await createCard(token);
+    const cardId = cardRes.body.id;
+
+    const res = await uploadInvoice(token, cardId);
+
+    expect(res.status).toBe(422);
+    expect(res.body.code).toBe("INVOICE_OCR_TIMEOUT");
+
+    const metricsRes = await request(app).get("/metrics");
+    expect(metricsRes.status).toBe(200);
+    expect(metricsRes.text).toMatch(
+      /domain_financial_flow_events_total\{flow="credit_card_invoice_ocr_runtime",operation="status_timeout",outcome="error"\}\s+([0-9.]+)/,
+    );
+  });
+
   it("POST parse-pdf retorna 404 para cartao de outro usuario", async () => {
     const token1 = await registerAndLogin("inv-iso-1@test.dev");
     const token2 = await registerAndLogin("inv-iso-2@test.dev");
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT));
 
     const cardRes = await createCard(token1);
     const cardId = cardRes.body.id;
@@ -268,10 +315,10 @@ describe("credit-card-invoices", () => {
     const cardId = cardRes.body.id;
 
     // Upload two invoices with different due_date+total_amount (unique constraint)
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT));
     await uploadInvoice(token, cardId);
 
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT_APRIL);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT_APRIL));
     await uploadInvoice(token, cardId);
 
     const res = await request(app)
@@ -302,7 +349,7 @@ describe("credit-card-invoices", () => {
 
   it("POST link-bill vincula fatura a uma pendencia", async () => {
     const token = await registerAndLogin("inv-link@test.dev");
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT));
 
     const cardRes = await createCard(token);
     const cardId = cardRes.body.id;
@@ -338,7 +385,7 @@ describe("credit-card-invoices", () => {
 
   it("POST link-bill retorna 409 quando fatura ja esta vinculada", async () => {
     const token = await registerAndLogin("inv-link-dup@test.dev");
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT));
 
     const cardRes = await createCard(token);
     const cardId = cardRes.body.id;
@@ -378,7 +425,7 @@ describe("credit-card-invoices", () => {
 
   it("POST link-bill retorna 422 quando valor da pendencia difere do total da fatura", async () => {
     const token = await registerAndLogin("inv-link-amount-mismatch@test.dev");
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT));
 
     const cardRes = await createCard(token);
     const cardId = cardRes.body.id;
@@ -415,10 +462,10 @@ describe("credit-card-invoices", () => {
     const cardRes = await createCard(token);
     const cardId = cardRes.body.id;
 
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT));
     const firstInvoiceRes = await uploadInvoice(token, cardId);
 
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT_APRIL_SAME_TOTAL);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT_APRIL_SAME_TOTAL));
     const secondInvoiceRes = await uploadInvoice(token, cardId);
 
     const billRes = await request(app)
@@ -454,7 +501,7 @@ describe("credit-card-invoices", () => {
   it("POST link-bill retorna 404 para fatura de outro usuario", async () => {
     const token1 = await registerAndLogin("inv-link-iso-1@test.dev");
     const token2 = await registerAndLogin("inv-link-iso-2@test.dev");
-    mockExtractText.mockResolvedValue(VALID_ITAU_TEXT);
+    mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_ITAU_TEXT));
 
     const cardRes = await createCard(token1);
     const cardId = cardRes.body.id;
