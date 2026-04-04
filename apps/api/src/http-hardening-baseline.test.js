@@ -11,6 +11,20 @@ import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 
 const ALLOWED_ORIGIN = "http://localhost:5173";
 
+const getExpectedSameSiteCookieAttribute = () => {
+  const rawValue = (process.env.COOKIE_SAME_SITE || "lax").toLowerCase().trim();
+
+  if (rawValue === "none") {
+    return "SameSite=None";
+  }
+
+  if (rawValue === "strict") {
+    return "SameSite=Strict";
+  }
+
+  return "SameSite=Lax";
+};
+
 describe("http hardening baseline", () => {
   beforeAll(async () => {
     const { setupTestDb } = await import("./test-helpers.js");
@@ -59,6 +73,26 @@ describe("http hardening baseline", () => {
     expect(response.headers["access-control-allow-credentials"]).toBe("true");
   });
 
+  it("keeps same-origin requests without Origin header working", async () => {
+    const response = await request(app).get("/health");
+
+    expect(response.status).toBe(200);
+    expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+  });
+
+  it("accepts legitimate preflight for allowed frontend origin", async () => {
+    const response = await request(app)
+      .options("/health")
+      .set("Origin", ALLOWED_ORIGIN)
+      .set("Access-Control-Request-Method", "GET")
+      .set("Access-Control-Request-Headers", "content-type");
+
+    expect(response.status).toBe(204);
+    expect(response.headers["access-control-allow-origin"]).toBe(ALLOWED_ORIGIN);
+    expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    expect(response.headers["access-control-allow-methods"]).toContain("GET");
+  });
+
   it("blocks disallowed CORS origin with 403", async () => {
     const response = await request(app)
       .get("/health")
@@ -78,12 +112,13 @@ describe("http hardening baseline", () => {
     const cookies = response.headers["set-cookie"] || [];
     const accessCookie = cookies.find((cookie) => cookie.startsWith("cf_access="));
     const refreshCookie = cookies.find((cookie) => cookie.startsWith("cf_refresh="));
+    const expectedSameSite = getExpectedSameSiteCookieAttribute();
 
     expect(accessCookie).toBeTruthy();
     expect(refreshCookie).toBeTruthy();
     expect(accessCookie).toContain("HttpOnly");
     expect(refreshCookie).toContain("HttpOnly");
-    expect(accessCookie).toContain("SameSite=Lax");
-    expect(refreshCookie).toContain("SameSite=Lax");
+    expect(accessCookie).toContain(expectedSameSite);
+    expect(refreshCookie).toContain(expectedSameSite);
   });
 });
