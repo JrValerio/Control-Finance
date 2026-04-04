@@ -1,0 +1,45 @@
+{
+  "version": "1.0.0",
+  "anonymizationPolicyVersion": "1.0.0",
+  "cases": [
+    {
+      "id": "itau_high_confidence_auto_accept",
+      "description": "Fluxo de alta confianca segue sem exigir confirmacao explicita.",
+      "invoiceText": "BANCO ITAU S.A.\n**** 1234\nPERIODO DE 08/02/2026 A 07/03/2026\nVENCIMENTO 15/03/2026\nTOTAL DA FATURA R$ 1.247,80\nPAGAMENTO MINIMO R$ 124,78",
+      "card": {
+        "closingDay": 7,
+        "dueDay": 15
+      },
+      "expected": {
+        "issuer": "itau",
+        "parseConfidence": "high",
+        "classificationConfidence": 0.9,
+        "classificationAmbiguous": false,
+        "reasonCode": "not_ambiguous",
+        "requiresUserConfirmation": false,
+        "totalAmount": 1247.8,
+        "dueDate": "2026-03-15"
+      }
+    },
+    {
+      "id": "itau_period_missing_requires_confirmation",
+      "description": "Fluxo ambiguo bloqueia auto-aceite e exige confirmacao explicita.",
+      "invoiceText": "BANCO ITAU S.A.\nVENCIMENTO 15/03/2026\nTOTAL DA FATURA R$ 850,00",
+      "card": {
+        "closingDay": 7,
+        "dueDay": 15
+      },
+      "expected": {
+        "issuer": "itau",
+        "parseConfidence": "low",
+        "classificationConfidence": 0.45,
+        "classificationAmbiguous": true,
+        "reasonCode": "period_inferred_from_closing_day",
+        "requiresUserConfirmation": true,
+        "totalAmount": 850,
+        "dueDate": "2026-03-15",
+        "blockedCode": "AMBIGUOUS_CLASSIFICATION_CONFIRMATION_REQUIRED"
+      }
+    }
+  ]
+}
