@@ -15,6 +15,7 @@
     "db:seed": "node src/db/seed.js",
     "lint": "eslint src --max-warnings 0",
     "test:golden": "vitest run src/credit-card-invoices.golden.test.js",
+    "test:smoke:critical": "vitest run src/smoke-critical-finance-journey.test.js",
     "test": "vitest run",
     "test:run": "vitest run"
   },
