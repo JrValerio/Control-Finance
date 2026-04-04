@@ -225,6 +225,7 @@ AUTH_RATE_LIMIT_WINDOW_MS=
 AUTH_BRUTE_FORCE_MAX_ATTEMPTS=
 AUTH_BRUTE_FORCE_WINDOW_MS=
 AUTH_BRUTE_FORCE_LOCK_MS=
+TAX_DOCUMENTS_STORAGE_ADAPTER=local
 TAX_DOCUMENTS_STORAGE_DIR=
 TAX_DOCUMENT_MAX_FILE_SIZE_BYTES=10485760
 ```
@@ -276,6 +277,7 @@ Configuração recomendada:
 * login e registro funcionam
 * `VITE_API_URL` aponta para a API pública
 * `ANTHROPIC_API_KEY` está configurada na API se a camada de IA estiver habilitada
+* `TAX_DOCUMENTS_STORAGE_ADAPTER` permanece `local` ate existir plano explicito de cutover
 * `TAX_DOCUMENTS_STORAGE_DIR` aponta para storage persistente se a Central do Leão estiver habilitada em produção
 
 ## Scripts
