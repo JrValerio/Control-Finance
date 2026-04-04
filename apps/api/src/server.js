@@ -1,4 +1,5 @@
 import app from "./app.js";
+import { assertJwtEnvironmentConsistency } from "./config/jwt-env-guard.js";
 import { assertStripeEnvironmentConsistency } from "./config/stripe-env-guard.js";
 import { getDatabaseConnectionDiagnostics } from "./db/index.js";
 import { runMigrations } from "./db/migrate.js";
@@ -8,6 +9,7 @@ import { logError, logInfo } from "./observability/logger.js";
 const port = Number(process.env.PORT) || 3001;
 
 const startServer = async () => {
+  assertJwtEnvironmentConsistency();
   assertStripeEnvironmentConsistency();
   await runMigrations();
   startImportSessionsCleanupJob();

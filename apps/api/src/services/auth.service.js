@@ -2,9 +2,9 @@ import { randomBytes, createHash, randomUUID } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
+import { resolveJwtSecretForRuntime } from "../config/jwt-env-guard.js";
 import { dbQuery } from "../db/index.js";
 
-const DEFAULT_JWT_SECRET = "control-finance-dev-secret";
 const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = "15m";
 const PASSWORD_REGEX = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const WEAK_PASSWORD_MESSAGE =
@@ -22,7 +22,7 @@ const sanitizeUser = (user) => ({
   email: user.email,
 });
 
-const getJwtSecret = () => process.env.JWT_SECRET || DEFAULT_JWT_SECRET;
+const getJwtSecret = () => resolveJwtSecretForRuntime(process.env);
 
 const getAccessTokenExpiresIn = () =>
   process.env.ACCESS_TOKEN_EXPIRES_IN ||

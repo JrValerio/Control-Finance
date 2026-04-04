@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
+import { assertJwtEnvironmentConsistency } from "./config/jwt-env-guard.js";
 import healthRoutes from "./routes/health.routes.js";
 import metricsRoutes from "./routes/metrics.routes.js";
 import authRoutes from "./routes/auth.routes.js";
@@ -30,6 +31,7 @@ import { requestLoggingMiddleware } from "./middlewares/request-logging.middlewa
 import { httpMetricsMiddleware } from "./observability/http-metrics.js";
 
 dotenv.config();
+assertJwtEnvironmentConsistency();
 
 const app = express();
 
