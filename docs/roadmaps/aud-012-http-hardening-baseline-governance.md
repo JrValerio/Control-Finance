@@ -22,6 +22,28 @@ Estabelecer baseline minimo de hardening HTTP para workloads sensiveis, com cont
 - Adicionar teste(s) de contrato para impedir regressao do baseline no CI.
 - Produzir metrica basica de violacao de policy no recorte validado.
 
+## Baseline minimo explicito do recorte
+
+- Headers obrigatorios no recorte sensivel:
+	- `Cross-Origin-Opener-Policy` (default `same-origin`, excecao auth `same-origin-allow-popups`)
+	- `Cross-Origin-Embedder-Policy: require-corp`
+	- `X-Content-Type-Options: nosniff`
+	- `X-Frame-Options: SAMEORIGIN`
+	- `Referrer-Policy: strict-origin-when-cross-origin`
+	- `X-Permitted-Cross-Domain-Policies: none`
+	- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- CORS minimo:
+	- origem permitida do recorte deve receber `Access-Control-Allow-Origin` e `Access-Control-Allow-Credentials: true`
+	- origem nao permitida deve falhar com 403
+- Cookies (contrato de flags):
+	- cookies de autenticacao com `HttpOnly` e `SameSite` coerente com politica atual do ambiente
+
+## Regressao bloqueante nesta fatia
+
+- Ausencia/alteracao indevida de qualquer item do baseline minimo acima no recorte testado.
+- CORS aceitando origem fora da allowlist do recorte.
+- Emissao de cookie de autenticacao sem flags minimas de contrato.
+
 ## Escopo que nao entra
 
 - Reestruturacao ampla de middlewares/roteamento.
@@ -33,6 +55,10 @@ Estabelecer baseline minimo de hardening HTTP para workloads sensiveis, com cont
 
 - Reversao unica da fatia.
 - Fallback por profile de headers por ambiente, conforme plano executavel.
+- Rollback exato da integracao:
+	- remover script `test:hardening:http` de `apps/api/package.json`
+	- remover job `http-hardening-baseline` de `.github/workflows/ci.yml`
+	- remover teste de contrato do recorte em `apps/api/src/http-hardening-baseline.test.js`
 
 ## Criterios verificaveis minimos
 
