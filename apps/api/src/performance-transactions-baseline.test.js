@@ -51,7 +51,7 @@ const runConcurrentRequests = async ({
   let nextIndex = 0;
 
   const worker = async () => {
-    while (true) {
+    while (nextIndex < totalRequests) {
       const requestIndex = nextIndex;
       nextIndex += 1;
 

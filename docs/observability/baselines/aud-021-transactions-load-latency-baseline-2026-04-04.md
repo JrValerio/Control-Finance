@@ -21,12 +21,12 @@ Register the first reproducible p95/p99 baseline for authenticated `GET /transac
 ## Measured Baseline (first run)
 
 - sampleSize: `60`
-- p95Ms: `113.5`
-- p99Ms: `121.27`
-- avgMs: `58.85`
-- minMs: `27.15`
-- maxMs: `121.27`
-- capturedAt: `2026-04-05T00:39:52.758Z`
+- p95Ms: `63.87`
+- p99Ms: `67.43`
+- avgMs: `48.77`
+- minMs: `30.54`
+- maxMs: `67.43`
+- capturedAt: `2026-04-05T00:42:44.826Z`
 
 ## Minimal Comparison Rule
 
