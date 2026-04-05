@@ -3,6 +3,8 @@
 Date (UTC): 2026-04-04
 Owner: operations + observability
 Scope: single scenario tabletop for document import semantic incident (`source=transactions_import`).
+Incident Type: tabletop drill only (controlled exercise, not a real production incident).
+Production Impact: none (simulation-based validation).
 
 ## Scenario
 

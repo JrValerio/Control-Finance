@@ -8,6 +8,11 @@ Operational response for a single incident boundary in document import:
 
 This runbook is intentionally narrow for AUD-020 and does not define a global incident policy.
 
+## Drill Reference (AUD-020)
+
+- Controlled tabletop drill evidence (not a real production incident):
+   - `docs/runbooks/aud-020-tabletop-document-import-semantic-regression-2026-04-04.md`
+
 ## Incident Trigger (single scenario)
 
 Open incident when all conditions below are observed in the same time window (5-15 minutes):
