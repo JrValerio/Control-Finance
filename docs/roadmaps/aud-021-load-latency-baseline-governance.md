@@ -24,7 +24,23 @@ Executar recorte minimo para estabelecer baseline reproduzivel de carga e latenc
 - Ativo minimo esperado nesta fatia:
   - procedimento de medicao reproduzivel para p95/p99 no recorte;
   - evidencias versionadas da execucao da baseline;
-  - criterio explicito de alerta/regressao para comparacao futura.
+  - criterio simples de comparacao futura para regressao no mesmo protocolo.
+
+## Protocolo operacional fechado (v1)
+
+- Endpoint: `GET /transactions` autenticado.
+- Query fixa: `limit=20`, `offset=0`.
+- Ambiente alvo desta fatia:
+  - baseline primaria: in-process no `apps/api` via teste dedicado (reproduzivel local e CI);
+  - objetivo nesta primeira entrega: registrar baseline, nao bloquear release por threshold global.
+- Janela e carga:
+  - aquecimento: 12 requests;
+  - medicao: 60 requests;
+  - concorrencia: 6 workers.
+- Leitura obrigatoria:
+  - p95 e p99 em milissegundos calculados sobre a janela de medicao.
+- Comando oficial:
+  - `npm -w apps/api run test:performance:aud-021`.
 
 ## Escopo que nao entra
 
@@ -41,7 +57,21 @@ Executar recorte minimo para estabelecer baseline reproduzivel de carga e latenc
 - Evidencia minima versionada da medicao no recorte.
 - Mudanca delimitada a AUD-021 com diff cirurgico.
 
+## Formato minimo da evidencia versionada
+
+- Protocolo executado (endpoint/query/janelas/concurrency/comando).
+- Resultado medido (`p95Ms`, `p99Ms`, `avgMs`, `minMs`, `maxMs`, `sampleSize`).
+- Contexto de ambiente e timestamp da coleta.
+- Regra de comparacao futura simples:
+  - considerar regressao quando novo `p95Ms` ou `p99Ms` exceder baseline em mais de 20% no mesmo protocolo.
+
 ## Rollback
 
 - Nao aplicavel para conteudo versionado de documentacao/evidencia.
 - Caso necessario, revert unico da fatia para restaurar baseline anterior.
+- Rollback exato da integracao:
+  - remover `apps/api/src/performance-transactions-baseline.test.js`;
+  - remover script `test:performance:aud-021` de `apps/api/package.json`;
+  - remover job `load-latency-baseline-aud021` de `.github/workflows/ci.yml`;
+  - remover arquivos em `docs/observability/baselines/` criados pela fatia;
+  - restaurar `docs/roadmaps/aud-021-load-latency-baseline-governance.md` ao baseline de kickoff.

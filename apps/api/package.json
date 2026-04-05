@@ -24,6 +24,7 @@
     "test:golden": "vitest run src/credit-card-invoices.golden.test.js",
     "test:hardening:http": "vitest run src/http-hardening-baseline.test.js",
     "test:smoke:critical": "vitest run src/smoke-critical-finance-journey.test.js",
+    "test:performance:aud-021": "vitest run src/performance-transactions-baseline.test.js",
     "test": "vitest run",
     "test:run": "vitest run"
   },
