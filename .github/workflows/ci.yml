@@ -321,3 +321,31 @@ jobs:
         with:
           name: sensitive-data-retention-aud019-log
           path: sensitive-data-retention-aud019.log
+
+  load_latency_baseline_aud021:
+    name: load-latency-baseline-aud021
+    runs-on: ubuntu-latest
+    needs: [api]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Load latency baseline (AUD-021)
+        run: npm -w apps/api run test:performance:aud-021 | tee load-latency-baseline-aud021.log
+
+      - name: Upload load latency baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-latency-baseline-aud021-log
+          path: load-latency-baseline-aud021.log
