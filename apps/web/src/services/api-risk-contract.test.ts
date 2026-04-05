@@ -1,30 +1,85 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 import {
   api,
   getApiHealth,
   resolveApiUrl,
-  setUnauthorizedHandler,
   setPaymentRequiredHandler,
+  setUnauthorizedHandler,
+  type PaymentRequiredPayload,
 } from "./api";
 
-var requestInterceptor;
-var responseErrorInterceptor;
+type ApiErrorInput = {
+  response?: {
+    status?: number;
+    data?: {
+      message?: string;
+      code?: string;
+    };
+  };
+  config?: {
+    url?: string;
+    headers?: Record<string, unknown>;
+    _retry?: boolean;
+  };
+};
+
+type RequestConfigInput = {
+  headers?: Record<string, unknown>;
+};
+
+type RequestInterceptor = (config: RequestConfigInput) => RequestConfigInput;
+type ResponseErrorInterceptor = (error: ApiErrorInput) => Promise<unknown>;
+
+type MockAxiosInstance = {
+  get: Mock;
+  post: Mock;
+  request: Mock;
+  interceptors: {
+    request: {
+      use: Mock;
+    };
+    response: {
+      use: Mock;
+    };
+  };
+};
+
+const interceptorState = vi.hoisted(() => ({
+  requestInterceptor: null as RequestInterceptor | null,
+  responseErrorInterceptor: null as ResponseErrorInterceptor | null,
+}));
+
+const requireRequestInterceptor = (): RequestInterceptor => {
+  if (!interceptorState.requestInterceptor) {
+    throw new Error("request interceptor nao inicializado");
+  }
+
+  return interceptorState.requestInterceptor;
+};
+
+const requireResponseErrorInterceptor = (): ResponseErrorInterceptor => {
+  if (!interceptorState.responseErrorInterceptor) {
+    throw new Error("response interceptor nao inicializado");
+  }
+
+  return interceptorState.responseErrorInterceptor;
+};
 
 vi.mock("axios", () => {
-  const instance = {
+  const instance: MockAxiosInstance = {
     get: vi.fn(),
     post: vi.fn(),
     request: vi.fn(),
     interceptors: {
       request: {
-        use: vi.fn((handler) => {
-          requestInterceptor = handler;
+        use: vi.fn((handler: RequestInterceptor) => {
+          interceptorState.requestInterceptor = handler;
           return 0;
         }),
       },
       response: {
-        use: vi.fn((_onSuccess, onError) => {
-          responseErrorInterceptor = onError;
+        use: vi.fn((_onSuccess: unknown, onError: ResponseErrorInterceptor) => {
+          interceptorState.responseErrorInterceptor = onError;
           return 0;
         }),
       },
@@ -38,7 +93,9 @@ vi.mock("axios", () => {
   };
 });
 
-describe("api service", () => {
+const apiMock = api as unknown as Pick<MockAxiosInstance, "get" | "post" | "request">;
+
+describe("api risk contract", () => {
   beforeEach(() => {
     setUnauthorizedHandler(undefined);
     setPaymentRequiredHandler(undefined);
@@ -46,13 +103,13 @@ describe("api service", () => {
   });
 
   it("consulta o healthcheck da API", async () => {
-    api.get.mockResolvedValueOnce({
+    apiMock.get.mockResolvedValueOnce({
       data: { ok: true, version: "1.6.4", commit: "2eb3f64" },
     });
 
     const result = await getApiHealth();
 
-    expect(api.get).toHaveBeenCalledWith("/health");
+    expect(apiMock.get).toHaveBeenCalledWith("/health");
     expect(result).toEqual({ ok: true, version: "1.6.4", commit: "2eb3f64" });
   });
 
@@ -75,31 +132,30 @@ describe("api service", () => {
   });
 
   it("injeta x-request-id em todas as requisicoes", () => {
-    const nextConfig = requestInterceptor({
+    const nextConfig = requireRequestInterceptor()({
       headers: {},
     });
 
-    expect(nextConfig.headers.Authorization).toBeUndefined();
-    expect(typeof nextConfig.headers["x-request-id"]).toBe("string");
-    expect(nextConfig.headers["x-request-id"].length).toBeGreaterThan(0);
+    const headers = (nextConfig.headers || {}) as Record<string, unknown>;
+    expect(headers.Authorization).toBeUndefined();
+    expect(typeof headers["x-request-id"]).toBe("string");
+    expect(String(headers["x-request-id"]).length).toBeGreaterThan(0);
   });
-
-  // ─── 401 / Refresh interceptor ───────────────────────────────────────────────
 
   it("tenta refresh e retenta request quando API retorna 401", async () => {
     const onUnauthorized = vi.fn();
     setUnauthorizedHandler(onUnauthorized);
 
-    api.post.mockResolvedValueOnce({}); // refresh succeeds
-    api.request.mockResolvedValueOnce({ data: "retried" }); // original request retried
+    apiMock.post.mockResolvedValueOnce({});
+    apiMock.request.mockResolvedValueOnce({ data: "retried" });
 
-    const result = await responseErrorInterceptor({
+    const result = await requireResponseErrorInterceptor()({
       response: { status: 401 },
       config: { url: "/transactions", headers: {} },
     });
 
-    expect(api.post).toHaveBeenCalledWith("/auth/refresh");
-    expect(api.request).toHaveBeenCalled();
+    expect(apiMock.post).toHaveBeenCalledWith("/auth/refresh");
+    expect(apiMock.request).toHaveBeenCalled();
     expect(onUnauthorized).not.toHaveBeenCalled();
     expect(result).toEqual({ data: "retried" });
   });
@@ -108,10 +164,10 @@ describe("api service", () => {
     const onUnauthorized = vi.fn();
     setUnauthorizedHandler(onUnauthorized);
 
-    api.post.mockRejectedValueOnce(new Error("refresh failed"));
+    apiMock.post.mockRejectedValueOnce(new Error("refresh failed"));
 
     await expect(
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 401 },
         config: { url: "/transactions", headers: {} },
       }),
@@ -120,33 +176,33 @@ describe("api service", () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
-  it("nao tenta refresh quando 401 vem da rota de refresh (evita loop)", async () => {
+  it("nao tenta refresh quando 401 vem da rota de refresh", async () => {
     const onUnauthorized = vi.fn();
     setUnauthorizedHandler(onUnauthorized);
 
     await expect(
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 401 },
         config: { url: "/auth/refresh", headers: {} },
       }),
     ).rejects.toBeTruthy();
 
-    expect(api.post).not.toHaveBeenCalled();
+    expect(apiMock.post).not.toHaveBeenCalled();
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
-  it("nao tenta refresh quando request ja foi retentado (_retry=true)", async () => {
+  it("nao tenta refresh quando request ja foi retentado", async () => {
     const onUnauthorized = vi.fn();
     setUnauthorizedHandler(onUnauthorized);
 
     await expect(
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 401 },
         config: { url: "/transactions", headers: {}, _retry: true },
       }),
     ).rejects.toBeTruthy();
 
-    expect(api.post).not.toHaveBeenCalled();
+    expect(apiMock.post).not.toHaveBeenCalled();
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
@@ -155,10 +211,10 @@ describe("api service", () => {
     setUnauthorizedHandler(onUnauthorized);
     setUnauthorizedHandler(undefined);
 
-    api.post.mockRejectedValueOnce(new Error("refresh failed"));
+    apiMock.post.mockRejectedValueOnce(new Error("refresh failed"));
 
     await expect(
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 401 },
         config: { url: "/transactions", headers: {} },
       }),
@@ -167,28 +223,26 @@ describe("api service", () => {
     expect(onUnauthorized).not.toHaveBeenCalled();
   });
 
-  // ─── Concurrent 401 / refresh queue ─────────────────────────────────────────
-
-  it("dois requests 401 simultaneos disparam apenas um refresh e ambos retentam", async () => {
-    api.post.mockResolvedValueOnce({}); // refresh succeeds
-    api.request
+  it("dois requests 401 simultaneos disparam apenas um refresh", async () => {
+    apiMock.post.mockResolvedValueOnce({});
+    apiMock.request
       .mockResolvedValueOnce({ data: "response-1" })
       .mockResolvedValueOnce({ data: "response-2" });
 
     const [r1, r2] = await Promise.all([
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 401 },
         config: { url: "/summary", headers: {} },
       }),
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 401 },
         config: { url: "/forecast", headers: {} },
       }),
     ]);
 
-    expect(api.post).toHaveBeenCalledTimes(1);
-    expect(api.post).toHaveBeenCalledWith("/auth/refresh");
-    expect(api.request).toHaveBeenCalledTimes(2);
+    expect(apiMock.post).toHaveBeenCalledTimes(1);
+    expect(apiMock.post).toHaveBeenCalledWith("/auth/refresh");
+    expect(apiMock.request).toHaveBeenCalledTimes(2);
     expect(r1).toEqual({ data: "response-1" });
     expect(r2).toEqual({ data: "response-2" });
   });
@@ -197,34 +251,31 @@ describe("api service", () => {
     const onUnauthorized = vi.fn();
     setUnauthorizedHandler(onUnauthorized);
 
-    api.post.mockRejectedValueOnce(new Error("refresh failed"));
+    apiMock.post.mockRejectedValueOnce(new Error("refresh failed"));
 
     const results = await Promise.allSettled([
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 401 },
         config: { url: "/summary", headers: {} },
       }),
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 401 },
         config: { url: "/forecast", headers: {} },
       }),
     ]);
 
-    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(apiMock.post).toHaveBeenCalledTimes(1);
     expect(results[0].status).toBe("rejected");
     expect(results[1].status).toBe("rejected");
-    // unauthorizedHandler fired once — from the first request's catch block only
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
-  // ─── 402 handler ─────────────────────────────────────────────────────────────
-
   it("chama paymentRequiredHandler com contexto trial_expired quando code=TRIAL_EXPIRED", async () => {
-    const onPaymentRequired = vi.fn();
+    const onPaymentRequired = vi.fn<(payload: PaymentRequiredPayload) => void>();
     setPaymentRequiredHandler(onPaymentRequired);
 
     await expect(
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: {
           status: 402,
           data: { message: "Periodo de teste encerrado.", code: "TRIAL_EXPIRED" },
@@ -240,11 +291,11 @@ describe("api service", () => {
   });
 
   it("resolve copy explicita para gate de importacao de extrato", async () => {
-    const onPaymentRequired = vi.fn();
+    const onPaymentRequired = vi.fn<(payload: PaymentRequiredPayload) => void>();
     setPaymentRequiredHandler(onPaymentRequired);
 
     await expect(
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 402, data: { message: "Recurso disponivel apenas no plano Pro." } },
         config: { url: "/transactions/import/dry-run" },
       }),
@@ -258,12 +309,11 @@ describe("api service", () => {
     });
   });
 
-  it("nao falha se paymentRequiredHandler nao estiver definido (status 402)", async () => {
+  it("nao falha se paymentRequiredHandler nao estiver definido", async () => {
     await expect(
-      responseErrorInterceptor({
+      requireResponseErrorInterceptor()({
         response: { status: 402, data: {} },
       }),
     ).rejects.toBeTruthy();
-    // nenhum erro de "is not a function"
   });
 });

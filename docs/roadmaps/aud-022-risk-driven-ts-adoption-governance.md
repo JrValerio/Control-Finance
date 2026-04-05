@@ -21,11 +21,21 @@ Executar recorte minimo para reduzir coexistencia JS+TS em superficie de contrat
 
 ## Fronteira selecionada (alvo unico)
 
-- Fronteira unica: superficie de contrato de servicos web em `apps/web/src/services/api.test.js`.
+- Fronteira unica: contrato de risco do cliente HTTP web em `apps/web/src/services/api.ts`, validado por teste dedicado migrado de JS para TS.
+- Risco concreto que a fatia elimina: drift silencioso no contrato de interceptors (request id, retry de 401 e payload de 402) por falta de tipagem explicita no teste de maior cobertura desse fluxo.
+- Artefato minimo de migracao: mover o teste de risco de `apps/web/src/services/api.test.js` para arquivo TypeScript dedicado (`apps/web/src/services/api-risk-contract.test.ts`).
 - Ativo minimo esperado nesta fatia:
   - migracao da fronteira para TypeScript com tipagem explicita;
   - alinhamento do teste/contrato para impedir drift de shape;
   - evidencia de execucao focada no recorte.
+
+## Prova focada de nao regressao
+
+- Check dedicado da fatia executando apenas os testes de contrato de risco da API web.
+- Suficiencia minima da prova:
+  - validar injector de `x-request-id` no interceptor de request;
+  - validar fila/retry de 401 sem loop de refresh;
+  - validar mapeamento de payload 402 (`reason`, `feature`, `context`) sem drift.
 
 ## Escopo que nao entra
 
@@ -43,7 +53,8 @@ Executar recorte minimo para reduzir coexistencia JS+TS em superficie de contrat
 ## Rollback
 
 - Revert unico da fatia.
-- Rollback exato da integracao (a confirmar na execucao minima):
-  - restaurar arquivo JS da fronteira selecionada;
-  - remover adaptacoes TS estritamente introduzidas por esta fatia;
+- Rollback exato da integracao:
+  - restaurar `apps/web/src/services/api.test.js`;
+  - remover `apps/web/src/services/api-risk-contract.test.ts`;
+  - remover script/check dedicado da AUD-022 em `apps/web/package.json` e `.github/workflows/ci.yml`;
   - restaurar governanca ao baseline de kickoff se necessario.

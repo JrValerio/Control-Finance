@@ -349,3 +349,31 @@ jobs:
         with:
           name: load-latency-baseline-aud021-log
           path: load-latency-baseline-aud021.log
+
+  risk_driven_ts_adoption_aud022:
+    name: risk-driven-ts-adoption-aud022
+    runs-on: ubuntu-latest
+    needs: [web]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Risk-driven TS adoption contract (AUD-022)
+        run: npm -w apps/web run test:risk:aud-022 | tee risk-driven-ts-adoption-aud022.log
+
+      - name: Upload risk-driven TS adoption evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: risk-driven-ts-adoption-aud022-log
+          path: risk-driven-ts-adoption-aud022.log
