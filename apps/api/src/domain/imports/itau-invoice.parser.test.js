@@ -158,14 +158,12 @@ describe("parseItauInvoice", () => {
     expect(result.cardLast4).toBeNull();
   });
 
-  it("rawExcerpt contem os primeiros 800 chars do texto normalizado", () => {
+  it("nao retorna rawExcerpt no objeto parseado", () => {
     const text = buildItauText();
     const result = parseItauInvoice(text);
 
     expect(result).not.toBeNull();
-    expect(typeof result.rawExcerpt).toBe("string");
-    expect(result.rawExcerpt.length).toBeLessThanOrEqual(800);
-    expect(result.rawExcerpt).toContain("ITAÚ");
+    expect(result.rawExcerpt).toBeUndefined();
   });
 
   it("aceita variacao 'VALOR TOTAL DA FATURA' para totalAmount", () => {
