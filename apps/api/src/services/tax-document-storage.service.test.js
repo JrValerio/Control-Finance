@@ -19,6 +19,15 @@ const TEST_STORAGE_DIR = path.join(
 const ENV_KEYS = [
   "TAX_DOCUMENTS_STORAGE_DIR",
   "TAX_DOCUMENTS_STORAGE_ADAPTER",
+  "TAX_DOCUMENTS_REMOTE_BUCKET",
+  "TAX_DOCUMENTS_REMOTE_REGION",
+  "TAX_DOCUMENTS_REMOTE_ENDPOINT",
+  "TAX_DOCUMENTS_REMOTE_FORCE_PATH_STYLE",
+  "TAX_DOCUMENTS_REMOTE_ACCESS_KEY_ID",
+  "TAX_DOCUMENTS_REMOTE_SECRET_ACCESS_KEY",
+  "TAX_DOCUMENTS_REMOTE_SESSION_TOKEN",
+  "TAX_DOCUMENTS_LEGACY_LOCAL_READ_ENABLED",
+  "TAX_DOCUMENTS_LEGACY_LOCAL_STORAGE_DIR",
 ];
 
 const envSnapshot = {};
@@ -54,10 +63,20 @@ describe("tax-document-storage.service", () => {
     const policy = resolveTaxDocumentStoragePolicy();
 
     expect(policy).toMatchObject({
-      version: "aud-003-phase-a-v1",
+      version: "aud-003-phase-b-v1",
       adapterName: "local",
     });
     expect(policy.supportedAdapters).toContain("local");
+    expect(policy.supportedAdapters).toContain("s3");
+  });
+
+  it("aceita adapter s3 quando configuracao remota minima e informada", () => {
+    process.env.TAX_DOCUMENTS_STORAGE_ADAPTER = "s3";
+    process.env.TAX_DOCUMENTS_REMOTE_BUCKET = "control-finance-tax";
+    process.env.TAX_DOCUMENTS_REMOTE_REGION = "us-east-1";
+
+    const policy = resolveTaxDocumentStoragePolicy();
+    expect(policy.adapterName).toBe("s3");
   });
 
   it("rejeita adapter nao suportado", () => {
