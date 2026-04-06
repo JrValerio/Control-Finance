@@ -3,10 +3,11 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { assertJwtEnvironmentConsistency } from "./config/jwt-env-guard.js";
-import { assertTaxStorageEnvironmentConsistency } from "./config/tax-storage-env-guard.js";
+import { resolveTaxStorageModuleAvailability } from "./config/tax-storage-env-guard.js";
 import healthRoutes from "./routes/health.routes.js";
 import metricsRoutes from "./routes/metrics.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import { logWarn } from "./observability/logger.js";
 import { securityHeadersMiddleware } from "./middlewares/security-headers.middleware.js";
 import categoriesRoutes from "./routes/categories.routes.js";
 import budgetsRoutes from "./routes/budgets.routes.js";
@@ -33,7 +34,7 @@ import { httpMetricsMiddleware } from "./observability/http-metrics.js";
 
 dotenv.config();
 assertJwtEnvironmentConsistency();
-assertTaxStorageEnvironmentConsistency();
+const taxStorageModuleAvailability = resolveTaxStorageModuleAvailability();
 
 const app = express();
 
@@ -116,7 +117,25 @@ app.use("/bills", billsRoutes);
 app.use("/credit-cards", creditCardsRoutes);
 app.use("/income-sources", incomeSourcesRoutes);
 app.use("/salary", salaryRoutes);
-app.use("/tax", taxRoutes);
+if (taxStorageModuleAvailability.enabled) {
+  app.use("/tax", taxRoutes);
+} else {
+  logWarn({
+    event: "tax.module.disabled",
+    code: taxStorageModuleAvailability.code,
+    reason: taxStorageModuleAvailability.reason,
+  });
+
+  app.use("/tax", (_req, _res, next) => {
+    const error = new Error(
+      "Modulo fiscal temporariamente indisponivel. Contate o suporte e tente novamente.",
+    );
+    error.status = 503;
+    error.publicCode = "TAX_MODULE_DISABLED";
+    error.internalMessage = taxStorageModuleAvailability.reason;
+    next(error);
+  });
+}
 app.use("/ops", opsRoutes);
 app.use("/ai", aiRoutes);
 app.use("/goals", goalsRoutes);
