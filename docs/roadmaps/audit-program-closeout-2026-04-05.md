@@ -67,24 +67,22 @@ Fonte de verificacao: consultas remotas de issue/PR por codigo AUD no titulo (`A
 - recortes minimos preservados sem expansao para politicas globais indevidas;
 - main estabilizada com merges squash e branches de trabalho encerradas por fatia.
 
-## Riscos residuais apos AUD-022
+## Riscos residuais monitorados
 
 - risco de rastreabilidade historica heterogenea em itens antigos sem nomeacao AUD explicita em issue/PR (principalmente AUD-004 e AUD-005);
 - risco de leitura fora de contexto de baselines e contratos sem referencia ao protocolo/slice de origem;
 - risco de reabertura ampla de escopo em evolucoes futuras (TS/performance/incidentes) se nao manter fronteira unica por fatia.
 
-## Decisao recomendada
-
-Recomendacao: entrar em manutencao incremental orientada a risco, sem abrir novo ciclo grande por inercia.
-
-Criticos para abrir novo ciclo formal:
+## Gatilhos objetivos para novo ciclo
 
 1. surgimento de risco P1/P2 recorrente nao coberto por fatias anteriores;
 2. evidencia de drift contratual sem cobertura focada;
 3. degradacao sustentada acima das regras de comparacao definidas nas baselines;
 4. mudanca de requisito de produto que exija novo trilho AUD dedicado.
 
-## Plano minimo pos-ciclo
+## O que segue em manutencao normal
+
+Recomendacao: entrar em manutencao incremental orientada a risco, sem abrir novo ciclo grande por inercia.
 
 1. manter apenas fatias pequenas de manutencao com fronteira unica e prova focada;
 2. para cada nova fatia, referenciar explicitamente a AUD predecessora do dominio;
