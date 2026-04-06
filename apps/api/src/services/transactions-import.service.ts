@@ -28,7 +28,7 @@ import { applySmartClassification } from "../domain/imports/transaction-classifi
 import { normalizeCategoryNameKey } from "./categories-normalization.js";
 import { loadActiveTransactionImportCategoryRulesByUser } from "./transactions-import-rules.service.js";
 
-type ErrorWithStatus = Error & { status: number };
+type ErrorWithStatus = Error & { status: number; publicCode?: string };
 
 type RawCsvRow = {
   date: string;
@@ -322,6 +322,160 @@ const createError = (status: number, message: string): ErrorWithStatus => {
   const error = new Error(message) as ErrorWithStatus;
   error.status = status;
   return error;
+};
+
+const createErrorWithPublicCode = (
+  status: number,
+  message: string,
+  publicCode: string,
+): ErrorWithStatus => {
+  const error = createError(status, message);
+  error.publicCode = publicCode;
+  return error;
+};
+
+const computeImportFileSha256 = (importFile: ImportFile): string | null => {
+  if (!Buffer.isBuffer(importFile?.buffer) || importFile.buffer.length === 0) {
+    return null;
+  }
+
+  return createHash("sha256").update(importFile.buffer).digest("hex");
+};
+
+const normalizeImportSourceKind = (value: unknown): string => {
+  if (typeof value !== "string") {
+    return "bank_statement";
+  }
+
+  const normalizedValue = value.trim().toLowerCase();
+  return normalizedValue || "bank_statement";
+};
+
+const normalizeSha256 = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedValue = value.trim().toLowerCase();
+
+  if (!/^[a-f0-9]{64}$/.test(normalizedValue)) {
+    return null;
+  }
+
+  return normalizedValue;
+};
+
+const normalizeOptionalText = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue || null;
+};
+
+const normalizeOptionalPositiveInteger = (value: unknown): number | null => {
+  const parsedValue = Number(value);
+
+  if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+    return null;
+  }
+
+  return parsedValue;
+};
+
+const reserveImportFileFingerprintOrThrow = async (
+  transactionClient: {
+    query: (
+      sql: string,
+      params?: unknown[],
+    ) => Promise<{ rowCount?: number; rows: unknown[] }>;
+  },
+  {
+    userId,
+    sourceKind,
+    fileSha256,
+    originalFileName,
+    mimeType,
+    sizeBytes,
+    hasCandidateRows,
+  }: {
+    userId: number | string;
+    sourceKind: unknown;
+    fileSha256: unknown;
+    originalFileName: unknown;
+    mimeType: unknown;
+    sizeBytes: unknown;
+    hasCandidateRows: boolean;
+  },
+) => {
+  if (!hasCandidateRows) {
+    return;
+  }
+
+  const normalizedFileSha256 = normalizeSha256(fileSha256);
+
+  // Backward compatibility for old sessions created before file_sha256 existed.
+  if (!normalizedFileSha256) {
+    return;
+  }
+
+  const normalizedSourceKind = normalizeImportSourceKind(sourceKind);
+  const duplicateLookupResult = await transactionClient.query(
+    `
+      SELECT id
+      FROM import_files
+      WHERE user_id = $1
+        AND source_kind = $2
+        AND file_sha256 = $3
+      LIMIT 1
+    `,
+    [userId, normalizedSourceKind, normalizedFileSha256],
+  );
+
+  if (Array.isArray(duplicateLookupResult.rows) && duplicateLookupResult.rows.length > 0) {
+    throw createErrorWithPublicCode(
+      409,
+      "Arquivo ja importado anteriormente.",
+      "DUPLICATE_IMPORT_FILE",
+    );
+  }
+
+  try {
+    await transactionClient.query(
+      `
+        INSERT INTO import_files (
+          user_id,
+          source_kind,
+          file_sha256,
+          original_filename,
+          mime_type,
+          size_bytes
+        )
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        userId,
+        normalizedSourceKind,
+        normalizedFileSha256,
+        normalizeOptionalText(originalFileName),
+        normalizeOptionalText(mimeType),
+        normalizeOptionalPositiveInteger(sizeBytes),
+      ],
+    );
+  } catch (error) {
+    const errorCode = typeof error?.code === "string" ? error.code : null;
+
+    if (errorCode === "23505") {
+      throw createErrorWithPublicCode(
+        409,
+        "Arquivo ja importado anteriormente.",
+        "DUPLICATE_IMPORT_FILE",
+      );
+    }
+
+    throw error;
+  }
 };
 
 const normalizeHeader = (value: unknown): string => String(value || "").trim().toLowerCase();
@@ -1037,16 +1191,26 @@ const createSummary = (rows = []) => {
   );
 };
 
-const persistImportSession = async (userId: number | string, payload: unknown) => {
+const persistImportSession = async (
+  userId: number | string,
+  payload: unknown,
+  { fileSha256 = null }: { fileSha256?: string | null } = {},
+) => {
   const importId = randomUUID();
   const expiresAtDate = new Date(Date.now() + IMPORT_TTL_MINUTES * 60 * 1000);
   const result = await dbQuery(
     `
-      INSERT INTO transaction_import_sessions (id, user_id, payload_json, expires_at)
-      VALUES ($1, $2, $3::jsonb, $4)
+      INSERT INTO transaction_import_sessions (id, user_id, payload_json, expires_at, file_sha256)
+      VALUES ($1, $2, $3::jsonb, $4, $5)
       RETURNING expires_at
     `,
-    [importId, userId, JSON.stringify(payload), expiresAtDate.toISOString()],
+    [
+      importId,
+      userId,
+      JSON.stringify(payload),
+      expiresAtDate.toISOString(),
+      normalizeSha256(fileSha256),
+    ],
   );
 
   return {
@@ -1088,7 +1252,7 @@ const normalizeImportId = (value: unknown): string => {
 const loadImportSessionById = async (importId: string) => {
   const result = await dbQuery(
     `
-      SELECT id, user_id, payload_json, expires_at, committed_at
+      SELECT id, user_id, payload_json, expires_at, committed_at, file_sha256
       FROM transaction_import_sessions
       WHERE id = $1
       LIMIT 1
@@ -1213,6 +1377,7 @@ export const dryRunTransactionsImportForUser = async (
   });
 
   const summary = createSummary(rows);
+  const fileSha256 = computeImportFileSha256(importFile);
 
   const normalizedRows = rows
     .filter((row) => row.status === "valid" && row.normalized)
@@ -1221,9 +1386,14 @@ export const dryRunTransactionsImportForUser = async (
   const persistedSession = await persistImportSession(userId, {
     normalizedRows,
     summary,
+    fileSha256,
     fileName: importFile?.originalname || null,
+    fileMimeType: importFile?.mimetype || null,
+    fileSizeBytes: Buffer.isBuffer(importFile?.buffer) ? importFile.buffer.length : null,
     documentType,
     utilityBillImportDecision,
+  }, {
+    fileSha256,
   });
 
   return {
@@ -1434,7 +1604,10 @@ export const commitTransactionsImportForUser = async (
       );
   const payloadSummary = payload.summary || {};
   const importFileName = payload.fileName || null;
+  const importFileMimeType = payload.fileMimeType || null;
+  const importFileSizeBytes = payload.fileSizeBytes || null;
   const importDocumentType = payload.documentType || null;
+  const importFileSha256 = importSession.file_sha256 || payload.fileSha256 || null;
   const observabilitySummary = {
     totalRows: normalizeSummaryInteger(payloadSummary.totalRows, normalizedRows.length),
     validRows: normalizeSummaryInteger(payloadSummary.validRows, normalizedRows.length),
@@ -1442,6 +1615,16 @@ export const commitTransactionsImportForUser = async (
   };
 
   const commitOutcome = await withDbTransaction(async (transactionClient) => {
+    await reserveImportFileFingerprintOrThrow(transactionClient, {
+      userId,
+      sourceKind: "bank_statement",
+      fileSha256: importFileSha256,
+      originalFileName: importFileName,
+      mimeType: importFileMimeType,
+      sizeBytes: importFileSizeBytes,
+      hasCandidateRows: normalizedRows.length > 0,
+    });
+
     const sessionUpdateResult = await transactionClient.query(
       `
         UPDATE transaction_import_sessions

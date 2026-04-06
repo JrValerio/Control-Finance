@@ -1419,7 +1419,7 @@ describe("transaction imports", () => {
     expect(Number(transactionCountResult.rows[0].count)).toBe(0);
   });
 
-  it("POST /transactions/import/commit nao insere duplicatas mesmo se sessao foi criada antes do primeiro commit", async () => {
+  it("POST /transactions/import/commit retorna 409 para arquivo duplicado mesmo com sessao criada antes do primeiro commit", async () => {
     const token = await registerAndLogin("import-dedupe-commit@controlfinance.dev");
     await makeProUser("import-dedupe-commit@controlfinance.dev");
 
@@ -1441,20 +1441,45 @@ describe("transaction imports", () => {
       .set("Authorization", `Bearer ${token}`)
       .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
 
+    const sessionHashesResult = await dbQuery(
+      `SELECT id, file_sha256
+       FROM transaction_import_sessions
+       WHERE id IN ($1, $2)
+       ORDER BY id ASC`,
+      [dryA.body.importId, dryB.body.importId],
+    );
+
+    expect(sessionHashesResult.rows).toHaveLength(2);
+    expect(sessionHashesResult.rows[0].file_sha256).toBeTruthy();
+    expect(sessionHashesResult.rows[1].file_sha256).toBeTruthy();
+    expect(sessionHashesResult.rows[0].file_sha256).toBe(sessionHashesResult.rows[1].file_sha256);
+
     // commit A
-    await request(app)
+    const commitA = await request(app)
       .post("/transactions/import/commit")
       .set("Authorization", `Bearer ${token}`)
       .send({ importId: dryA.body.importId });
+    expect(commitA.status).toBe(200);
+    expect(commitA.body.imported).toBe(1);
 
-    // commit B — sessao criada antes do commit A; a linha ja existe agora
+    const importFilesResult = await dbQuery(
+      `SELECT user_id, source_kind, file_sha256
+       FROM import_files
+       ORDER BY id ASC`,
+    );
+
+    expect(importFilesResult.rows).toHaveLength(1);
+    expect(importFilesResult.rows[0].source_kind).toBe("bank_statement");
+    expect(importFilesResult.rows[0].file_sha256).toBe(sessionHashesResult.rows[0].file_sha256);
+
+    // commit B — sessao criada antes do commit A; o mesmo arquivo agora deve ser bloqueado
     const commitB = await request(app)
       .post("/transactions/import/commit")
       .set("Authorization", `Bearer ${token}`)
       .send({ importId: dryB.body.importId });
 
-    expect(commitB.status).toBe(200);
-    expect(commitB.body.imported).toBe(0);
+    expectErrorResponseWithRequestId(commitB, 409, "Arquivo ja importado anteriormente.");
+    expect(commitB.body.code).toBe("DUPLICATE_IMPORT_FILE");
 
     const persisted = await dbQuery(
       `SELECT COUNT(*)::int AS count FROM transactions WHERE user_id = (SELECT id FROM users WHERE email = $1) AND deleted_at IS NULL`,
@@ -1463,6 +1488,13 @@ describe("transaction imports", () => {
 
     expect(Number(persisted.rows[0].count)).toBe(1);
 
+    const secondSessionResult = await dbQuery(
+      `SELECT committed_at FROM transaction_import_sessions WHERE id = $1 LIMIT 1`,
+      [dryB.body.importId],
+    );
+
+    expect(secondSessionResult.rows[0].committed_at).toBeNull();
+
     // proximo dry-run continua detectando o lancamento como duplicado
     const check = await request(app)
       .post("/transactions/import/dry-run")
@@ -1470,6 +1502,47 @@ describe("transaction imports", () => {
       .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
 
     expect(check.body.summary.duplicateRows).toBeGreaterThan(0);
+  });
+
+  it("POST /transactions/import/commit permite mesmo arquivo para usuarios diferentes", async () => {
+    const emailA = "import-dedupe-multi-user-a@controlfinance.dev";
+    const emailB = "import-dedupe-multi-user-b@controlfinance.dev";
+    const tokenA = await registerAndLogin(emailA);
+    const tokenB = await registerAndLogin(emailB);
+    await makeProUser(emailA);
+    await makeProUser(emailB);
+
+    const csv = csvFile(
+      ["date,type,value,description,notes,category", "2026-04-01,Entrada,2000,Freelance,,"].join(
+        "\n",
+      ),
+    );
+
+    const dryRunA = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+    expect(dryRunA.status).toBe(200);
+
+    const commitA = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${tokenA}`)
+      .send({ importId: dryRunA.body.importId });
+    expect(commitA.status).toBe(200);
+    expect(commitA.body.imported).toBe(1);
+
+    const dryRunB = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${tokenB}`)
+      .attach("file", csv.buffer, { filename: csv.fileName, contentType: "text/csv" });
+    expect(dryRunB.status).toBe(200);
+
+    const commitB = await request(app)
+      .post("/transactions/import/commit")
+      .set("Authorization", `Bearer ${tokenB}`)
+      .send({ importId: dryRunB.body.importId });
+    expect(commitB.status).toBe(200);
+    expect(commitB.body.imported).toBe(1);
   });
 
   it("POST /transactions/import/dry-run retorna documentType bank_statement para CSV manual", async () => {
