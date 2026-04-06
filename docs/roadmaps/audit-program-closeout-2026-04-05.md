@@ -88,3 +88,35 @@ Recomendacao: entrar em manutencao incremental orientada a risco, sem abrir novo
 2. para cada nova fatia, referenciar explicitamente a AUD predecessora do dominio;
 3. padronizar nomenclatura de issue/PR com codigo AUD para eliminar lacunas de rastreabilidade;
 4. revisar este closeout em janela mensal curta para decidir se abre ciclo novo.
+
+## Addendum de consolidacao (2026-04-06)
+
+Objetivo deste addendum: registrar a consolidacao pos-fechamento de AUD-003 e AUD-004 com evidencia de merge em `main` e CI pos-merge verde.
+
+### Status oficial consolidado
+
+- AUD-003: fechado no ciclo de engenharia do repositorio.
+- AUD-004: fechado no ciclo de engenharia do repositorio.
+
+### Evidencia objetiva (AUD-003)
+
+- PR: #497 (merged em `main`).
+- Merge commit: `cc630da699190a6ba474ee1b03e297c513e7697b`.
+- CI pos-merge em `main`: verde (workflow `CI`, run `24040559271`).
+- Pages pos-merge: verde (workflow `pages-build-deployment`, run `24040558713`).
+- Falha inicial da PR: lockfile de workspace fora de sincronia para `npm ci` (infra/dependencias), sem evidencia de regressao funcional do desenho de AUD-003.
+
+### Evidencia objetiva (AUD-004)
+
+- PR: #496 (merged em `main`).
+- CI pos-merge em `main`: verde no ciclo correspondente de merge.
+
+### Residuals (nao blockers tecnicos de implementacao)
+
+- Validacao operacional de ambiente para storage remoto em producao: bucket, credenciais, regiao, permissoes e bootstrap real.
+- Sunset explicito da compatibilidade legada (`remote-first` com fallback legado) por data, condicao de migracao ou follow-up ticket.
+
+### Decisao de governanca
+
+- Nao reabrir AUD-003 ou AUD-004 sem evidencia nova de regressao.
+- Tratar itens acima como observacoes residuais operacionais, nao como gap tecnico ativo de implementacao.
