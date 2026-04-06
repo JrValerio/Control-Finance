@@ -167,7 +167,14 @@ describe("credit-card-invoices", () => {
     expect(res.body.requiresUserConfirmation).toBe(false);
     expect(res.body.parseMetadata?.parser?.name).toBe("itau_parser_v1");
     expect(res.body.parseMetadata?.ocrRuntime?.status).toBe("success");
+    expect(res.body.parseMetadata?.rawExcerpt).toBeUndefined();
     expect(res.body.linkedBillId).toBeNull();
+
+    const persistedInvoiceResult = await dbQuery(
+      "SELECT parse_metadata FROM credit_card_invoices WHERE id = $1 LIMIT 1",
+      [res.body.id],
+    );
+    expect(persistedInvoiceResult.rows[0]?.parse_metadata?.rawExcerpt).toBeUndefined();
   });
 
   it("POST parse-pdf infere periodo quando ausente no PDF (parse_confidence=low)", async () => {
@@ -351,6 +358,52 @@ describe("credit-card-invoices", () => {
       .set("Authorization", `Bearer ${token2}`);
 
     expect(res.status).toBe(404);
+  });
+
+  it("GET /invoices sanitiza rawExcerpt de registro legado no parseMetadata", async () => {
+    const email = "inv-list-legacy-rawexcerpt@test.dev";
+    const token = await registerAndLogin(email);
+
+    const cardRes = await createCard(token);
+    const cardId = cardRes.body.id;
+
+    const userResult = await dbQuery("SELECT id FROM users WHERE email = $1 LIMIT 1", [email]);
+    const userId = Number(userResult.rows[0]?.id);
+
+    await dbQuery(
+      `INSERT INTO credit_card_invoices
+         (user_id, credit_card_id, issuer, card_last4, period_start, period_end,
+          due_date, total_amount, minimum_payment, financed_balance,
+          parse_confidence, parse_metadata)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+      [
+        userId,
+        cardId,
+        "itau",
+        "1234",
+        "2026-02-08",
+        "2026-03-07",
+        "2026-03-15",
+        1247.8,
+        124.78,
+        null,
+        "high",
+        JSON.stringify({
+          rawExcerpt: "DADO LEGADO SENSIVEL",
+          parser: { strategy: "issuer_specific", name: "itau_parser_v1" },
+        }),
+      ],
+    );
+
+    const res = await request(app)
+      .get(`/credit-cards/${cardId}/invoices`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBe(1);
+    expect(res.body[0].parseMetadata?.rawExcerpt).toBeUndefined();
+    expect(res.body[0].parseMetadata?.parser?.name).toBe("itau_parser_v1");
   });
 
   // ─── link-bill ───────────────────────────────────────────────────────────────

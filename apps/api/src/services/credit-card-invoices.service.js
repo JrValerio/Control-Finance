@@ -62,9 +62,34 @@ const normalizeTextForDetection = (text) =>
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
 
-const collapseWhitespace = (text) => String(text || "").replace(/\s+/g, " ").trim();
+const normalizeJsonObject = (value) => {
+  if (!value) {
+    return {};
+  }
 
-const extractRawExcerpt = (text) => collapseWhitespace(text).slice(0, 800);
+  if (typeof value === "string") {
+    try {
+      const parsedValue = JSON.parse(value);
+      return parsedValue && typeof parsedValue === "object" && !Array.isArray(parsedValue)
+        ? { ...parsedValue }
+        : {};
+    } catch {
+      return {};
+    }
+  }
+
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return { ...value };
+  }
+
+  return {};
+};
+
+const sanitizeInvoiceParseMetadata = (value) => {
+  const normalizedMetadata = normalizeJsonObject(value);
+  delete normalizedMetadata.rawExcerpt;
+  return normalizedMetadata;
+};
 
 const resolveIssuerMetricKey = (issuer) => {
   const normalizedIssuer = String(issuer || "").trim().toLowerCase();
@@ -227,7 +252,6 @@ const parseGenericCreditCardInvoice = ({ rawText, issuer }) => {
       periodStart: null,
       periodEnd: null,
     },
-    rawExcerpt: extractRawExcerpt(rawText),
   };
 };
 
@@ -257,9 +281,10 @@ const parseCreditCardInvoiceByStrategy = (rawText) => {
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
 const formatInvoice = (row) => {
+  const sanitizedParseMetadata = sanitizeInvoiceParseMetadata(row.parse_metadata);
   const classificationSignals = resolveInvoiceClassificationSignals({
     parseConfidence: row.parse_confidence,
-    parseMetadata: row.parse_metadata,
+    parseMetadata: sanitizedParseMetadata,
   });
 
   return {
@@ -388,7 +413,6 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
   const needsReview = parseConfidence === "low" || reviewReasonCodes.length > 0;
 
   const parseMetadata = {
-    rawExcerpt: parsed.rawExcerpt,
     fieldsSources,
     parser: {
       strategy: strategyResult.strategy,
@@ -402,6 +426,7 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
     },
     ...(Object.keys(inferenceContext).length > 0 ? { inferenceContext } : {}),
   };
+  const sanitizedParseMetadata = sanitizeInvoiceParseMetadata(parseMetadata);
 
   const { rows } = await dbQuery(
     `INSERT INTO credit_card_invoices
@@ -417,7 +442,7 @@ export const parseCreditCardInvoicePdfForUser = async (rawUserId, rawCardId, fil
       parsed.minimumPayment ?? null,
       parsed.financedBalance ?? null,
       parseConfidence,
-      JSON.stringify(parseMetadata),
+      JSON.stringify(sanitizedParseMetadata),
     ]
   );
 
@@ -476,7 +501,7 @@ export const linkBillToInvoiceForUser = async (rawUserId, rawCardId, rawInvoiceI
 
   const classificationSignals = resolveInvoiceClassificationSignals({
     parseConfidence: invRows[0].parse_confidence,
-    parseMetadata: invRows[0].parse_metadata,
+    parseMetadata: sanitizeInvoiceParseMetadata(invRows[0].parse_metadata),
   });
   const explicitAmbiguousConfirmation = input?.confirmAmbiguousClassification === true;
 

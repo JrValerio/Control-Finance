@@ -140,11 +140,6 @@ const extractCardLast4 = (text) => {
   return null;
 };
 
-// ─── Raw excerpt (first 800 chars after normalisation) ────────────────────────
-
-const extractRawExcerpt = (text) =>
-  text.replace(/\s+/g, " ").trim().slice(0, 800);
-
 // ─── Main parser ─────────────────────────────────────────────────────────────
 
 /**
@@ -158,7 +153,6 @@ const extractRawExcerpt = (text) =>
  * @property {string|null} cardLast4
  * @property {string}      issuer           - always 'itau'
  * @property {Object}      fieldsSources    - which regex matched each field
- * @property {string}      rawExcerpt
  */
 
 /**
@@ -198,6 +192,5 @@ export const parseItauInvoice = (rawText) => {
     cardLast4,
     issuer: "itau",
     fieldsSources,
-    rawExcerpt: extractRawExcerpt(text),
   };
 };
