@@ -3,6 +3,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import { assertJwtEnvironmentConsistency } from "./config/jwt-env-guard.js";
+import { assertTaxStorageEnvironmentConsistency } from "./config/tax-storage-env-guard.js";
 import healthRoutes from "./routes/health.routes.js";
 import metricsRoutes from "./routes/metrics.routes.js";
 import authRoutes from "./routes/auth.routes.js";
@@ -32,6 +33,7 @@ import { httpMetricsMiddleware } from "./observability/http-metrics.js";
 
 dotenv.config();
 assertJwtEnvironmentConsistency();
+assertTaxStorageEnvironmentConsistency();
 
 const app = express();
 
