@@ -345,6 +345,37 @@ Essa ordem está certa porque:
 - depois fecha o módulo de cartão
 - por fim faz o polimento narrativo em cima de base já coerente
 
+### Atualização da trilha Home Operacional (A->D)
+
+Leitura consolidada da execução incremental em PRs empilhados:
+
+- `#402`: estrutura da home
+- `#403`: protagonismo dos cards críticos
+- `#404`: semântica e severidade (incluindo `SalaryWidget.tsx`)
+- `#405`: ação operacional por severidade
+
+Ajuste incremental posterior no `#405`:
+
+- commit isolado `d4a288e`
+- mensagem: `polish(web): allow actionable empty state in salary widget`
+- efeito: `SalaryWidget.tsx` passa a aparecer no `#405` por acréscimo controlado, sem contradizer a trilha histórica
+
+Validação local do ajuste incremental:
+
+- typecheck: ok
+- `SalaryWidget.test.tsx`: `35/35`
+
+Status de aterrissagem em `main` (2026-04-01):
+
+- `#402` merged em `main`
+- `#403` merged em `main`
+- `#404` merged em `main`
+- `#405` merged em `main` com head `d4a288e`
+
+Nota operacional:
+
+- Durante o merge train, o `#403` foi fechado automaticamente ao deletar a branch-base do `#402`; a esteira foi recuperada com restauração da base, reabertura do PR e retarget para `main`, sem perda de trilha lógica.
+
 ---
 
 ## 11. Riscos a evitar
