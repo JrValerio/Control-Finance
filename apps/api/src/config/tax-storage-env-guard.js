@@ -15,11 +15,7 @@ const createTaxStorageEnvError = (message, code = "TAX_STORAGE_ENV_INVALID") => 
   return error;
 };
 
-export const assertTaxStorageEnvironmentConsistency = (env = process.env) => {
-  if (!isProductionEnvironment(env)) {
-    return;
-  }
-
+const validateProductionTaxStorageEnvironment = (env = process.env) => {
   const adapterName = resolveTaxDocumentStorageAdapterName(env);
 
   if (adapterName !== TAX_DOCUMENT_STORAGE_ADAPTER_REMOTE_S3) {
@@ -37,4 +33,40 @@ export const assertTaxStorageEnvironmentConsistency = (env = process.env) => {
       "TAX_STORAGE_LEGACY_LOCAL_DIR_REQUIRED",
     );
   }
+};
+
+export const resolveTaxStorageModuleAvailability = (env = process.env) => {
+  if (!isProductionEnvironment(env)) {
+    return {
+      enabled: true,
+      code: null,
+      reason: null,
+    };
+  }
+
+  try {
+    validateProductionTaxStorageEnvironment(env);
+    return {
+      enabled: true,
+      code: null,
+      reason: null,
+    };
+  } catch (error) {
+    return {
+      enabled: false,
+      code: typeof error?.code === "string" && error.code.trim() ? error.code.trim() : "TAX_STORAGE_ENV_INVALID",
+      reason:
+        typeof error?.message === "string" && error.message.trim()
+          ? error.message.trim()
+          : "Invalid tax storage environment.",
+    };
+  }
+};
+
+export const assertTaxStorageEnvironmentConsistency = (env = process.env) => {
+  if (!isProductionEnvironment(env)) {
+    return;
+  }
+
+  validateProductionTaxStorageEnvironment(env);
 };
