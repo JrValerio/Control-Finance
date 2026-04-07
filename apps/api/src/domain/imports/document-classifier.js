@@ -102,6 +102,14 @@ const TELECOM_SIGNALS = [
   "codigo de barras",
 ];
 
+const CREDIT_CARD_INVOICE_ITAU_SIGNALS = [
+  "total da fatura anterior",
+  "pagamentos efetuados",
+  "lancamentos no cartao",
+  "saldo financiado",
+  "limite total de credito",
+];
+
 const BANK_STATEMENT_SIGNALS = [
   "saldo anterior",
   "saldo final",
@@ -157,6 +165,14 @@ export const detectDocumentType = ({ text = "", extension = "" }) => {
   // Telecom bill (internet/phone/tv) — 2+ signals
   if (countMatches(normalized, TELECOM_SIGNALS) >= 2) {
     return "utility_bill_telecom";
+  }
+
+  // Itaú credit card invoice — requires "itau" + 2 structural signals
+  if (
+    normalized.includes("itau") &&
+    countMatches(normalized, CREDIT_CARD_INVOICE_ITAU_SIGNALS) >= 2
+  ) {
+    return "credit_card_invoice_itau";
   }
 
   // PDF with bank statement content

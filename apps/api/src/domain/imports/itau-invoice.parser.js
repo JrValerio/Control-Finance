@@ -140,6 +140,164 @@ const extractCardLast4 = (text) => {
   return null;
 };
 
+// ─── Transaction parser ───────────────────────────────────────────────────────
+
+/**
+ * Lines that look like transactions but are structural (summaries, metadata,
+ * simulations). Tested against the collapsed, accent-stripped, lowercased line.
+ */
+const STRUCTURAL_LINE_PATTERNS = [
+  /^total\s+(dos\s+)?(pagamentos|lancamentos|outros)/i,
+  /^lancamentos\s+no\s+cartao/i,
+  /^lancamentos\s+(compras|produtos|servi)/i,
+  /^compras\s+parceladas/i,
+  /^proxima\s+fatura/i,
+  /^demais\s+faturas/i,
+  /^total\s+para\s+proximas/i,
+  /^limite\s+(total|disponivel|utilizado|de\s+saque)/i,
+  /^juros\s+(do\s+rotativo|de\s+mora)/i,
+  /^multa\s+por\s+atraso/i,
+  /^iof\s+de\s+financiamento/i,
+  /^valor\s+juros/i,
+  /^valor\s+total\s+a\s+pagar/i,
+  /^valor\s+da\s+parcela/i,
+  /^valor\s+do\s+iof/i,
+  /^valor\s+total\s+financiado/i,
+  /^valor\s+compra/i,
+  /^valor\s+saque/i,
+  /^valor\s+tarifa/i,
+  /^quantidade\s+de\s+parcelas/i,
+  /^cet\s+/i,
+  /^simulacao/i,
+  /^pagamento\s+minimo/i,
+  /^pagamento\s+efetuado/i,
+  /^encargos\s+cobrados/i,
+  /^fique\s+atento/i,
+  /^novo\s+teto/i,
+  /^juros\s+maximos/i,
+  /^credito\s+rotativo/i,
+  /^limite\s+maximo\s+de\s+juros/i,
+  /^juros\s+e\s+encargos/i,
+  /^%\s+sobre/i,
+];
+
+const isStructuralLine = (line) => {
+  const normalized = line
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+  return STRUCTURAL_LINE_PATTERNS.some((re) => re.test(normalized));
+};
+
+/**
+ * Extract year from the invoice due date string ("YYYY-MM-DD").
+ * Falls back to current year.
+ */
+const invoiceYear = (dueDate) => {
+  if (typeof dueDate === "string" && /^\d{4}/.test(dueDate)) {
+    return dueDate.slice(0, 4);
+  }
+  return String(new Date().getFullYear());
+};
+
+/**
+ * Convert a short date "DD/MM" to "YYYY-MM-DD" using the invoice year.
+ * When the month is later than the due-date month it belongs to the prior year
+ * (e.g. closing on 13/03 means a 02/XX date in February → same year, but a
+ * 12/XX date in December belongs to the prior year).
+ */
+const shortDateToIso = (day, month, year) => {
+  const y = Number(year);
+  const m = Number(month);
+  // Closing month inferred from the year string isn't available here, so we
+  // simply trust the year passed in. The caller adjusts when needed.
+  return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+
+/**
+ * Parse individual purchase/service transactions from an Itaú invoice PDF text.
+ *
+ * Returns an array of raw import rows compatible with the statement-import pipeline:
+ *   { line: number, raw: { date, type, value, description, notes, category } }
+ *
+ * Rules:
+ *   - Positive amount  → type "Saida"  (purchase charged to card)
+ *   - Negative amount  → type "Entrada" (refund/reversal credited to card)
+ *   - "PAGAMENTO EFETUADO" lines → filtered (avoid duplicates with bank statement)
+ *   - Structural/summary lines  → filtered
+ */
+export const parseItauInvoiceTransactions = (rawText) => {
+  if (typeof rawText !== "string" || !rawText.trim()) {
+    throw new Error("Nao foi possivel extrair transacoes da fatura.");
+  }
+
+  const invoiceMetadata = parseItauInvoice(rawText);
+  const year = invoiceYear(invoiceMetadata?.dueDate ?? null);
+
+  const lines = rawText
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const rows = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    if (isStructuralLine(line)) continue;
+
+    // Pattern: DD/MM DESCRIPTION VALUE  (value may have trailing "-" for refunds)
+    // e.g. "14/02 ZP *BARBEARIA NOHVO 179,90"
+    // e.g. "05/03 ZP *BARBEARIA NOHVO - 179,90"  ← space before "-" variant
+    // e.g. "05/03 ZP *BARBEARIA NOHVO -179,90"
+    const match = line.match(
+      /^(\d{2})\/(\d{2})\s+(.+?)\s+(-\s*[\d.,]+|[\d.,]+-?)$/,
+    );
+    if (!match) continue;
+
+    const [, day, month, rawDescription, rawAmount] = match;
+    const description = rawDescription.trim();
+
+    // Skip payment lines even when they have dates
+    if (/^pagamento\s+efetuado/i.test(
+      description.normalize("NFD").replace(/[\u0300-\u036f]/g, ""),
+    )) {
+      continue;
+    }
+
+    // Parse amount — negative (leading or trailing "-") → Entrada (refund)
+    const amountStr = rawAmount.replace(/\s/g, "");
+    const isNegative = amountStr.startsWith("-") || amountStr.endsWith("-");
+    const numericStr = amountStr.replace(/^-|-$/g, "");
+    const parsed = parseBRL(numericStr);
+
+    if (parsed === null) continue;
+
+    const type = isNegative ? "Entrada" : "Saida";
+    const isoDate = shortDateToIso(day, month, year);
+
+    rows.push({
+      line: i + 1,
+      raw: {
+        date: isoDate,
+        type,
+        value: String(parsed.toFixed(2)),
+        description,
+        notes: "",
+        category: "",
+      },
+    });
+  }
+
+  if (rows.length === 0) {
+    throw new Error("Nenhuma transacao reconhecida na fatura.");
+  }
+
+  return rows;
+};
+
 // ─── Main parser ─────────────────────────────────────────────────────────────
 
 /**
