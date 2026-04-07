@@ -60,6 +60,14 @@ v1.31.0 - Central do Leão (IRPF MVP)
 - A trilha fiscal passou a usar um contrato oficial de export no backend, sem side effect implícito de rebuild
 - O produto agora inclui uma frente explícita de preparação do IRPF, com guardrail claro: organiza e prepara, mas não transmite DIRPF
 
+#### Home operacional (A->D) concluída em main (PRs #402-#405)
+
+- `#402` (estrutura) merged em `main`
+- `#403` (protagonismo) merged em `main`
+- `#404` (semântica e severidade) merged em `main`
+- `#405` (ação operacional) merged em `main`, incluindo ajuste incremental no `SalaryWidget` (head `d4a288e`)
+- Pós-merge disciplinado executado: sync de `main`, validação local (`typecheck` + suíte focada da home) e limpeza de branches da trilha
+
 ### Quality
 
 - `npm test` na raiz verde
