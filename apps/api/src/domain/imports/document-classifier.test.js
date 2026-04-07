@@ -169,6 +169,38 @@ describe("detectDocumentType", () => {
     });
   });
 
+  describe("credit_card_invoice_nubank", () => {
+    it("detecta fatura Nubank com nu pagamentos + periodo vigente + total a pagar", () => {
+      const text = [
+        "Nu Pagamentos S.A.",
+        "Periodo vigente: 08 OUT a 08 NOV",
+        "Total a pagar R$ 767,23",
+        "Data de vencimento: 18 NOV 2024",
+      ].join("\n");
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("credit_card_invoice_nubank");
+    });
+
+    it("detecta fatura Nubank com pagamentos e financiamentos + data de vencimento", () => {
+      const text = [
+        "Nu Pagamentos S.A.",
+        "Pagamentos e Financiamentos R$ 106,15",
+        "Data de vencimento: 15 AGO 2025",
+      ].join("\n");
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("credit_card_invoice_nubank");
+    });
+
+    it("NAO detecta nubank sem nu pagamentos no texto", () => {
+      const text = "periodo vigente: 08 OUT a 08 NOV\ntotal a pagar R$ 767,23\npagamentos e financiamentos";
+      expect(detectDocumentType({ text, extension: ".pdf" })).not.toBe("credit_card_invoice_nubank");
+    });
+
+    it("NAO detecta nubank com apenas nu pagamentos e nenhum outro sinal da lista", () => {
+      // "nu pagamentos" e o unico sinal (countMatches = 1 < 2) — nao deve detectar
+      const text = "Nu Pagamentos S.A.\nFatura de credito cancelado.";
+      expect(detectDocumentType({ text, extension: ".pdf" })).not.toBe("credit_card_invoice_nubank");
+    });
+  });
+
   describe("bank_statement via conteudo", () => {
     it("detecta extrato com saldo anterior", () => {
       const text = "Saldo anterior: R$ 1.000,00\nlançamentos do periodo";
