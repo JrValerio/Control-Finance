@@ -60,10 +60,10 @@ PAGAMENTO MÍNIMO R$ 124,78
 `.trim();
 
 const VALID_NUBANK_TEXT = `
-NUBANK
+Nu Pagamentos S.A.
 Cartao final 9988
-VENCIMENTO  20/03/2026
-TOTAL DA FATURA    R$ 540,35
+Data de vencimento: 20 MAR 2026
+Total a pagar R$ 540,35
 `.trim();
 
 const INVALID_TEXT = `Este texto nao tem nenhum dado de fatura.`;
@@ -201,8 +201,8 @@ describe("credit-card-invoices", () => {
     expect(res.body.parseMetadata.reviewContext.reasonCodes).toContain("period_inferred_from_closing_day");
   });
 
-  it("POST parse-pdf usa fallback por emissor reconhecido nao-itau com needsReview", async () => {
-    const token = await registerAndLogin("inv-nubank-fallback@test.dev");
+  it("POST parse-pdf usa parser Nubank dedicado — sem periodo inferido do dia de fechamento", async () => {
+    const token = await registerAndLogin("inv-nubank-parser@test.dev");
     mockExtractTextWithRuntime.mockResolvedValue(createOcrRuntimeResult(VALID_NUBANK_TEXT));
 
     const cardRes = await createCard(token, { closingDay: 10, dueDay: 20 });
@@ -217,8 +217,9 @@ describe("credit-card-invoices", () => {
     expect(res.body.dueDate).toBe("2026-03-20");
     expect(res.body.parseConfidence).toBe("low");
     expect(res.body.needsReview).toBe(true);
-    expect(res.body.parseMetadata?.parser?.strategy).toBe("generic_fallback");
-    expect(res.body.parseMetadata?.reviewContext?.reasonCodes).toContain("issuer_parser_fallback");
+    expect(res.body.parseMetadata?.parser?.strategy).toBe("issuer_specific");
+    expect(res.body.parseMetadata?.parser?.name).toBe("nubank_parser_v1");
+    expect(res.body.parseMetadata?.reviewContext?.reasonCodes).not.toContain("issuer_parser_fallback");
     expect(res.body.parseMetadata?.reviewContext?.reasonCodes).toContain("period_inferred_from_closing_day");
   });
 

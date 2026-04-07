@@ -110,6 +110,14 @@ const CREDIT_CARD_INVOICE_ITAU_SIGNALS = [
   "limite total de credito",
 ];
 
+const CREDIT_CARD_INVOICE_NUBANK_SIGNALS = [
+  "nu pagamentos",
+  "periodo vigente",
+  "total a pagar",
+  "pagamentos e financiamentos",
+  "data de vencimento",
+];
+
 const BANK_STATEMENT_SIGNALS = [
   "saldo anterior",
   "saldo final",
@@ -173,6 +181,14 @@ export const detectDocumentType = ({ text = "", extension = "" }) => {
     countMatches(normalized, CREDIT_CARD_INVOICE_ITAU_SIGNALS) >= 2
   ) {
     return "credit_card_invoice_itau";
+  }
+
+  // Nubank credit card invoice — requires "nu pagamentos" + 2 structural signals
+  if (
+    normalized.includes("nu pagamentos") &&
+    countMatches(normalized, CREDIT_CARD_INVOICE_NUBANK_SIGNALS) >= 2
+  ) {
+    return "credit_card_invoice_nubank";
   }
 
   // PDF with bank statement content

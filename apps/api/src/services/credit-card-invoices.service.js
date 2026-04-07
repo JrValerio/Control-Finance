@@ -1,6 +1,7 @@
 import { dbQuery } from "../db/index.js";
 import { extractTextFromPdfWithOcrRuntime } from "../domain/imports/pdf-ocr.js";
 import { parseBRL, parseDMY, parseItauInvoice } from "../domain/imports/itau-invoice.parser.js";
+import { parseNubankInvoice } from "../domain/imports/nubank-invoice.parser.js";
 import { trackDomainFlowError, trackDomainFlowSuccess } from "../observability/domain-metrics.js";
 import { resolveInvoiceClassificationSignals } from "./credit-card-invoice-classification.service.js";
 import { resolveCreditCardInvoicePeriod } from "./credit-card-invoice-period-inference.service.js";
@@ -263,6 +264,15 @@ const parseCreditCardInvoiceByStrategy = (rawText) => {
       parsed: parseItauInvoice(rawText),
       strategy: "issuer_specific",
       parserName: "itau_parser_v1",
+      issuerDetection,
+    };
+  }
+
+  if (issuerDetection.issuer === "nubank") {
+    return {
+      parsed: parseNubankInvoice(rawText),
+      strategy: "issuer_specific",
+      parserName: "nubank_parser_v1",
       issuerDetection,
     };
   }

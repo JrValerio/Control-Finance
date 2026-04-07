@@ -22,6 +22,45 @@
       }
     },
     {
+      "id": "nubank_high_confidence_auto_accept",
+      "description": "Fatura Nubank com periodo identificado — alta confianca, auto-aceite.",
+      "invoiceText": "Nu Pagamentos S.A.\nCartao final 9988\nData de vencimento: 15 NOV 2024\nPeriodo vigente: 08 OUT a 08 NOV\nTotal a pagar R$ 767,23\nPagamento minimo R$ 172,28",
+      "card": {
+        "closingDay": 8,
+        "dueDay": 15
+      },
+      "expected": {
+        "issuer": "nubank",
+        "parseConfidence": "high",
+        "classificationConfidence": 0.9,
+        "classificationAmbiguous": false,
+        "reasonCode": "not_ambiguous",
+        "requiresUserConfirmation": false,
+        "totalAmount": 767.23,
+        "dueDate": "2024-11-15"
+      }
+    },
+    {
+      "id": "nubank_period_missing_requires_confirmation",
+      "description": "Fatura Nubank sem periodo — baixa confianca, exige confirmacao explicita.",
+      "invoiceText": "Nu Pagamentos S.A.\nCartao final 5577\nData de vencimento: 20 MAR 2026\nTotal a pagar R$ 540,35",
+      "card": {
+        "closingDay": 8,
+        "dueDay": 20
+      },
+      "expected": {
+        "issuer": "nubank",
+        "parseConfidence": "low",
+        "classificationConfidence": 0.45,
+        "classificationAmbiguous": true,
+        "reasonCode": "period_inferred_from_closing_day",
+        "requiresUserConfirmation": true,
+        "totalAmount": 540.35,
+        "dueDate": "2026-03-20",
+        "blockedCode": "AMBIGUOUS_CLASSIFICATION_CONFIRMATION_REQUIRED"
+      }
+    },
+    {
       "id": "itau_period_missing_requires_confirmation",
       "description": "Fluxo ambiguo bloqueia auto-aceite e exige confirmacao explicita.",
       "invoiceText": "BANCO ITAU S.A.\nVENCIMENTO 15/03/2026\nTOTAL DA FATURA R$ 850,00",
