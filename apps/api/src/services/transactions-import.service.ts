@@ -9,6 +9,7 @@ import {
 import {
   parseOfxRows,
 } from "../domain/imports/ofx-import.js";
+import { parseItauInvoiceTransactions } from "../domain/imports/itau-invoice.parser.js";
 import {
   extractTextFromPdfBuffer,
   getPdfImportGuidanceError,
@@ -920,6 +921,15 @@ const parseImportFileRows = async (importFile: ImportFile) => {
     if (documentType === "utility_bill_telecom") {
       const suggestion = extractTelecomBillSuggestion(text);
       return { rows: [], documentType, suggestion, suggestions: suggestion ? [suggestion] : [] };
+    }
+
+    if (documentType === "credit_card_invoice_itau") {
+      try {
+        const rows = parseItauInvoiceTransactions(text);
+        return { rows, documentType, suggestion: null, suggestions: [] };
+      } catch (error) {
+        throw createError(400, error.message || "Nao foi possivel reconhecer transacoes na fatura.");
+      }
     }
 
     try {
