@@ -128,6 +128,8 @@ const BANK_STATEMENT_SIGNALS = [
   "stmttrn",
   "fitid",
   "trnamt",
+  "extrato conta",
+  "periodo de visualizacao",
 ];
 
 const countMatches = (normalized, signals) =>
@@ -141,8 +143,10 @@ export const detectDocumentType = ({ text = "", extension = "" }) => {
   if (!normalized) return "unknown";
 
   // INSS — requires "instituto nacional" + at least one more signal
+  // Guard: "historico de emprestimo consignado" is a loan history report, not an income statement
   if (
     normalized.includes("instituto nacional do seguro social") &&
+    !normalized.includes("historico de emprestimo consignado") &&
     countMatches(normalized, INSS_SIGNALS) >= 2
   ) {
     return "income_statement_inss";
@@ -153,6 +157,13 @@ export const detectDocumentType = ({ text = "", extension = "" }) => {
     countMatches(normalized, [...PAYROLL_PRIMARY_SIGNALS, ...PAYROLL_SECONDARY_SIGNALS]) >= 3
   ) {
     return "income_statement_payroll";
+  }
+
+  // Bank statement with strong evidence takes priority over utility bill misclassification.
+  // Extrato Itaú contains carrier names (Claro, TIM) as transaction descriptions which
+  // would otherwise match TELECOM_SIGNALS. Promote bank_statement when ≥2 strong signals.
+  if (countMatches(normalized, BANK_STATEMENT_SIGNALS) >= 2) {
+    return "bank_statement";
   }
 
   // Energy bill — 2+ signals
@@ -191,7 +202,7 @@ export const detectDocumentType = ({ text = "", extension = "" }) => {
     return "credit_card_invoice_nubank";
   }
 
-  // PDF with bank statement content
+  // PDF with bank statement content — single signal fallback
   if (countMatches(normalized, BANK_STATEMENT_SIGNALS) >= 1) {
     return "bank_statement";
   }

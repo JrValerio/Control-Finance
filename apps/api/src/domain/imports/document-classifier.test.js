@@ -211,6 +211,35 @@ describe("detectDocumentType", () => {
       const text = "<STMTTRN>\n<FITID>20260101001\n<TRNAMT>-150.00";
       expect(detectDocumentType({ text, extension: ".pdf" })).toBe("bank_statement");
     });
+
+    it("extrato Itau com transacoes CLARO/TIM nao e classificado como utility_bill_telecom", () => {
+      // Reproduz extrato_itau_032026.pdf: tem SALDO DO DIA, lançamentos, periodo de visualizacao
+      // e transacoes como PIX QRS CLARO e PAY TIM — nao deve virar telecom bill
+      const text = [
+        "extrato conta / lancamentos",
+        "periodo de visualizacao: 09/03/2026 ate 08/04/2026",
+        "SALDO DO DIA 447,64",
+        "PIX QRS CLARO07/04 -44,83",
+        "PAY TIM 07/04 -89,90",
+        "PGTO INSS 01776829899 2.803,52",
+        "SALDO DO DIA 497,64",
+      ].join("\n");
+      expect(detectDocumentType({ text, extension: ".pdf" })).toBe("bank_statement");
+    });
+  });
+
+  describe("income_statement_inss guard", () => {
+    it("historico de emprestimo consignado NAO e classificado como income_statement_inss", () => {
+      const text = [
+        "Instituto Nacional do Seguro Social",
+        "HISTÓRICO DE EMPRÉSTIMO CONSIGNADO",
+        "MARIA EDLEUSA MONSAO DA SILVA",
+        "Benefício NB: 177.682.989-9",
+        "SITUAÇÃO: ATIVO",
+        "competência início desconto fim desconto",
+      ].join("\n");
+      expect(detectDocumentType({ text, extension: ".pdf" })).not.toBe("income_statement_inss");
+    });
   });
 
   describe("unknown", () => {
