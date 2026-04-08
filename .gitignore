@@ -33,3 +33,4 @@ dist-ssr
 
 # Local operational artifacts and smoke/debug evidence
 tmp/
+*.traineddata
