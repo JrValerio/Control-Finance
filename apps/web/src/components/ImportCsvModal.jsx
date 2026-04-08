@@ -992,7 +992,7 @@ const ImportCsvModal = ({
               className="block w-full text-sm text-cf-text-primary file:mr-3 file:rounded file:border file:border-cf-border file:bg-cf-bg-subtle file:px-3 file:py-1 file:text-sm file:font-semibold file:text-cf-text-primary hover:file:bg-cf-border"
             />
             <p className="mt-2 text-xs text-cf-text-secondary">
-              OFX é o formato preferencial quando o banco oferecer. CSV manual, CSV do banco e PDF com OCR assistido entram como alternativas.
+              OFX é o formato preferencial quando o banco oferecer. Para CSV manual, use o modelo abaixo como base.
             </p>
             <p className="mt-1 text-xs text-cf-text-secondary">
               Use a pré-visualização para conferir categorias, renda e pendências antes de confirmar a importação.
@@ -1000,6 +1000,29 @@ const ImportCsvModal = ({
             <p className="mt-1 text-xs text-cf-text-secondary">
               Quando possível, a plataforma sugere automaticamente categorias com base nas descrições e nas categorias já cadastradas.
             </p>
+            <p className="mt-1 text-xs text-cf-text-secondary">
+              No modelo CSV, use datas em YYYY-MM-DD e valores com ponto decimal.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const csv = [
+                  "date,description,value,type,notes",
+                  "2026-01-15,Supermercado Extra,250.00,Saida,compras do mes",
+                  "2026-01-20,Salario,5000.00,Entrada,",
+                ].join("\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "modelo-extrato.csv";
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="mt-2 text-xs font-medium text-brand-1 hover:underline"
+            >
+              Baixar modelo CSV
+            </button>
           </div>
 
           {lastCommitResult ? (
