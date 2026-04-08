@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { forecastService, type Forecast } from "../services/forecast.service";
 import { profileService } from "../services/profile.service";
+import { billingService } from "../services/billing.service";
 import { useMaskedCurrency } from "../context/DiscreetModeContext";
 import { logWidgetFallbackError } from "../utils/widgetFallbackTelemetry";
 import { OperationalSeverityBadge, OperationalStateBlock, type OperationalSeverity } from "./OperationalStateBlock";
@@ -178,7 +179,10 @@ const ForecastCard = ({
     try {
       setError("");
       setHasLoadError(false);
-      const me = await profileService.getMe();
+      const [me, billing] = await Promise.all([
+        profileService.getMe(),
+        billingService.getSubscription(),
+      ]);
 
       const hasProfile =
         me.profile !== null &&
@@ -190,7 +194,13 @@ const ForecastCard = ({
         return;
       }
 
-      const trialEnded = Boolean(me.trialExpired || trialExpired);
+      // Freeze only when entitlement is free with expired trial.
+      // Active subscription (subscription / subscription_grace / prepaid) always unfreezes.
+      const isPaid =
+        billing.entitlementSource === "subscription" ||
+        billing.entitlementSource === "subscription_grace" ||
+        billing.entitlementSource === "prepaid";
+      const trialEnded = !isPaid && Boolean(billing.trialExpired || trialExpired);
       if (trialEnded) {
         setForecast(loadCachedForecast());
         setCardState("frozen");
