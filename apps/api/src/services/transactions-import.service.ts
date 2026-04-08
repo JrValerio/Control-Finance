@@ -10,6 +10,7 @@ import {
   parseOfxRows,
 } from "../domain/imports/ofx-import.js";
 import { parseItauInvoiceTransactions } from "../domain/imports/itau-invoice.parser.js";
+import { parseNubankInvoiceTransactions } from "../domain/imports/nubank-invoice.parser.js";
 import {
   extractTextFromPdfBuffer,
   getPdfImportGuidanceError,
@@ -926,6 +927,15 @@ const parseImportFileRows = async (importFile: ImportFile) => {
     if (documentType === "credit_card_invoice_itau") {
       try {
         const rows = parseItauInvoiceTransactions(text);
+        return { rows, documentType, suggestion: null, suggestions: [] };
+      } catch (error) {
+        throw createError(400, error.message || "Nao foi possivel reconhecer transacoes na fatura.");
+      }
+    }
+
+    if (documentType === "credit_card_invoice_nubank") {
+      try {
+        const rows = parseNubankInvoiceTransactions(text);
         return { rows, documentType, suggestion: null, suggestions: [] };
       } catch (error) {
         throw createError(400, error.message || "Nao foi possivel reconhecer transacoes na fatura.");
