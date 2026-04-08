@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { profileService, type UserProfile } from "../services/profile.service";
+import { billingService } from "../services/billing.service";
 import { getApiErrorMessage } from "../utils/apiError";
 import { useDiscreetMode } from "../context/DiscreetModeContext";
 
@@ -111,12 +112,19 @@ const ProfileSettings = ({
     setIsLoading(true);
     setLoadError(null);
     try {
-      const me = await profileService.getMe();
+      const [me, billing] = await Promise.all([
+        profileService.getMe(),
+        billingService.getSubscription(),
+      ]);
       setEmail(me.email);
       setHasPassword(me.hasPassword ?? null);
       setLinkedProviders(me.linkedProviders ?? []);
-      setTrialEndsAt(me.trialEndsAt ?? null);
-      setTrialExpired(me.trialExpired ?? false);
+      setTrialEndsAt(billing.trialEndsAt ?? me.trialEndsAt ?? null);
+      const isPaid =
+        billing.entitlementSource === "subscription" ||
+        billing.entitlementSource === "subscription_grace" ||
+        billing.entitlementSource === "prepaid";
+      setTrialExpired(!isPaid && Boolean(billing.trialExpired ?? me.trialExpired));
       const p: UserProfile | null = me.profile;
       setDisplayName(p?.displayName ?? "");
       setSalaryMonthly(
