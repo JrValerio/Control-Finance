@@ -21,6 +21,9 @@ vi.mock("../services/profile.service", () => ({
 vi.mock("../services/billing.service", () => ({
   billingService: {
     getSubscription: vi.fn(() => Promise.resolve({
+      plan: "pro",
+      displayName: "Control Finance PRO",
+      features: {},
       entitlementSource: "subscription",
       trialExpired: false,
       trialEndsAt: null,
@@ -186,6 +189,9 @@ describe("ForecastCard", () => {
       trialExpired: true,
     });
     vi.mocked(billingService.getSubscription).mockResolvedValueOnce({
+      plan: "free",
+      displayName: "Plano Gratuito",
+      features: {},
       entitlementSource: "free",
       trialExpired: true,
       trialEndsAt: null,
