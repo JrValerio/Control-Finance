@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import ProfileSettings from "./ProfileSettings";
+import { billingService } from "../services/billing.service";
 import { profileService } from "../services/profile.service";
 import { DiscreetModeProvider } from "../context/DiscreetModeContext";
 
@@ -10,6 +11,18 @@ vi.mock("../services/profile.service", () => ({
   profileService: {
     getMe: vi.fn(),
     updateProfile: vi.fn(),
+  },
+}));
+
+vi.mock("../services/billing.service", () => ({
+  billingService: {
+    getSubscription: vi.fn(() => Promise.resolve({
+      entitlementSource: "subscription",
+      trialExpired: false,
+      trialEndsAt: null,
+      subscription: { currentPeriodEnd: "2026-04-25", cancelAtPeriodEnd: false },
+      proExpiresAt: null,
+    })),
   },
 }));
 
@@ -318,6 +331,13 @@ describe("ProfileSettings — Assinatura", () => {
     vi.mocked(profileService.getMe).mockResolvedValue(
       buildMe({ trialEndsAt: pastDate, trialExpired: true }),
     );
+    vi.mocked(billingService.getSubscription).mockResolvedValueOnce({
+      entitlementSource: "free",
+      trialExpired: true,
+      trialEndsAt: null,
+      subscription: null,
+      proExpiresAt: null,
+    });
     const onOpenBilling = vi.fn();
     renderPage({ onOpenBilling });
     await waitFor(() => expect(screen.getByText("Trial expirado")).toBeInTheDocument());
@@ -332,6 +352,13 @@ describe("ProfileSettings — Assinatura", () => {
     vi.mocked(profileService.getMe).mockResolvedValue(
       buildMe({ trialEndsAt: pastDate, trialExpired: true }),
     );
+    vi.mocked(billingService.getSubscription).mockResolvedValueOnce({
+      entitlementSource: "free",
+      trialExpired: true,
+      trialEndsAt: null,
+      subscription: null,
+      proExpiresAt: null,
+    });
     renderPage();
     await waitFor(() => expect(screen.getByText("Trial expirado")).toBeInTheDocument());
     expect(screen.queryByRole("button", { name: "Fazer upgrade" })).not.toBeInTheDocument();

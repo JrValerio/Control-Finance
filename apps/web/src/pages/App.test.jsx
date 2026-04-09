@@ -1,3 +1,14 @@
+vi.mock("../services/billing.service", () => ({
+  billingService: {
+    getSubscription: vi.fn(() => Promise.resolve({
+      entitlementSource: "free",
+      trialExpired: false,
+      trialEndsAt: null,
+      subscription: null,
+      proExpiresAt: null,
+    })),
+  },
+}));
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";

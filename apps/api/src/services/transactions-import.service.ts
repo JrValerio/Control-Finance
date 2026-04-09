@@ -111,6 +111,7 @@ const UTILITY_BILL_DOCUMENT_TYPES = new Set([
   "utility_bill_gas",
   "utility_bill_telecom",
 ]);
+const collapseWhitespace = (value: unknown) => String(value || "").replace(/\s+/g, " ").trim();
 
 const resolveUtilityBillImportDecision = (documentType: unknown): UtilityBillImportDecision | null => {
   const normalizedDocumentType =
@@ -874,6 +875,21 @@ const parseImportFileRows = async (importFile: ImportFile) => {
     const guidanceError = getPdfImportGuidanceError(text);
     if (guidanceError) {
       throw createError(400, guidanceError);
+    }
+
+    const normalizedPdfText = collapseWhitespace(text)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+
+    if (
+      normalizedPdfText.includes("instituto nacional do seguro social") &&
+      normalizedPdfText.includes("historico de emprestimo consignado")
+    ) {
+      throw createError(
+        400,
+        "Este PDF e um historico de emprestimo consignado do INSS. Para importar renda, envie o Historico de Creditos do beneficio.",
+      );
     }
 
     const documentType = detectDocumentType({ text, extension });

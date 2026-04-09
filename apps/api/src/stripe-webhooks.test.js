@@ -394,6 +394,63 @@ describe("stripe webhooks", () => {
     expect(sub.status).toBe("past_due");
   });
 
+  it("invoice.payment_succeeded reativa subscription apos past_due", async () => {
+    await registerAndLogin("webhook-payment-recovered@controlfinance.dev");
+    const userId = await getUserIdByEmail("webhook-payment-recovered@controlfinance.dev");
+    const token = extractAccessToken(
+      await request(app)
+        .post("/auth/login")
+        .send({ email: "webhook-payment-recovered@controlfinance.dev", password: "Senha123" }),
+    );
+
+    await stripePost({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          customer: "cus_test_010",
+          subscription: "sub_test_010",
+          metadata: { userId: String(userId) },
+        },
+      },
+    });
+
+    await stripePost({
+      type: "invoice.payment_failed",
+      data: {
+        object: {
+          subscription: "sub_test_010",
+          customer: "cus_test_010",
+        },
+      },
+    });
+
+    let sub = await getSubscription(userId);
+    expect(sub.status).toBe("past_due");
+
+    const response = await stripePost({
+      type: "invoice.payment_succeeded",
+      data: {
+        object: {
+          subscription: "sub_test_010",
+          customer: "cus_test_010",
+          status: "paid",
+        },
+      },
+    });
+
+    expect(response.status).toBe(200);
+
+    sub = await getSubscription(userId);
+    expect(sub.status).toBe("active");
+
+    const summaryResponse = await request(app)
+      .get("/billing/subscription")
+      .set("Authorization", `Bearer ${token}`);
+    expect(summaryResponse.status).toBe(200);
+    expect(summaryResponse.body.plan).toBe("pro");
+    expect(summaryResponse.body.entitlementSource).toBe("subscription");
+  });
+
   it("apos subscription.deleted, entitlement retorna ao plano free", async () => {
     await registerAndLogin("webhook-entitlement-fallback@controlfinance.dev");
     const userId = await getUserIdByEmail("webhook-entitlement-fallback@controlfinance.dev");

@@ -399,6 +399,19 @@ export const handleInvoicePaymentFailed = async (invoice) => {
   );
 };
 
+export const handleInvoicePaid = async (invoice) => {
+  const stripeSubscriptionId = invoice?.subscription ?? null;
+  if (!stripeSubscriptionId) return;
+
+  await dbQuery(
+    `UPDATE subscriptions SET
+      status = 'active',
+      updated_at = NOW()
+     WHERE stripe_subscription_id = $1`,
+    [stripeSubscriptionId],
+  );
+};
+
 const markStripeEventProcessed = async (stripeEventId, eventType) => {
   if (!stripeEventId) return false;
 
@@ -436,6 +449,9 @@ export const processStripeEvent = async (event) => {
       return handleSubscriptionUpserted(event.data?.object);
     case "customer.subscription.deleted":
       return handleSubscriptionDeleted(event.data?.object);
+    case "invoice.paid":
+    case "invoice.payment_succeeded":
+      return handleInvoicePaid(event.data?.object);
     case "invoice.payment_failed":
       return handleInvoicePaymentFailed(event.data?.object);
     default:
