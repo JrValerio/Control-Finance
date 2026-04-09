@@ -258,4 +258,36 @@ Total a pagar R$ 50,00
     expect(rows[0].raw.value).toBe("45.00");
     expect(rows[0].raw.description).toBe("Reembolso Mercado Livre");
   });
+
+  it("reconhece compras internacionais quando o valor R$ fica em linha separada", () => {
+    const text = `
+Nu Pagamentos S.A.
+Data de vencimento: 18 NOV 2024
+Total a pagar R$ 146,14
+30 OUT Paypal *Discord
+BRL 24.99 = USD 4.38
+Conversao: BRL 5.92 = USD 1 = R$ 5,92
+R$ 25,96
+31 OUT Openai *Chatgpt Subscr
+USD 20.00
+Conversao: USD 1 = R$ 6,00
+R$ 120,18
+    `.trim();
+
+    const rows = parseNubankInvoiceTransactions(text);
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0].raw).toMatchObject({
+      date: "2024-10-30",
+      type: "Saida",
+      value: "25.96",
+      description: "Paypal *Discord",
+    });
+    expect(rows[1].raw).toMatchObject({
+      date: "2024-10-31",
+      type: "Saida",
+      value: "120.18",
+      description: "Openai *Chatgpt Subscr",
+    });
+  });
 });

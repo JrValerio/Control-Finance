@@ -175,6 +175,13 @@ const TRANSACTION_LINE_RE = new RegExp(
   "i",
 );
 
+const TRANSACTION_HEADER_RE = new RegExp(
+  `^(\\d{2})\\s+(${MONTHS_PAT})\\s+(.+?)\\s*$`,
+  "i",
+);
+
+const STANDALONE_AMOUNT_RE = /^-?\s*R\$\s*[\d.,]+$/i;
+
 /**
  * Parse individual purchase/service transactions from a Nubank invoice PDF text.
  *
@@ -208,10 +215,33 @@ export const parseNubankInvoiceTransactions = (rawText) => {
 
     if (CONTINUATION_LINE_PATTERNS.some((re) => re.test(line))) continue;
 
-    const match = line.match(TRANSACTION_LINE_RE);
-    if (!match) continue;
+    let matchDay, matchMon, matchDescription, matchRawAmount;
 
-    const [, day, mon, rawDescription, rawAmount] = match;
+    const fullMatch = line.match(TRANSACTION_LINE_RE);
+    if (fullMatch) {
+      [, matchDay, matchMon, matchDescription, matchRawAmount] = fullMatch;
+    } else {
+      const headerMatch = line.match(TRANSACTION_HEADER_RE);
+      if (!headerMatch) continue;
+
+      // Avanca sobre sub-linhas de continuacao
+      let j = i + 1;
+      while (j < lines.length && CONTINUATION_LINE_PATTERNS.some((re) => re.test(lines[j]))) {
+        j++;
+      }
+
+      // A proxima linha nao-continuação deve ser um valor standalone R$
+      if (j >= lines.length || !lines[j].match(STANDALONE_AMOUNT_RE)) continue;
+
+      [, matchDay, matchMon, matchDescription] = headerMatch;
+      matchRawAmount = lines[j];
+      i = j; // consome a linha do valor para nao reprocessar
+    }
+
+    const day = matchDay;
+    const mon = matchMon;
+    const rawDescription = matchDescription.trim();
+    const rawAmount = matchRawAmount;
     const description = rawDescription.trim();
 
     const normalizedDesc = description
