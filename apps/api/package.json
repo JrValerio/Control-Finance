@@ -10,6 +10,7 @@
     "dev": "node --import tsx/esm --watch src/server.js",
     "start": "node --import tsx/esm src/server.js",
     "build": "node -e \"console.log('api build: no-op')\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "db:migrate": "node src/db/migrate.js",
     "db:backfill:categories-normalized": "node src/db/backfill-categories-normalized.js",
     "db:seed": "node src/db/seed.js",

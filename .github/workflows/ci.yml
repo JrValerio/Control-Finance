@@ -54,6 +54,9 @@ jobs:
       - name: Lint (api)
         run: npm -w apps/api run lint
 
+      - name: Typecheck (api)
+        run: npm -w apps/api run typecheck
+
       - name: Test (api)
         run: npm -w apps/api run test
 
