@@ -601,7 +601,7 @@ const toIsoDateString = (value: unknown): string | null => {
     return null;
   }
 
-  const parsedDate = new Date(value);
+  const parsedDate = new Date(value as string | number | Date);
 
   if (Number.isNaN(parsedDate.getTime())) {
     return null;
@@ -612,7 +612,7 @@ const toIsoDateString = (value: unknown): string | null => {
 
 const toISODateOnly = (value: unknown): string | null => {
   if (!value) return null;
-  const d = new Date(value);
+  const d = new Date(value as string | number | Date);
   if (Number.isNaN(d.getTime())) return null;
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -800,7 +800,16 @@ const ensureValidCsvHeaders = (headerRow) => {
   return normalizedHeaders;
 };
 
-const buildRawRow = (sourceRow = {}) => ({
+const buildRawRow = (
+  sourceRow: {
+    date?: unknown;
+    type?: unknown;
+    value?: unknown;
+    description?: unknown;
+    notes?: unknown;
+    category?: unknown;
+  } = {},
+) => ({
   date: normalizeRawCell(sourceRow.date),
   type: normalizeRawCell(sourceRow.type),
   value: normalizeRawCell(sourceRow.value),
@@ -1358,7 +1367,7 @@ export const dryRunTransactionsImportForUser = async (
     validOnly.map((r) => [r.line, generateImportFingerprint(r.normalized)]),
   );
   const [existingSet, structuredIncomeStatements] = await Promise.all([
-    loadExistingFingerprints(userId, [...fingerprintMap.values()]),
+    loadExistingFingerprints(userId, [...fingerprintMap.values()] as string[]),
     loadStructuredIncomeStatementsForUser(userId),
   ]);
   const seenFingerprintsInFile = new Set<string>();
@@ -1702,7 +1711,7 @@ export const commitTransactionsImportForUser = async (
     const existingFingerprints = await loadExistingFingerprintsWithClient(
       transactionClient,
       userId,
-      [...new Set(fingerprintCandidates)],
+      [...new Set(fingerprintCandidates)] as string[],
     );
     const seenFingerprints = new Set(existingFingerprints);
 
