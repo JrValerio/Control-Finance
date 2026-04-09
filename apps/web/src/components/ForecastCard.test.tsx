@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import ForecastCard, { FORECAST_CACHE_KEY } from "./ForecastCard";
 import { DiscreetModeProvider } from "../context/DiscreetModeContext";
+import { billingService } from "../services/billing.service";
 import type { Forecast } from "../services/forecast.service";
 
 vi.mock("../services/forecast.service", () => ({
@@ -14,6 +15,18 @@ vi.mock("../services/forecast.service", () => ({
 vi.mock("../services/profile.service", () => ({
   profileService: {
     getMe: vi.fn(),
+  },
+}));
+
+vi.mock("../services/billing.service", () => ({
+  billingService: {
+    getSubscription: vi.fn(() => Promise.resolve({
+      entitlementSource: "subscription",
+      trialExpired: false,
+      trialEndsAt: null,
+      subscription: { currentPeriodEnd: "2026-04-25", cancelAtPeriodEnd: false },
+      proExpiresAt: null,
+    })),
   },
 }));
 
@@ -171,6 +184,13 @@ describe("ForecastCard", () => {
     vi.mocked(profileService.getMe).mockResolvedValue({
       ...buildMe(),
       trialExpired: true,
+    });
+    vi.mocked(billingService.getSubscription).mockResolvedValueOnce({
+      entitlementSource: "free",
+      trialExpired: true,
+      trialEndsAt: null,
+      subscription: null,
+      proExpiresAt: null,
     });
 
     render(

@@ -234,4 +234,30 @@ describe("transaction imports utility bills dry-run", () => {
     expect(metrics.import_dry_run_utility_gate_blocked_total).toBe(1);
     expect(metrics.import_dry_run_utility_gate_supported_total).toBe(0);
   });
+
+  it("POST /transactions/import/dry-run explica quando o PDF e historico de emprestimo consignado do INSS", async () => {
+    const token = await registerAndLogin("import-consignado-inss@controlfinance.dev");
+    await makeProUser("import-consignado-inss@controlfinance.dev");
+
+    vi.mocked(extractTextFromPdfBuffer).mockResolvedValue([
+      "Instituto Nacional do Seguro Social",
+      "HISTORICO DE EMPRESTIMO CONSIGNADO",
+      "Beneficio NB: 177.682.989-9",
+      "Situacao: Ativo",
+    ].join("\n"));
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", Buffer.from("%PDF-1.4 consignado"), {
+        filename: "consignado.pdf",
+        contentType: "application/pdf",
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe(
+      "Este PDF e um historico de emprestimo consignado do INSS. Para importar renda, envie o Historico de Creditos do beneficio.",
+    );
+    expect(vi.mocked(detectDocumentType)).not.toHaveBeenCalled();
+  });
 });
