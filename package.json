@@ -14,7 +14,7 @@
     "check:js-boundaries": "node scripts/check-js-boundaries.mjs",
     "lint": "npm run check:js-boundaries && npm -w apps/web run lint && npm -w apps/api run lint",
     "typecheck:web": "npm -w apps/web run typecheck",
-    "typecheck": "npm run typecheck:web",
+    "typecheck": "npm run typecheck:web && npm -w apps/api run typecheck",
     "test": "npm -w apps/web run test:run && npm -w apps/api run test:run",
     "test:run": "npm run test",
     "build": "npm -w apps/web run build && npm -w apps/api run build",
