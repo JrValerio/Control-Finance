@@ -269,6 +269,7 @@ export const getDashboardSnapshot = async (
 
   const baseSnapshot: DashboardSnapshotBase = {
     bankBalance: toNum(bankRes.rows[0]?.total as NumericLike),
+    semanticSourceMap: DASHBOARD_SEMANTIC_SOURCE_MAP,
     bills: {
       overdueCount: toInt(bills.overdue_count),
       overdueTotal: toNum(bills.overdue_total),

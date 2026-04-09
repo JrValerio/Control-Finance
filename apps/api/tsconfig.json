@@ -16,7 +16,8 @@
     "baseUrl": "."
   },
   "include": [
-    "src/domain/contracts/**/*.ts"
+    "src/domain/contracts/**/*.ts",
+    "src/services/dashboard.service.ts"
   ],
   "exclude": [
     "node_modules",
