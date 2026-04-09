@@ -224,14 +224,23 @@ export const parseNubankInvoiceTransactions = (rawText) => {
       const headerMatch = line.match(TRANSACTION_HEADER_RE);
       if (!headerMatch) continue;
 
-      // Avanca sobre sub-linhas de continuacao
+      // Avanca ate encontrar valor standalone R$ ou nova transacao (max 8 linhas)
+      const isNewTxStart = (l) =>
+        TRANSACTION_LINE_RE.test(l) ||
+        (!CONTINUATION_LINE_PATTERNS.some((re) => re.test(l)) &&
+          TRANSACTION_HEADER_RE.test(l));
+
       let j = i + 1;
-      while (j < lines.length && CONTINUATION_LINE_PATTERNS.some((re) => re.test(lines[j]))) {
+      while (j < lines.length && j - i <= 8) {
+        if (lines[j].match(STANDALONE_AMOUNT_RE)) break;
+        if (isNewTxStart(lines[j])) {
+          j = lines.length;
+          break;
+        }
         j++;
       }
 
-      // A proxima linha nao-continuação deve ser um valor standalone R$
-      if (j >= lines.length || !lines[j].match(STANDALONE_AMOUNT_RE)) continue;
+      if (j >= lines.length || j - i > 8 || !lines[j].match(STANDALONE_AMOUNT_RE)) continue;
 
       [, matchDay, matchMon, matchDescription] = headerMatch;
       matchRawAmount = lines[j];

@@ -290,4 +290,49 @@ R$ 120,18
       description: "Openai *Chatgpt Subscr",
     });
   });
+
+  it("reconhece parcelamentos quando o detalhe ocupa varias linhas antes do valor da parcela", () => {
+    const text = `
+Nu Pagamentos S.A.
+Data de vencimento: 09 MAR 2026
+Total a pagar R$ 205,97
+06 FEV Pagamento em 06 FEV −R$ 69,28
+02 FEV MODA MUNDIAL BRASIL PAGAMENTOS LTDA - Parcela 2/2
+Total a pagar: R$ 179,72 (valor da transação de R$ 152,48 + R$ 1,29 de IOF +
+R$ 25,96 de juros) divididos em 2 parcelas de R$ 89,86.
+R$ 89,86
+09 FEV Encerramento de dívida R$ 0,00
+09 FEV Encerramento de dívida R$ 0,00
+09 FEV Juros de dívida encerrada R$ 0,00
+09 FEV MILCA VALERIA MONSAO DA SILVA GARGIULO - Parcela 1/2
+Total a pagar: R$ 57,21 (valor da transação de R$ 43,40 + R$ 0,45 de IOF +
+R$ 13,37 de juros) divididos em 2 parcelas de R$ 28,61.
+R$ 28,61
+09 FEV SHPP BRASIL INSTITUICAO DE PAG - Parcela 1/2
+Total a pagar: R$ 38,11 (valor da transação de R$ 30,89 + R$ 0,30 de IOF +
+R$ 6,92 de juros) divididos em 2 parcelas de R$ 19,06.
+R$ 19,06
+09 FEV Juros de dívida encerrada R$ 0,00
+09 FEV Zaine Simeia Valéria Monsão da Silva - Parcela 1/2
+Total a pagar: R$ 136,89 (valor da transação de R$ 101,00 + R$ 1,13 de IOF +
+R$ 34,76 de juros) divididos em 2 parcelas de R$ 68,45.
+R$ 68,45
+    `.trim();
+
+    const rows = parseNubankInvoiceTransactions(text);
+
+    expect(rows).toHaveLength(4);
+    expect(rows.map((r) => r.raw.description)).toEqual([
+      "MODA MUNDIAL BRASIL PAGAMENTOS LTDA - Parcela 2/2",
+      "MILCA VALERIA MONSAO DA SILVA GARGIULO - Parcela 1/2",
+      "SHPP BRASIL INSTITUICAO DE PAG - Parcela 1/2",
+      "Zaine Simeia Valéria Monsão da Silva - Parcela 1/2",
+    ]);
+    expect(rows.map((r) => r.raw.value)).toEqual([
+      "89.86",
+      "28.61",
+      "19.06",
+      "68.45",
+    ]);
+  });
 });
