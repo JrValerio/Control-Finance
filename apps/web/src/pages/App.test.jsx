@@ -1,6 +1,9 @@
 vi.mock("../services/billing.service", () => ({
   billingService: {
     getSubscription: vi.fn(() => Promise.resolve({
+      plan: "free",
+      displayName: "Plano Gratuito",
+      features: {},
       entitlementSource: "free",
       trialExpired: false,
       trialEndsAt: null,
