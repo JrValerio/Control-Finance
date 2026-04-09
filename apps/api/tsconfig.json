@@ -17,7 +17,8 @@
   },
   "include": [
     "src/domain/contracts/**/*.ts",
-    "src/services/dashboard.service.ts"
+    "src/services/dashboard.service.ts",
+    "src/services/transactions-import.service.ts"
   ],
   "exclude": [
     "node_modules",
