@@ -8,6 +8,7 @@ import {
   resetWriteRateLimiterState,
 } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
+import { resetImportObservabilityForTests } from "./observability/import-observability.js";
 import { csvFile, makeProUser, registerAndLogin, setupTestDb } from "./test-helpers.js";
 
 const getObservabilityCounterValue = (metricsText, { source, signal, reasonClass }) => {
@@ -15,6 +16,22 @@ const getObservabilityCounterValue = (metricsText, { source, signal, reasonClass
     `document_financial_observability_events_total\\{[^}]*source="${source}"[^}]*signal="${signal}"[^}]*reason_class="${reasonClass}"[^}]*\\}\\s+([0-9.]+)`,
   );
 
+  const match = metricsText.match(expression);
+
+  if (!match) {
+    return 0;
+  }
+
+  return Number(match[1] || 0);
+};
+
+const getImportMetricValue = (metricsText, metricName, labels = {}) => {
+  const labelSegments = Object.entries(labels).map(
+    ([labelName, labelValue]) => `(?=[^}]*${labelName}="${labelValue}")`,
+  );
+  const labelsPattern =
+    labelSegments.length > 0 ? `\\{${labelSegments.join("")}[^}]*\\}` : "";
+  const expression = new RegExp(`${metricName}${labelsPattern}\\s+([0-9.]+)`);
   const match = metricsText.match(expression);
 
   if (!match) {
@@ -38,6 +55,7 @@ describe("document financial observability", () => {
     resetImportRateLimiterState();
     resetWriteRateLimiterState();
     resetHttpMetricsForTests();
+    resetImportObservabilityForTests();
     await dbQuery("DELETE FROM transactions");
     await dbQuery("DELETE FROM transaction_import_sessions");
     await dbQuery("DELETE FROM subscriptions");
@@ -111,5 +129,14 @@ describe("document financial observability", () => {
         reasonClass: "none",
       }),
     ).toBeGreaterThanOrEqual(1);
+    expect(metricsResponse.text).toContain("# HELP import_dry_run_total");
+    expect(metricsResponse.text).toContain("# HELP import_commit_total");
+    expect(getImportMetricValue(metricsResponse.text, "import_dry_run_total")).toBe(1);
+    expect(getImportMetricValue(metricsResponse.text, "import_commit_total")).toBe(1);
+    expect(getImportMetricValue(metricsResponse.text, "import_commit_success_total")).toBe(1);
+    expect(getImportMetricValue(metricsResponse.text, "import_rows_total", { operation: "dry_run" })).toBe(1);
+    expect(getImportMetricValue(metricsResponse.text, "import_rows_total", { operation: "commit" })).toBe(1);
+    expect(getImportMetricValue(metricsResponse.text, "import_rows_samples_total", { operation: "dry_run" })).toBe(1);
+    expect(getImportMetricValue(metricsResponse.text, "import_rows_samples_total", { operation: "commit" })).toBe(1);
   });
 });

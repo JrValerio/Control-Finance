@@ -1,3 +1,5 @@
+import { Counter } from "prom-client";
+import { metricsRegistry } from "./http-metrics.js";
 import { logError, logInfo } from "./logger.js";
 
 const METRIC_NAMES = {
@@ -24,6 +26,74 @@ const importMetricsState = {
   [METRIC_NAMES.rowsSamples]: 0,
 };
 
+const importDryRunTotalCounter = new Counter({
+  name: "import_dry_run_total",
+  help: "Total de dry-runs de importacao executados.",
+  registers: [metricsRegistry],
+});
+
+const importDryRunSemanticDriftTotalCounter = new Counter({
+  name: "import_dry_run_semantic_drift_total",
+  help: "Total de dry-runs com drift semantico detectado na importacao.",
+  registers: [metricsRegistry],
+});
+
+const importDryRunUtilityGateBlockedTotalCounter = new Counter({
+  name: "import_dry_run_utility_gate_blocked_total",
+  help: "Total de dry-runs bloqueados pelo gate de contas utilitarias.",
+  registers: [metricsRegistry],
+});
+
+const importDryRunUtilityGateSupportedTotalCounter = new Counter({
+  name: "import_dry_run_utility_gate_supported_total",
+  help: "Total de dry-runs suportados pelo gate de contas utilitarias.",
+  registers: [metricsRegistry],
+});
+
+const importCommitTotalCounter = new Counter({
+  name: "import_commit_total",
+  help: "Total de tentativas de commit de importacao.",
+  registers: [metricsRegistry],
+});
+
+const importCommitSuccessTotalCounter = new Counter({
+  name: "import_commit_success_total",
+  help: "Total de commits de importacao concluidos com sucesso.",
+  registers: [metricsRegistry],
+});
+
+const importCommitFailTotalCounter = new Counter({
+  name: "import_commit_fail_total",
+  help: "Total de commits de importacao que falharam.",
+  registers: [metricsRegistry],
+});
+
+const importRowsTotalCounter = new Counter({
+  name: "import_rows_total",
+  help: "Total de linhas observadas nos fluxos de importacao por operacao.",
+  labelNames: ["operation"],
+  registers: [metricsRegistry],
+});
+
+const importRowsSamplesTotalCounter = new Counter({
+  name: "import_rows_samples_total",
+  help: "Total de amostras de linhas observadas nos fluxos de importacao por operacao.",
+  labelNames: ["operation"],
+  registers: [metricsRegistry],
+});
+
+const prometheusImportMetrics = [
+  importDryRunTotalCounter,
+  importDryRunSemanticDriftTotalCounter,
+  importDryRunUtilityGateBlockedTotalCounter,
+  importDryRunUtilityGateSupportedTotalCounter,
+  importCommitTotalCounter,
+  importCommitSuccessTotalCounter,
+  importCommitFailTotalCounter,
+  importRowsTotalCounter,
+  importRowsSamplesTotalCounter,
+];
+
 const toNonNegativeInteger = (value, fallbackValue = 0) => {
   const parsedValue = Number(value);
 
@@ -38,11 +108,14 @@ const incrementMetric = (metricName, incrementValue = 1) => {
   importMetricsState[metricName] += toNonNegativeInteger(incrementValue, 0);
 };
 
-const observeRows = (rowsCount) => {
+const observeRows = (rowsCount, operation) => {
   const normalizedRowsCount = toNonNegativeInteger(rowsCount, 0);
+  const normalizedOperation = String(operation || "unknown").trim().toLowerCase() || "unknown";
 
   incrementMetric(METRIC_NAMES.rowsTotal, normalizedRowsCount);
   incrementMetric(METRIC_NAMES.rowsSamples, 1);
+  importRowsTotalCounter.inc({ operation: normalizedOperation }, normalizedRowsCount);
+  importRowsSamplesTotalCounter.inc({ operation: normalizedOperation }, 1);
 };
 
 const shouldEmitImportLogs = () => {
@@ -85,7 +158,8 @@ export const createElapsedTimer = () => {
 
 export const trackDryRunMetrics = ({ rowsTotal = 0 } = {}) => {
   incrementMetric(METRIC_NAMES.dryRunTotal);
-  observeRows(rowsTotal);
+  importDryRunTotalCounter.inc();
+  observeRows(rowsTotal, "dry_run");
 };
 
 export const trackDryRunSemanticDriftMetrics = ({ driftDetected = false } = {}) => {
@@ -94,30 +168,36 @@ export const trackDryRunSemanticDriftMetrics = ({ driftDetected = false } = {}) 
   }
 
   incrementMetric(METRIC_NAMES.dryRunSemanticDriftTotal);
+  importDryRunSemanticDriftTotalCounter.inc();
 };
 
 export const trackDryRunUtilityGateDecisionMetrics = ({ decision = null } = {}) => {
   if (decision === "blocked") {
     incrementMetric(METRIC_NAMES.dryRunUtilityGateBlockedTotal);
+    importDryRunUtilityGateBlockedTotalCounter.inc();
     return;
   }
 
   if (decision === "supported") {
     incrementMetric(METRIC_NAMES.dryRunUtilityGateSupportedTotal);
+    importDryRunUtilityGateSupportedTotalCounter.inc();
   }
 };
 
 export const trackCommitAttemptMetrics = () => {
   incrementMetric(METRIC_NAMES.commitTotal);
+  importCommitTotalCounter.inc();
 };
 
 export const trackCommitSuccessMetrics = ({ rowsImported = 0 } = {}) => {
   incrementMetric(METRIC_NAMES.commitSuccessTotal);
-  observeRows(rowsImported);
+  importCommitSuccessTotalCounter.inc();
+  observeRows(rowsImported, "commit");
 };
 
 export const trackCommitFailMetrics = () => {
   incrementMetric(METRIC_NAMES.commitFailTotal);
+  importCommitFailTotalCounter.inc();
 };
 
 export const logImportEvent = (eventName, payload = {}) => {
@@ -144,5 +224,9 @@ export const logImportEvent = (eventName, payload = {}) => {
 export const resetImportObservabilityForTests = () => {
   Object.keys(importMetricsState).forEach((metricName) => {
     importMetricsState[metricName] = 0;
+  });
+
+  prometheusImportMetrics.forEach((metric) => {
+    metric.reset();
   });
 };

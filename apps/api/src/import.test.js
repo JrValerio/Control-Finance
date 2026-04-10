@@ -10,6 +10,7 @@ import {
   resetWriteRateLimiterState,
 } from "./middlewares/rate-limit.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
+import { resetImportObservabilityForTests } from "./observability/import-observability.js";
 import {
   csvFile,
   expectErrorResponseWithRequestId,
@@ -18,6 +19,17 @@ import {
   registerAndLogin,
   setupTestDb,
 } from "./test-helpers.js";
+
+const getImportMetricValue = (metricsText, metricName) => {
+  const expression = new RegExp(`${metricName}\\s+([0-9.]+)`);
+  const match = metricsText.match(expression);
+
+  if (!match) {
+    return 0;
+  }
+
+  return Number(match[1] || 0);
+};
 
 describe("transaction imports", () => {
   beforeAll(async () => {
@@ -33,6 +45,7 @@ describe("transaction imports", () => {
     resetImportRateLimiterState();
     resetWriteRateLimiterState();
     resetHttpMetricsForTests();
+    resetImportObservabilityForTests();
     await dbQuery("DELETE FROM transactions");
     await dbQuery("DELETE FROM subscriptions");
     await dbQuery("DELETE FROM users");
@@ -1029,8 +1042,12 @@ describe("transaction imports", () => {
       .post("/transactions/import/commit")
       .set("Authorization", `Bearer ${token}`)
       .send({});
+    const metricsResponse = await request(app).get("/metrics");
 
     expectErrorResponseWithRequestId(response, 400, "importId e obrigatorio.");
+    expect(metricsResponse.status).toBe(200);
+    expect(getImportMetricValue(metricsResponse.text, "import_commit_total")).toBe(1);
+    expect(getImportMetricValue(metricsResponse.text, "import_commit_fail_total")).toBe(1);
   });
 
   it("POST /transactions/import/commit retorna 400 com importId invalido", async () => {
