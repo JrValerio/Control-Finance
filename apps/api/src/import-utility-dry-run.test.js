@@ -47,6 +47,22 @@ import {
   setupTestDb,
 } from "./test-helpers.js";
 
+const getImportMetricValue = (metricsText, metricName, labels = {}) => {
+  const labelSegments = Object.entries(labels).map(
+    ([labelName, labelValue]) => `(?=[^}]*${labelName}="${labelValue}")`,
+  );
+  const labelsPattern =
+    labelSegments.length > 0 ? `\\{${labelSegments.join("")}[^}]*\\}` : "";
+  const expression = new RegExp(`${metricName}${labelsPattern}\\s+([0-9.]+)`);
+  const match = metricsText.match(expression);
+
+  if (!match) {
+    return 0;
+  }
+
+  return Number(match[1] || 0);
+};
+
 describe("transaction imports utility bills dry-run", () => {
   beforeAll(async () => {
     await setupTestDb();
@@ -94,8 +110,10 @@ describe("transaction imports utility bills dry-run", () => {
         filename: "telecom.pdf",
         contentType: "application/pdf",
       });
+    const metricsResponse = await request(app).get("/metrics");
 
     expect(response.status).toBe(200);
+    expect(metricsResponse.status).toBe(200);
     expect(response.body.documentType).toBe("utility_bill_telecom");
     expect(response.body.utilityBillImportDecision).toEqual({
       scope: "generic_boleto",
@@ -131,6 +149,9 @@ describe("transaction imports utility bills dry-run", () => {
     expect(metrics.import_dry_run_semantic_drift_total).toBe(0);
     expect(metrics.import_dry_run_utility_gate_blocked_total).toBe(1);
     expect(metrics.import_dry_run_utility_gate_supported_total).toBe(0);
+    expect(getImportMetricValue(metricsResponse.text, "import_dry_run_total")).toBe(1);
+    expect(getImportMetricValue(metricsResponse.text, "import_dry_run_utility_gate_blocked_total")).toBe(1);
+    expect(getImportMetricValue(metricsResponse.text, "import_rows_samples_total", { operation: "dry_run" })).toBe(1);
   });
 
   it("POST /transactions/import/dry-run retorna documentType e suggestion para utility_bill_gas", async () => {
@@ -216,8 +237,10 @@ describe("transaction imports utility bills dry-run", () => {
         filename: "gas-drift.pdf",
         contentType: "application/pdf",
       });
+    const metricsResponse = await request(app).get("/metrics");
 
     expect(response.status).toBe(200);
+    expect(metricsResponse.status).toBe(200);
     expect(response.body.documentType).toBe("utility_bill_gas");
     expect(response.body.utilityBillImportDecision).toEqual({
       scope: "generic_boleto",
@@ -233,6 +256,7 @@ describe("transaction imports utility bills dry-run", () => {
     expect(metrics.import_dry_run_semantic_drift_total).toBe(1);
     expect(metrics.import_dry_run_utility_gate_blocked_total).toBe(1);
     expect(metrics.import_dry_run_utility_gate_supported_total).toBe(0);
+    expect(getImportMetricValue(metricsResponse.text, "import_dry_run_semantic_drift_total")).toBe(1);
   });
 
   it("POST /transactions/import/dry-run explica quando o PDF e historico de emprestimo consignado do INSS", async () => {
