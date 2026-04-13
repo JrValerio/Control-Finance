@@ -71,6 +71,22 @@ type StructuredIncomeConflict = {
   postedTransactionId: number | null;
 };
 
+type IncomeCandidateReason = "pattern_match" | "source_match" | "amount_match";
+
+type IncomeCandidateAnnotation = {
+  income_candidate: boolean;
+  income_source_id: number | null;
+  income_candidate_reason: IncomeCandidateReason | null;
+};
+
+type IncomeSourceDetectionContext = {
+  id: number;
+  name: string | null;
+  normalizedName: string;
+  matchTokens: string[];
+  latestNetAmount: number | null;
+};
+
 type CategoryOverride = {
   line: number;
   categoryId: number | null;
@@ -98,6 +114,7 @@ const DEFAULT_IMPORT_HISTORY_LIMIT = 20;
 const MAX_IMPORT_HISTORY_LIMIT = 100;
 const IMPORT_INCOME_STATEMENT_AMOUNT_TOLERANCE = 0.05;
 const IMPORT_INCOME_STATEMENT_DATE_TOLERANCE_DAYS = 10;
+const DEFAULT_IMPORT_INCOME_CANDIDATE_MIN_AMOUNT = 1000;
 const REQUIRED_HEADERS = ["date", "type", "value", "description"];
 const OPTIONAL_HEADERS = ["notes", "category"];
 const ALLOWED_HEADERS = new Set([...REQUIRED_HEADERS, ...OPTIONAL_HEADERS]);
@@ -111,7 +128,44 @@ const UTILITY_BILL_DOCUMENT_TYPES = new Set([
   "utility_bill_gas",
   "utility_bill_telecom",
 ]);
+const INCOME_SOURCE_MATCH_TOKEN_STOPWORDS = new Set(["a", "as", "de", "da", "das", "do", "dos", "e", "em", "o", "os"]);
+const INCOME_CANDIDATE_PATTERN_MATCHERS = [
+  /\bpgto inss\b/i,
+  /\bcredito inss\b/i,
+  /\bbeneficio\b/i,
+  /\bcredito salario\b/i,
+  /\bsalario\b/i,
+  /\bfolha pagamento\b/i,
+  /\bpagamento folha\b/i,
+  /\bprovento\b/i,
+  /\baposentadoria\b/i,
+  /\bpensao\b/i,
+];
+const INCOME_CANDIDATE_TRANSFER_EXCLUSION_MATCHERS = [
+  /\bpix\b/i,
+  /\btransf\b/i,
+  /\btransferencia\b/i,
+  /\bted\b/i,
+  /\bdoc\b/i,
+];
 const collapseWhitespace = (value: unknown) => String(value || "").replace(/\s+/g, " ").trim();
+
+const normalizeIncomeDetectionText = (value: unknown): string =>
+  collapseWhitespace(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const tokenizeIncomeDetectionText = (value: unknown): string[] =>
+  normalizeIncomeDetectionText(value)
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter(
+      (token) =>
+        token.length >= 3 &&
+        !/^\d+$/.test(token) &&
+        !INCOME_SOURCE_MATCH_TOKEN_STOPWORDS.has(token),
+    );
 
 const resolveUtilityBillImportDecision = (documentType: unknown): UtilityBillImportDecision | null => {
   const normalizedDocumentType =
@@ -229,6 +283,63 @@ const loadStructuredIncomeStatementsForUser = async (
   }));
 };
 
+const loadIncomeSourceDetectionContextForUser = async (
+  userId: number | string,
+): Promise<IncomeSourceDetectionContext[]> => {
+  const [sourcesResult, statementsResult] = await Promise.all([
+    dbQuery(
+      `SELECT id, name
+         FROM income_sources
+        WHERE user_id = $1
+        ORDER BY created_at ASC`,
+      [userId],
+    ),
+    dbQuery(
+      `SELECT st.income_source_id,
+              st.net_amount,
+              st.payment_date,
+              st.reference_month,
+              st.id
+         FROM income_statements st
+         JOIN income_sources src
+           ON src.id = st.income_source_id
+        WHERE src.user_id = $1
+        ORDER BY st.payment_date DESC NULLS LAST, st.reference_month DESC, st.id DESC`,
+      [userId],
+    ),
+  ]);
+
+  if (!Array.isArray(sourcesResult.rows) || sourcesResult.rows.length === 0) {
+    return [];
+  }
+
+  const latestAmountBySourceId = new Map<number, number>();
+
+  statementsResult.rows.forEach((row) => {
+    const sourceId = Number(row.income_source_id);
+
+    if (!Number.isInteger(sourceId) || sourceId <= 0 || latestAmountBySourceId.has(sourceId)) {
+      return;
+    }
+
+    latestAmountBySourceId.set(sourceId, toMoneyNumber(row.net_amount));
+  });
+
+  return sourcesResult.rows.map((row) => {
+    const sourceId = Number(row.id);
+    const sourceName =
+      typeof row.name === "string" && row.name.trim() ? row.name.trim() : null;
+
+    return {
+      id: sourceId,
+      name: sourceName,
+      normalizedName: normalizeIncomeDetectionText(sourceName),
+      matchTokens: Array.from(new Set(tokenizeIncomeDetectionText(sourceName))),
+      latestNetAmount: latestAmountBySourceId.get(sourceId) ?? null,
+    };
+  });
+};
+
 const calculateDateDiffInDays = (
   leftDate: string | null | undefined,
   rightDate: string | null | undefined,
@@ -319,6 +430,132 @@ const findStructuredIncomeConflict = (
     status: bestMatch.status,
     postedTransactionId: bestMatch.postedTransactionId,
   };
+};
+
+const getImportIncomeCandidateMinAmount = (): number => {
+  const parsedValue = Number(process.env.IMPORT_INCOME_CANDIDATE_MIN_AMOUNT);
+
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return DEFAULT_IMPORT_INCOME_CANDIDATE_MIN_AMOUNT;
+  }
+
+  return Number(parsedValue.toFixed(2));
+};
+
+const buildDefaultIncomeCandidateAnnotation = (): IncomeCandidateAnnotation => ({
+  income_candidate: false,
+  income_source_id: null,
+  income_candidate_reason: null,
+});
+
+const detectIncomeCandidateForRow = (
+  row: {
+    status: string;
+    raw: RawCsvRow;
+    normalized: NormalizedImportRow | null;
+  },
+  incomeSources: IncomeSourceDetectionContext[] = [],
+): IncomeCandidateAnnotation => {
+  if (row.status !== "valid" || !row.normalized || row.normalized.type !== CATEGORY_ENTRY) {
+    return buildDefaultIncomeCandidateAnnotation();
+  }
+
+  const rowValue = toMoneyNumber(row.normalized.value);
+
+  if (rowValue <= 0) {
+    return buildDefaultIncomeCandidateAnnotation();
+  }
+
+  const descriptionText = normalizeIncomeDetectionText(
+    `${row.normalized.description || ""} ${row.normalized.notes || ""} ${row.raw.description || ""} ${row.raw.notes || ""}`,
+  );
+  const textTokens = new Set(tokenizeIncomeDetectionText(descriptionText));
+  const hasPatternMatch = INCOME_CANDIDATE_PATTERN_MATCHERS.some((pattern) =>
+    pattern.test(descriptionText),
+  );
+  const isTransferLike =
+    !hasPatternMatch &&
+    INCOME_CANDIDATE_TRANSFER_EXCLUSION_MATCHERS.some((pattern) => pattern.test(descriptionText));
+
+  const rankedSourceMatches = incomeSources
+    .map((incomeSource) => {
+      const hasFullNameMatch =
+        Boolean(incomeSource.normalizedName) &&
+        descriptionText.includes(incomeSource.normalizedName);
+      const tokenMatchCount = incomeSource.matchTokens.filter(
+        (token) => textTokens.has(token) || descriptionText.includes(token),
+      ).length;
+      const hasSourceMatch = hasFullNameMatch || tokenMatchCount > 0;
+      const amountDiff =
+        incomeSource.latestNetAmount != null
+          ? Math.abs(rowValue - incomeSource.latestNetAmount)
+          : Number.POSITIVE_INFINITY;
+      const hasAmountMatch =
+        incomeSource.latestNetAmount != null &&
+        incomeSource.latestNetAmount > 0 &&
+        amountDiff / incomeSource.latestNetAmount <= IMPORT_INCOME_STATEMENT_AMOUNT_TOLERANCE;
+
+      if (!hasSourceMatch && !(hasAmountMatch && hasPatternMatch)) {
+        return null;
+      }
+
+      return {
+        incomeSource,
+        hasSourceMatch,
+        hasAmountMatch,
+        tokenMatchCount,
+        amountDiff,
+        score:
+          (hasFullNameMatch ? 1000 : 0) +
+          (hasSourceMatch ? 100 : 0) +
+          tokenMatchCount * 10 +
+          (hasAmountMatch ? 1 : 0),
+      };
+    })
+    .filter(Boolean)
+    .sort((leftMatch, rightMatch) => {
+      if (leftMatch.score !== rightMatch.score) {
+        return rightMatch.score - leftMatch.score;
+      }
+
+      return leftMatch.amountDiff - rightMatch.amountDiff;
+    });
+
+  const bestMatch = rankedSourceMatches[0] || null;
+  const secondBestMatch = rankedSourceMatches[1] || null;
+  const hasAmbiguousSourceMatch =
+    bestMatch &&
+    secondBestMatch &&
+    bestMatch.score === secondBestMatch.score &&
+    bestMatch.tokenMatchCount === secondBestMatch.tokenMatchCount &&
+    bestMatch.hasAmountMatch === secondBestMatch.hasAmountMatch &&
+    Math.abs(bestMatch.amountDiff - secondBestMatch.amountDiff) < 0.01;
+
+  if (bestMatch && !hasAmbiguousSourceMatch) {
+    return {
+      income_candidate: true,
+      income_source_id: bestMatch.incomeSource.id,
+      income_candidate_reason: bestMatch.hasSourceMatch ? "source_match" : "amount_match",
+    };
+  }
+
+  if (hasPatternMatch) {
+    return {
+      income_candidate: true,
+      income_source_id: null,
+      income_candidate_reason: "pattern_match",
+    };
+  }
+
+  if (!isTransferLike && rowValue >= getImportIncomeCandidateMinAmount()) {
+    return {
+      income_candidate: true,
+      income_source_id: null,
+      income_candidate_reason: "amount_match",
+    };
+  }
+
+  return buildDefaultIncomeCandidateAnnotation();
 };
 
 const createError = (status: number, message: string): ErrorWithStatus => {
@@ -1343,10 +1580,11 @@ export const dryRunTransactionsImportForUser = async (
     suggestions = [],
   } = await parseImportFileRows(importFile);
   const utilityBillImportDecision = resolveUtilityBillImportDecision(documentType);
-  const [categoryMap, categories, importRules] = await Promise.all([
+  const [categoryMap, categories, importRules, incomeSourceDetectionContext] = await Promise.all([
     loadCategoryMapForUser(userId),
     loadCategoriesForUser(userId),
     loadActiveTransactionImportCategoryRulesByUser(userId),
+    loadIncomeSourceDetectionContextForUser(userId),
   ]);
   const rowsWithRuleSuggestions = applyTransactionImportCategoryRules(parsedRows, importRules);
   const classifiedRows = applySmartClassification(rowsWithRuleSuggestions, categories);
@@ -1360,9 +1598,13 @@ export const dryRunTransactionsImportForUser = async (
       errors: normalizedRow.errors,
     };
   });
+  const annotatedRows = validatedRows.map((row) => ({
+    ...row,
+    ...detectIncomeCandidateForRow(row, incomeSourceDetectionContext),
+  }));
 
   // Deduplicate: compute fingerprints for valid rows, check against existing transactions
-  const validOnly = validatedRows.filter((r) => r.status === "valid" && r.normalized);
+  const validOnly = annotatedRows.filter((r) => r.status === "valid" && r.normalized);
   const fingerprintMap = new Map(
     validOnly.map((r) => [r.line, generateImportFingerprint(r.normalized)]),
   );
@@ -1372,7 +1614,7 @@ export const dryRunTransactionsImportForUser = async (
   ]);
   const seenFingerprintsInFile = new Set<string>();
 
-  const rows = validatedRows.map((row) => {
+  const rows = annotatedRows.map((row) => {
     if (row.status !== "valid" || !row.normalized) return row;
     const fp = String(fingerprintMap.get(row.line) || "").trim();
 
@@ -1426,7 +1668,14 @@ export const dryRunTransactionsImportForUser = async (
 
   const normalizedRows = rows
     .filter((row) => row.status === "valid" && row.normalized)
-    .map((row) => ({ ...row.normalized, fingerprint: row.fingerprint, line: row.line }));
+    .map((row) => ({
+      ...row.normalized,
+      fingerprint: row.fingerprint,
+      line: row.line,
+      income_candidate: row.income_candidate,
+      income_source_id: row.income_source_id,
+      income_candidate_reason: row.income_candidate_reason,
+    }));
 
   const persistedSession = await persistImportSession(userId, {
     normalizedRows,
