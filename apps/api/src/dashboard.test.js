@@ -622,6 +622,33 @@ describe("dashboard snapshot", () => {
     expect(parsed.success).toBe(true);
   });
 
+  it("nao duplica credit_card_invoice no adjustedProjectedBalance do semanticCore", async () => {
+    const email = "dash-no-double-count-invoice@test.dev";
+    const token = await registerAndLogin(email);
+
+    await createBankAccount(token, { balance: 1234.56 });
+    await createBill(token, { dueDate: isoDate(-2), amount: 400.15 });
+    await createBill(token, { dueDate: isoDate(4), amount: 99.85 });
+
+    const cardRes = await createCreditCard(token, { name: "Nubank" });
+    const cardId = cardRes.body.id;
+    await createPurchase(token, cardId, { amount: 310.4 });
+
+    const userId = await getUserIdByEmail(email);
+    await dbQuery(
+      `INSERT INTO bills (user_id, title, amount, due_date, bill_type, credit_card_id)
+       VALUES ($1, 'Fatura Nubank', 789.9, $2, 'credit_card_invoice', $3)`,
+      [userId, isoDate(6), cardId],
+    );
+
+    const res = await getSnapshot(token);
+
+    expect(res.status).toBe(200);
+    expect(res.body.cards.pendingInvoicesTotal).toBe(789.9);
+    expect(res.body.semanticCore.projection.projectedBalance).toBe(1234.56);
+    expect(res.body.semanticCore.projection.adjustedProjectedBalance).toBe(-365.74);
+  });
+
   // ─── Truth table regression ─────────────────────────────────────────────
 
   it.each([

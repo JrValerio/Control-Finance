@@ -135,8 +135,7 @@ const buildDashboardSemanticCore = (
     snapshot.bills.overdueTotal +
     snapshot.bills.dueSoonTotal +
     snapshot.bills.upcomingTotal +
-    snapshot.cards.openPurchasesTotal +
-    snapshot.cards.pendingInvoicesTotal;
+    snapshot.cards.openPurchasesTotal;
   const expectedInflow =
     snapshot.income.pendingThisMonth > 0 ? snapshot.income.pendingThisMonth : null;
   const adjustedProjectedBalance = Number(
