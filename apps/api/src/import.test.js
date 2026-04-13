@@ -694,6 +694,117 @@ describe("transaction imports", () => {
     ]);
   });
 
+  it("POST /transactions/import/dry-run anota credito INSS como candidato de renda com income_source conhecido", async () => {
+    const email = "import-income-candidate-inss@controlfinance.dev";
+    const token = await registerAndLogin(email);
+    await makeProUser(email);
+
+    const sourceResponse = await request(app)
+      .post("/income-sources")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "INSS Beneficio",
+      });
+
+    expect(sourceResponse.status).toBe(201);
+
+    const statementResponse = await request(app)
+      .post(`/income-sources/${sourceResponse.body.id}/statements`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        referenceMonth: "2026-02",
+        netAmount: 2803.52,
+        paymentDate: "2026-02-05",
+      });
+
+    expect(statementResponse.status).toBe(201);
+
+    const statementCsv = csvFile(
+      [
+        "Data;Historico;Valor",
+        "05/02/2026;PGTO INSS 01776829899;2803,52",
+        "06/02/2026;PIX QRS UBER DO BRA;-15,98",
+      ].join("\n"),
+      "itau-extrato.csv",
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", statementCsv.buffer, {
+        filename: statementCsv.fileName,
+        contentType: "text/csv",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.rows[0]).toMatchObject({
+      income_candidate: true,
+      income_source_id: sourceResponse.body.id,
+      income_candidate_reason: "source_match",
+    });
+    expect(response.body.rows[1]).toMatchObject({
+      income_candidate: false,
+      income_source_id: null,
+      income_candidate_reason: null,
+    });
+  });
+
+  it("POST /transactions/import/dry-run nao marca PIX TRANSF generico como candidato de renda", async () => {
+    const token = await registerAndLogin("import-income-candidate-pix-transfer@controlfinance.dev");
+    await makeProUser("import-income-candidate-pix-transfer@controlfinance.dev");
+
+    const statementCsv = csvFile(
+      [
+        "Data;Historico;Valor",
+        "05/02/2026;PIX TRANSF RECEBIDA JOAO;3500,00",
+      ].join("\n"),
+      "itau-extrato.csv",
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", statementCsv.buffer, {
+        filename: statementCsv.fileName,
+        contentType: "text/csv",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.rows[0]).toMatchObject({
+      income_candidate: false,
+      income_source_id: null,
+      income_candidate_reason: null,
+    });
+  });
+
+  it("POST /transactions/import/dry-run marca credito alto sem padrao conhecido para revisao humana", async () => {
+    const token = await registerAndLogin("import-income-candidate-amount-review@controlfinance.dev");
+    await makeProUser("import-income-candidate-amount-review@controlfinance.dev");
+
+    const statementCsv = csvFile(
+      [
+        "Data;Historico;Valor",
+        "05/02/2026;CREDITO CONTA CORRENTE;3500,00",
+      ].join("\n"),
+      "itau-extrato.csv",
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", statementCsv.buffer, {
+        filename: statementCsv.fileName,
+        contentType: "text/csv",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.rows[0]).toMatchObject({
+      income_candidate: true,
+      income_source_id: null,
+      income_candidate_reason: "amount_match",
+    });
+  });
+
   it("POST /transactions/import/dry-run auto-classifica extrato usando categorias existentes", async () => {
     const token = await registerAndLogin("import-bank-smart-category@controlfinance.dev");
     await makeProUser("import-bank-smart-category@controlfinance.dev");
