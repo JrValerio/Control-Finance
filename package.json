@@ -7,14 +7,19 @@
   },
   "workspaces": [
     "apps/web",
-    "apps/api"
+    "apps/api",
+    "apps/mobile"
   ],
   "scripts": {
     "dev": "concurrently \"npm -w apps/api run dev\" \"npm -w apps/web run dev\"",
+    "dev:mobile": "npm -w apps/mobile run dev",
+    "mobile:android": "npm -w apps/mobile run android",
+    "mobile:ios": "npm -w apps/mobile run ios",
     "check:js-boundaries": "node scripts/check-js-boundaries.mjs",
     "lint": "npm run check:js-boundaries && npm -w apps/web run lint && npm -w apps/api run lint",
     "typecheck:web": "npm -w apps/web run typecheck",
-    "typecheck": "npm run typecheck:web && npm -w apps/api run typecheck",
+    "typecheck:mobile": "npm -w apps/mobile run typecheck",
+    "typecheck": "npm run typecheck:web && npm -w apps/api run typecheck && npm -w apps/mobile run typecheck",
     "test": "npm -w apps/web run test:run && npm -w apps/api run test:run",
     "test:run": "npm run test",
     "build": "npm -w apps/web run build && npm -w apps/api run build",
