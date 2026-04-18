@@ -1,7 +1,7 @@
 import type { ExpoConfig } from "expo/config";
 
 const appName = process.env.EXPO_APP_NAME?.trim() || "Control Finance";
-const slug = process.env.EXPO_SLUG?.trim() || "control-finance-mobile";
+const slug = process.env.EXPO_SLUG?.trim() || "control-finance";
 const iosBundleIdentifier =
   process.env.EXPO_IOS_BUNDLE_ID?.trim() || "com.jrvalerio.controlfinance";
 const androidPackage =
