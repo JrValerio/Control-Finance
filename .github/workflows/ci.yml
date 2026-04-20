@@ -21,7 +21,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Lint (web)
         run: npm -w apps/web run lint
@@ -49,7 +49,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Lint (api)
         run: npm -w apps/api run lint
@@ -79,7 +79,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Smoke (critical finance journey)
         run: npm -w apps/api run test:smoke:critical | tee smoke-critical-finance-journey.log
@@ -107,7 +107,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Hardening baseline contract
         run: npm -w apps/api run test:hardening:http | tee http-hardening-baseline.log
@@ -135,7 +135,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Observability contract (documents)
         run: npm -w apps/api run test:observability:documents | tee document-financial-observability.log
@@ -163,7 +163,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Semantic contract enforcement (dashboard slice)
         run: |
@@ -196,7 +196,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Hotspot regression (credit card invoices)
         run: npm -w apps/api run test:hotspot:credit-card-invoices | tee hotspot-credit-card-invoices.log
@@ -224,7 +224,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Domain invariant (invoice classification)
         run: npm -w apps/api run test:domain:invoice-classification | tee domain-invoice-classification.log
@@ -252,7 +252,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Shared contract anti-drift (dashboard source map)
         run: |
@@ -285,7 +285,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Async import runtime lifecycle (credit card invoice)
         run: npm -w apps/api run test:async-import:invoice | tee async-import-runtime-invoice.log
@@ -313,7 +313,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Sensitive data retention compliance (AUD-019)
         run: npm -w apps/api run test:compliance:aud-019 | tee sensitive-data-retention-aud019.log
@@ -341,7 +341,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Load latency baseline (AUD-021)
         run: npm -w apps/api run test:performance:aud-021 | tee load-latency-baseline-aud021.log
@@ -369,7 +369,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: rm -f package-lock.json && npm install
 
       - name: Risk-driven TS adoption contract (AUD-022)
         run: npm -w apps/web run test:risk:aud-022 | tee risk-driven-ts-adoption-aud022.log
