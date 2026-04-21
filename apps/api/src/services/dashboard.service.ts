@@ -123,10 +123,11 @@ const normalizeYearMonth = (value: string | Date | null | undefined): string | n
 
 const buildDashboardSemanticCore = (
   snapshot: DashboardSnapshotBase,
+  spendingToDate: number,
   asOf: Date,
 ): DashboardSnapshot["semanticCore"] => {
   const confirmedInflowTotal = Number(snapshot.income.receivedThisMonth.toFixed(2));
-  const settledOutflowTotal = 0;
+  const settledOutflowTotal = Number(spendingToDate.toFixed(2));
   const netAmount = Number((confirmedInflowTotal - settledOutflowTotal).toFixed(2));
 
   const projectionReferenceMonth = snapshot.forecast?.month ?? snapshot.income.referenceMonth;
@@ -178,6 +179,8 @@ export const getDashboardSnapshot = async (
   const in7Days = toISODate(new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000));
   const currentMonth = toYearMonth(now);
 
+  const monthStart = `${currentMonth}-01`;
+
   const [
     bankRes,
     billsRes,
@@ -186,6 +189,7 @@ export const getDashboardSnapshot = async (
     incomeRes,
     forecastRes,
     consignadoRes,
+    outflowRes,
   ] = await Promise.all([
     // 1. Total bank balance across active accounts
     dbQuery(
@@ -259,6 +263,18 @@ export const getDashboardSnapshot = async (
        GROUP BY sp.gross_salary`,
       [uid],
     ),
+
+    // 7. Settled outflow: confirmed expense transactions this month
+    dbQuery(
+      `SELECT COALESCE(SUM(value), 0) AS total
+       FROM transactions
+       WHERE user_id = $1
+         AND type = 'Saida'
+         AND deleted_at IS NULL
+         AND date >= $2
+         AND date <= $3`,
+      [uid, monthStart, today],
+    ),
   ]);
 
   const bills = (billsRes.rows[0] ?? {}) as BillsRow;
@@ -305,9 +321,11 @@ export const getDashboardSnapshot = async (
     })(),
   };
 
+  const spendingToDate = toNum(outflowRes.rows[0]?.total as NumericLike);
+
   return {
     ...baseSnapshot,
-    semanticCore: buildDashboardSemanticCore(baseSnapshot, now),
+    semanticCore: buildDashboardSemanticCore(baseSnapshot, spendingToDate, now),
     semanticSourceMap: DASHBOARD_SEMANTIC_SOURCE_MAP,
   };
 };
