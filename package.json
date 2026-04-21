@@ -27,5 +27,8 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.57.1"
   }
 }
