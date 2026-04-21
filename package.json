@@ -29,6 +29,7 @@
     "concurrently": "^9.2.1"
   },
   "optionalDependencies": {
+    "@napi-rs/canvas-linux-x64-gnu": "0.1.80",
     "@rollup/rollup-linux-x64-gnu": "4.57.1"
   }
 }
