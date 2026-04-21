@@ -1,8 +1,10 @@
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { AuthProvider } from "./src/context/AuthContext";
 
 export default function App() {
   return (
+    <AuthProvider>
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={styles.content}>
@@ -36,6 +38,7 @@ export default function App() {
         </View>
       </ScrollView>
     </SafeAreaView>
+    </AuthProvider>
   );
 }
 
