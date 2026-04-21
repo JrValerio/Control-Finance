@@ -7,12 +7,11 @@ const iosBundleIdentifier =
 const androidPackage =
   process.env.EXPO_ANDROID_PACKAGE?.trim() || "com.jrvalerio.controlfinance";
 const scheme = process.env.EXPO_SCHEME?.trim() || "controlfinance";
-const owner = process.env.EXPO_OWNER?.trim();
-const projectId = process.env.EAS_PROJECT_ID?.trim();
 
 const config: ExpoConfig = {
   name: appName,
   slug,
+  owner: "jrvalerio",
   version: "1.0.0",
   orientation: "portrait",
   icon: "./assets/icon.png",
@@ -40,18 +39,13 @@ const config: ExpoConfig = {
   web: {
     favicon: "./assets/favicon.png",
   },
+  plugins: ["expo-secure-store"],
   extra: {
     apiUrl: process.env.EXPO_PUBLIC_API_URL?.trim() || "http://10.0.2.2:3001",
-    eas: projectId
-      ? {
-          projectId,
-        }
-      : undefined,
+    eas: {
+      projectId: "fd621c63-049d-47a5-9841-35e3004f7e94",
+    },
   },
 };
-
-if (owner) {
-  config.owner = owner;
-}
 
 export default config;
