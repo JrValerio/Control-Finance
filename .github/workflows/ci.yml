@@ -86,7 +86,7 @@ jobs:
 
       - name: Upload smoke evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: smoke-critical-finance-journey-log
           path: smoke-critical-finance-journey.log
@@ -114,7 +114,7 @@ jobs:
 
       - name: Upload hardening evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: http-hardening-baseline-log
           path: http-hardening-baseline.log
@@ -142,7 +142,7 @@ jobs:
 
       - name: Upload observability evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: document-financial-observability-log
           path: document-financial-observability.log
@@ -175,7 +175,7 @@ jobs:
 
       - name: Upload semantic enforcement evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: semantic-contract-enforcement-dashboard-log
           path: semantic-contract-enforcement-dashboard.log
@@ -203,7 +203,7 @@ jobs:
 
       - name: Upload hotspot evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hotspot-credit-card-invoices-log
           path: hotspot-credit-card-invoices.log
@@ -231,7 +231,7 @@ jobs:
 
       - name: Upload domain invariant evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: domain-invoice-classification-log
           path: domain-invoice-classification.log
@@ -264,7 +264,7 @@ jobs:
 
       - name: Upload shared contract evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: shared-contract-schemas-dashboard-map-log
           path: shared-contract-schemas-dashboard-map.log
@@ -292,7 +292,7 @@ jobs:
 
       - name: Upload async import runtime evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: async-import-runtime-invoice-log
           path: async-import-runtime-invoice.log
@@ -320,7 +320,7 @@ jobs:
 
       - name: Upload retention compliance evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sensitive-data-retention-aud019-log
           path: sensitive-data-retention-aud019.log
@@ -348,7 +348,7 @@ jobs:
 
       - name: Upload load latency baseline evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: load-latency-baseline-aud021-log
           path: load-latency-baseline-aud021.log
@@ -376,7 +376,7 @@ jobs:
 
       - name: Upload risk-driven TS adoption evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: risk-driven-ts-adoption-aud022-log
           path: risk-driven-ts-adoption-aud022.log
