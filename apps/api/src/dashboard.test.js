@@ -35,6 +35,7 @@ const resetState = async () => {
   await dbQuery("DELETE FROM credit_card_purchases");
   await dbQuery("DELETE FROM bills");
   await dbQuery("DELETE FROM credit_cards");
+  await dbQuery("DELETE FROM transactions");
   await dbQuery("DELETE FROM bank_accounts");
   await dbQuery("DELETE FROM users");
 };
@@ -75,6 +76,18 @@ const createIncomeSource = (token) =>
     .post("/income-sources")
     .set("Authorization", `Bearer ${token}`)
     .send({ name: "INSS Aposentadoria", sourceType: "inss_benefit" });
+
+const createTransaction = (token, overrides = {}) =>
+  request(app)
+    .post("/transactions")
+    .set("Authorization", `Bearer ${token}`)
+    .send({
+      description: "Mercado",
+      value: 100,
+      type: "Saída",
+      date: isoDate(0),
+      ...overrides,
+    });
 
 const DASHBOARD_TOP_LEVEL_KEYS = [
   "bankBalance",
@@ -858,5 +871,20 @@ describe("dashboard snapshot", () => {
 
     const parsed = DashboardSnapshotResponseSchema.safeParse(res.body);
     expect(parsed.success).toBe(true);
+  });
+
+  it("settledOutflowTotal reflete transacoes de saida do mes corrente", async () => {
+    const email = "dash-settled-outflow@test.dev";
+    const token = await registerAndLogin(email);
+
+    await createTransaction(token, { description: "Supermercado", value: 350.5, type: "Saida", date: isoDate(0) });
+    await createTransaction(token, { description: "Farmácia", value: 89.9, type: "Saida", date: isoDate(-2) });
+    await createTransaction(token, { description: "Salário", value: 2000, type: "Entrada", date: isoDate(0) });
+
+    const res = await getSnapshot(token);
+
+    expect(res.status).toBe(200);
+    expect(res.body.semanticCore.realized.settledOutflowTotal).toBe(440.4);
+    expect(res.body.semanticCore.realized.confirmedInflowTotal).toBe(0);
   });
 });
