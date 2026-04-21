@@ -1,6 +1,6 @@
-import { StatusBar } from "expo-status-bar";
-import { ActivityIndicator, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { AuthProvider, useAuth } from "./src/context/AuthContext";
+import DashboardScreen from "./src/screens/DashboardScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 
 function RootNavigator() {
@@ -18,12 +18,7 @@ function RootNavigator() {
     return <LoginScreen />;
   }
 
-  return (
-    <SafeAreaView style={styles.dashboard}>
-      <StatusBar style="light" />
-      <Text style={styles.dashboardText}>Dashboard — em breve</Text>
-    </SafeAreaView>
-  );
+  return <DashboardScreen />;
 }
 
 export default function App() {
@@ -40,15 +35,5 @@ const styles = StyleSheet.create({
     backgroundColor: "#0f172a",
     alignItems: "center",
     justifyContent: "center",
-  },
-  dashboard: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dashboardText: {
-    color: "#94a3b8",
-    fontSize: 16,
   },
 });
