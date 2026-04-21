@@ -70,15 +70,30 @@ const clearAuthCookies = (res) => {
   res.cookie("cf_refresh", "", { ...buildCookieOptions("/auth"), maxAge: 0 });
 };
 
-const issueSessionCookies = async (res, user, req) => {
+const issueSessionTokens = async (user, req) => {
   const familyId = randomUUID();
   const accessToken = issueAuthToken(user);
   const rawRefreshToken = await issueRefreshToken(user.id, familyId, {
     ipAddress: req.ip,
     userAgent: req.headers["user-agent"],
   });
+  return { accessToken, rawRefreshToken };
+};
+
+const issueSessionCookies = async (res, user, req) => {
+  const { accessToken, rawRefreshToken } = await issueSessionTokens(user, req);
   setAuthCookies(res, accessToken, rawRefreshToken);
 };
+
+const buildMobileAuthPayload = ({ user, accessToken, rawRefreshToken }) => ({
+  user,
+  accessToken,
+  refreshToken: rawRefreshToken,
+  tokenType: "Bearer",
+});
+
+const resolveMobileRefreshToken = (body) =>
+  typeof body?.refreshToken === "string" ? body.refreshToken.trim() : "";
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
@@ -102,6 +117,22 @@ router.post("/login", loginRateLimiter, bruteForceLoginGuard, async (req, res, n
     clearLoginFailures(req);
     await issueSessionCookies(res, user, req);
     res.status(200).json({ user });
+  } catch (error) {
+    if (error.status === 401) {
+      registerLoginFailure(req);
+    }
+    next(error);
+  }
+});
+
+router.post("/mobile/login", loginRateLimiter, bruteForceLoginGuard, async (req, res, next) => {
+  req.feature = "auth";
+  req.operation = "mobile_email_password_login";
+  try {
+    const { user } = await loginUser(req.body || {});
+    clearLoginFailures(req);
+    const session = await issueSessionTokens(user, req);
+    res.status(200).json(buildMobileAuthPayload({ user, ...session }));
   } catch (error) {
     if (error.status === 401) {
       registerLoginFailure(req);
@@ -147,6 +178,29 @@ router.post("/refresh", async (req, res, next) => {
   }
 });
 
+router.post("/mobile/refresh", async (req, res, next) => {
+  req.feature = "auth";
+  req.operation = "mobile_refresh_token_rotate";
+  const rawToken = resolveMobileRefreshToken(req.body);
+
+  if (!rawToken) {
+    return res.status(401).json({ message: "Sessao expirada." });
+  }
+
+  try {
+    const { user, rawRefreshToken } = await rotateRefreshToken(rawToken, {
+      ipAddress: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
+    const accessToken = issueAuthToken(user);
+    return res
+      .status(200)
+      .json(buildMobileAuthPayload({ user, accessToken, rawRefreshToken }));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.delete("/logout", async (req, res) => {
   req.feature = "auth";
   req.operation = "logout";
@@ -161,6 +215,22 @@ router.delete("/logout", async (req, res) => {
   }
 
   clearAuthCookies(res);
+  return res.status(204).send();
+});
+
+router.post("/mobile/logout", async (req, res) => {
+  req.feature = "auth";
+  req.operation = "mobile_logout";
+  const rawToken = resolveMobileRefreshToken(req.body);
+
+  if (rawToken) {
+    try {
+      await revokeRefreshToken(rawToken);
+    } catch {
+      // Best-effort revocation — logout stays idempotent for mobile clients too
+    }
+  }
+
   return res.status(204).send();
 });
 
