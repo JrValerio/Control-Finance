@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import express from "express";
 import rateLimit from "express-rate-limit";
@@ -23,6 +23,7 @@ import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 import { TaxDocumentIngestionExecutionResponseSchema } from "./domain/contracts/tax-document-ingestion-execution-response.schema.ts";
 import { TaxDocumentPreviewResponseSchema } from "./domain/contracts/tax-document-preview-response.schema.ts";
 import { resolveTaxDocumentAbsolutePath } from "./services/tax-document-storage.service.js";
+import * as logger from "./observability/logger.js";
 
 const TEST_TAX_STORAGE_DIR = path.join(os.tmpdir(), "control-finance-tax-documents-tests");
 let previousTaxStorageDir = undefined;
@@ -3604,5 +3605,103 @@ describe("taxUploadRateLimiter fires 429 after limit", () => {
     const throttled = await request(rateLimitApp).post("/tax/documents/ingest-execute").set(auth);
     expect(throttled.status).toBe(429);
     expect(throttled.body.message).toBe("Muitas requisicoes. Tente novamente em instantes.");
+  });
+});
+
+describe("tax.export.completed semantic event", () => {
+  const TAX_STORAGE_DIR = path.join(os.tmpdir(), "control-finance-tax-export-event-tests");
+
+  beforeAll(async () => {
+    process.env.TAX_DOCUMENTS_STORAGE_DIR = TAX_STORAGE_DIR;
+    await setupTestDb();
+  });
+
+  afterAll(async () => {
+    await fs.rm(TAX_STORAGE_DIR, { recursive: true, force: true });
+    delete process.env.TAX_DOCUMENTS_STORAGE_DIR;
+    await clearDbClientForTests();
+  });
+
+  beforeEach(async () => {
+    resetLoginProtectionState();
+    resetImportRateLimiterState();
+    resetTaxUploadRateLimiterState();
+    resetWriteRateLimiterState();
+    resetHttpMetricsForTests();
+    await fs.rm(TAX_STORAGE_DIR, { recursive: true, force: true });
+    await dbQuery("DELETE FROM tax_reviews");
+    await dbQuery("DELETE FROM tax_facts");
+    await dbQuery("DELETE FROM tax_document_extractions");
+    await dbQuery("DELETE FROM tax_documents");
+    await dbQuery("DELETE FROM tax_rule_sets");
+    await dbQuery("DELETE FROM tax_summaries");
+    await dbQuery("DELETE FROM user_identities");
+    await dbQuery("DELETE FROM users");
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("emite tax.export.completed com userId, taxYear, format, dataHash e requestId no export bem-sucedido", async () => {
+    const logSpy = vi.spyOn(logger, "logInfo");
+
+    const token = await registerAndLogin("tax-event-export@test.dev");
+
+    const uploadResponse = await request(app)
+      .post("/tax/documents")
+      .set("Authorization", `Bearer ${token}`)
+      .field("taxYear", "2026")
+      .attach(
+        "file",
+        Buffer.from(
+          [
+            "Comprovante de Rendimentos Pagos e de Imposto sobre a Renda Retido na Fonte",
+            "Fonte pagadora ACME LTDA",
+            "CNPJ 12.345.678/0001-90",
+            "Rendimentos tributaveis R$ 54.321,00",
+            "Imposto sobre a renda retido na fonte R$ 4.321,09",
+          ].join("\n"),
+          "utf8",
+        ),
+        { filename: "irpf-2026.csv", contentType: "text/csv" },
+      );
+    expect(uploadResponse.status).toBe(201);
+
+    await request(app)
+      .post(`/tax/documents/${uploadResponse.body.document.id}/reprocess`)
+      .set("Authorization", `Bearer ${token}`);
+
+    const factsResult = await dbQuery(
+      "SELECT id FROM tax_facts WHERE source_document_id = $1 ORDER BY id ASC",
+      [uploadResponse.body.document.id],
+    );
+    await request(app)
+      .post("/tax/facts/bulk-review")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ factIds: factsResult.rows.map((r) => Number(r.id)), action: "approve" });
+
+    await request(app)
+      .post("/tax/summary/2026/rebuild")
+      .set("Authorization", `Bearer ${token}`);
+
+    const exportResponse = await request(app)
+      .get("/tax/export/2026?format=json")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(exportResponse.status).toBe(200);
+
+    const exportEvent = logSpy.mock.calls
+      .map((call) => call[0])
+      .find((payload) => payload?.event === "tax.export.completed");
+
+    expect(exportEvent).toBeDefined();
+    expect(exportEvent.scope).toBe("tax");
+    expect(typeof exportEvent.userId).toBe("number");
+    expect(exportEvent.taxYear).toBe("2026");
+    expect(exportEvent.format).toBe("json");
+    expect(exportEvent.dataHash).toBe(exportResponse.headers["x-tax-export-data-hash"]);
+    expect(typeof exportEvent.requestId).toBe("string");
+    expect(exportEvent.requestId.length).toBeGreaterThan(0);
   });
 });
