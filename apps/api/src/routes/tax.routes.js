@@ -3,6 +3,8 @@ import path from "node:path";
 import multer from "multer";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
 import { taxUploadRateLimiter } from "../middlewares/rate-limit.middleware.js";
+import { trackDomainFlowSuccess } from "../observability/domain-metrics.js";
+import { logInfo } from "../observability/logger.js";
 import { TaxDocumentIngestionExecutionResponseSchema } from "../domain/contracts/tax-document-ingestion-execution-response.schema.ts";
 import { TaxDocumentPreviewResponseSchema } from "../domain/contracts/tax-document-preview-response.schema.ts";
 import { getTaxBootstrapByUser } from "../services/tax-bootstrap.service.js";
@@ -335,6 +337,17 @@ router.get("/export/:taxYear", async (req, res, next) => {
     );
     res.setHeader("X-Tax-Export-Facts-Included", String(exportFile.manifest.factsIncluded));
     res.setHeader("X-Tax-Export-Engine-Version", exportFile.manifest.engineVersion);
+
+    logInfo({
+      scope: "tax",
+      event: "tax.export.completed",
+      userId: req.user.id,
+      taxYear: req.params.taxYear,
+      format: exportFile.format,
+      dataHash: exportFile.manifest.dataHash,
+      requestId: req.requestId,
+    });
+    trackDomainFlowSuccess({ flow: "tax", operation: "export" });
 
     res.status(200).send(exportFile.content);
   } catch (error) {
