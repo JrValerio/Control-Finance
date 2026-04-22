@@ -8,6 +8,8 @@ const DEFAULT_ANALYTICS_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const DEFAULT_ANALYTICS_RATE_LIMIT_MAX_REQUESTS = 30; // analytics events are low-frequency by nature
 const DEFAULT_AI_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
 const DEFAULT_AI_RATE_LIMIT_MAX_REQUESTS = 10; // LLM calls are expensive
+const DEFAULT_TAX_UPLOAD_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const DEFAULT_TAX_UPLOAD_RATE_LIMIT_MAX_REQUESTS = 20; // file uploads + AI extraction are expensive
 const WRITE_RATE_LIMIT_ERROR_MESSAGE = "Muitas requisicoes. Tente novamente em instantes.";
 
 const parsePositiveInteger = (value, fallbackValue) => {
@@ -66,6 +68,18 @@ const getAiRateLimitMaxRequests = () =>
   parsePositiveInteger(
     process.env.AI_RATE_LIMIT_MAX,
     DEFAULT_AI_RATE_LIMIT_MAX_REQUESTS,
+  );
+
+const getTaxUploadRateLimitWindowMs = () =>
+  parsePositiveInteger(
+    process.env.TAX_UPLOAD_RATE_LIMIT_WINDOW_MS,
+    DEFAULT_TAX_UPLOAD_RATE_LIMIT_WINDOW_MS,
+  );
+
+const getTaxUploadRateLimitMaxRequests = () =>
+  parsePositiveInteger(
+    process.env.TAX_UPLOAD_RATE_LIMIT_MAX,
+    DEFAULT_TAX_UPLOAD_RATE_LIMIT_MAX_REQUESTS,
   );
 
 const createError = (status, message) => {
@@ -137,9 +151,24 @@ export const aiRateLimiter = rateLimit({
   handler: createRateLimitExceededHandler(),
 });
 
+export const taxUploadRateLimiter = rateLimit({
+  windowMs: getTaxUploadRateLimitWindowMs(),
+  max: getTaxUploadRateLimitMaxRequests(),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (request) => resolveRateLimitKey(request, "tax-upload"),
+  handler: createRateLimitExceededHandler(),
+});
+
 export const resetImportRateLimiterState = () => {
   if (importRateLimiter?.store?.resetAll) {
     importRateLimiter.store.resetAll();
+  }
+};
+
+export const resetTaxUploadRateLimiterState = () => {
+  if (taxUploadRateLimiter?.store?.resetAll) {
+    taxUploadRateLimiter.store.resetAll();
   }
 };
 

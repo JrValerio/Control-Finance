@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
+import express from "express";
+import rateLimit from "express-rate-limit";
 import app from "./app.js";
 import { clearDbClientForTests, dbQuery } from "./db/index.js";
 import {
@@ -11,7 +13,12 @@ import {
   setupTestDb,
 } from "./test-helpers.js";
 import { resetLoginProtectionState } from "./middlewares/login-protection.middleware.js";
-import { resetImportRateLimiterState, resetWriteRateLimiterState } from "./middlewares/rate-limit.middleware.js";
+import {
+  resetImportRateLimiterState,
+  resetTaxUploadRateLimiterState,
+  resetWriteRateLimiterState,
+} from "./middlewares/rate-limit.middleware.js";
+import { authMiddleware } from "./middlewares/auth.middleware.js";
 import { resetHttpMetricsForTests } from "./observability/http-metrics.js";
 import { TaxDocumentIngestionExecutionResponseSchema } from "./domain/contracts/tax-document-ingestion-execution-response.schema.ts";
 import { TaxDocumentPreviewResponseSchema } from "./domain/contracts/tax-document-preview-response.schema.ts";
@@ -30,6 +37,7 @@ const removeTaxStorageDir = async () => {
 const resetState = async () => {
   resetLoginProtectionState();
   resetImportRateLimiterState();
+  resetTaxUploadRateLimiterState();
   resetWriteRateLimiterState();
   resetHttpMetricsForTests();
   await removeTaxStorageDir();
@@ -3515,5 +3523,86 @@ describe("Tax API foundation", () => {
     expect(exportResponse.text).toContain("withheld_tax");
     expect(exportResponse.text).toContain("approved");
     expect(exportResponse.text).toContain(String(uploadResponse.body.document.id));
+  });
+});
+
+describe("taxUploadRateLimiter fires 429 after limit", () => {
+  // Isolated Express app with max=2 — avoids firing 20 real requests to hit production limit.
+  const limiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 2,
+    standardHeaders: false,
+    legacyHeaders: false,
+    keyGenerator: (req) => `tax-test:user:${req.user?.id ?? req.ip}`,
+    handler: (_req, _res, next) => {
+      const err = new Error("Muitas requisicoes. Tente novamente em instantes.");
+      err.status = 429;
+      next(err);
+    },
+  });
+
+  const rateLimitApp = express();
+  rateLimitApp.use(express.json());
+  rateLimitApp.post("/tax/documents", authMiddleware, limiter, (_req, res) => {
+    res.status(201).json({ document: { id: 1 } });
+  });
+  rateLimitApp.post("/tax/documents/preview", authMiddleware, limiter, (_req, res) => {
+    res.status(200).json({ preview: {} });
+  });
+  rateLimitApp.post("/tax/documents/ingest-execute", authMiddleware, limiter, (_req, res) => {
+    res.status(200).json({ result: {} });
+  });
+  // eslint-disable-next-line no-unused-vars
+  rateLimitApp.use((err, _req, res, _next) => {
+    res.status(err.status || 500).json({ message: err.message });
+  });
+
+  beforeAll(async () => { await setupTestDb(); });
+  afterAll(async () => { await clearDbClientForTests(); });
+  beforeEach(async () => {
+    resetLoginProtectionState();
+    resetImportRateLimiterState();
+    resetTaxUploadRateLimiterState();
+    resetWriteRateLimiterState();
+    resetHttpMetricsForTests();
+    await dbQuery("DELETE FROM refresh_tokens");
+    await dbQuery("DELETE FROM users");
+    if (limiter?.store?.resetAll) limiter.store.resetAll();
+  });
+
+  it("retorna 429 em POST /tax/documents apos exceder o limite", async () => {
+    const token = await registerAndLogin("tax-rl-documents@test.dev");
+    const auth = { Authorization: `Bearer ${token}` };
+
+    expect((await request(rateLimitApp).post("/tax/documents").set(auth)).status).toBe(201);
+    expect((await request(rateLimitApp).post("/tax/documents").set(auth)).status).toBe(201);
+
+    const throttled = await request(rateLimitApp).post("/tax/documents").set(auth);
+    expect(throttled.status).toBe(429);
+    expect(throttled.body.message).toBe("Muitas requisicoes. Tente novamente em instantes.");
+  });
+
+  it("retorna 429 em POST /tax/documents/preview apos exceder o limite", async () => {
+    const token = await registerAndLogin("tax-rl-preview@test.dev");
+    const auth = { Authorization: `Bearer ${token}` };
+
+    expect((await request(rateLimitApp).post("/tax/documents/preview").set(auth)).status).toBe(200);
+    expect((await request(rateLimitApp).post("/tax/documents/preview").set(auth)).status).toBe(200);
+
+    const throttled = await request(rateLimitApp).post("/tax/documents/preview").set(auth);
+    expect(throttled.status).toBe(429);
+    expect(throttled.body.message).toBe("Muitas requisicoes. Tente novamente em instantes.");
+  });
+
+  it("retorna 429 em POST /tax/documents/ingest-execute apos exceder o limite", async () => {
+    const token = await registerAndLogin("tax-rl-ingest@test.dev");
+    const auth = { Authorization: `Bearer ${token}` };
+
+    expect((await request(rateLimitApp).post("/tax/documents/ingest-execute").set(auth)).status).toBe(200);
+    expect((await request(rateLimitApp).post("/tax/documents/ingest-execute").set(auth)).status).toBe(200);
+
+    const throttled = await request(rateLimitApp).post("/tax/documents/ingest-execute").set(auth);
+    expect(throttled.status).toBe(429);
+    expect(throttled.body.message).toBe("Muitas requisicoes. Tente novamente em instantes.");
   });
 });
