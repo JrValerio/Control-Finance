@@ -2,6 +2,7 @@ import { Router } from "express";
 import path from "node:path";
 import multer from "multer";
 import { authMiddleware } from "../middlewares/auth.middleware.js";
+import { taxUploadRateLimiter } from "../middlewares/rate-limit.middleware.js";
 import { TaxDocumentIngestionExecutionResponseSchema } from "../domain/contracts/tax-document-ingestion-execution-response.schema.ts";
 import { TaxDocumentPreviewResponseSchema } from "../domain/contracts/tax-document-preview-response.schema.ts";
 import { getTaxBootstrapByUser } from "../services/tax-bootstrap.service.js";
@@ -109,7 +110,7 @@ router.get("/", async (req, res, next) => {
   }
 });
 
-router.post("/documents", (req, res, next) => {
+router.post("/documents", taxUploadRateLimiter, (req, res, next) => {
   upload.single("file")(req, res, async (error) => {
     if (error) {
       let normalizedError = error;
@@ -131,7 +132,7 @@ router.post("/documents", (req, res, next) => {
   });
 });
 
-router.post("/documents/preview", (req, res, next) => {
+router.post("/documents/preview", taxUploadRateLimiter, (req, res, next) => {
   upload.single("file")(req, res, async (error) => {
     if (error) {
       let normalizedError = error;
@@ -159,7 +160,7 @@ router.post("/documents/preview", (req, res, next) => {
   });
 });
 
-router.post("/documents/ingest-execute", (req, res, next) => {
+router.post("/documents/ingest-execute", taxUploadRateLimiter, (req, res, next) => {
   upload.single("file")(req, res, async (error) => {
     if (error) {
       let normalizedError = error;
