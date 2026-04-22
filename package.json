@@ -26,7 +26,8 @@
     "preview": "npm -w apps/web run preview"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "eslint": "^8.57.1"
   },
   "optionalDependencies": {
     "@napi-rs/canvas-linux-x64-gnu": "0.1.99",
