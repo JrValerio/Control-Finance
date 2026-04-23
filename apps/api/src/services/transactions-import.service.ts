@@ -1120,7 +1120,7 @@ const parseImportFileRows = async (importFile: ImportFile) => {
 
     const guidanceError = getPdfImportGuidanceError(text);
     if (guidanceError) {
-      throw createError(400, guidanceError);
+      throw createErrorWithPublicCode(400, guidanceError, "IMPORT_PDF_OCR_DISABLED");
     }
 
     const normalizedPdfText = collapseWhitespace(text)
