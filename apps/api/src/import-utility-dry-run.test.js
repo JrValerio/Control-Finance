@@ -88,6 +88,31 @@ describe("transaction imports utility bills dry-run", () => {
     vi.mocked(extractTextFromPdfBuffer).mockResolvedValue("mocked pdf text");
   });
 
+  it("POST /transactions/import/dry-run retorna codigo explicito quando OCR de PDF esta desativado", async () => {
+    const token = await registerAndLogin("import-pdf-ocr-disabled@controlfinance.dev");
+    await makeProUser("import-pdf-ocr-disabled@controlfinance.dev");
+
+    vi.mocked(getPdfImportGuidanceError).mockReturnValue(
+      "PDF sem texto reconhecivel. Tente OFX ou CSV.",
+    );
+
+    const response = await request(app)
+      .post("/transactions/import/dry-run")
+      .set("Authorization", `Bearer ${token}`)
+      .attach("file", Buffer.from("%PDF-1.4 scanned"), {
+        filename: "extrato-escaneado.pdf",
+        contentType: "application/pdf",
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toMatchObject({
+      message: "PDF sem texto reconhecivel. Tente OFX ou CSV.",
+      code: "IMPORT_PDF_OCR_DISABLED",
+    });
+    expect(typeof response.body.requestId).toBe("string");
+    expect(response.body.requestId).not.toHaveLength(0);
+  });
+
   it("POST /transactions/import/dry-run retorna documentType e suggestion para utility_bill_telecom", async () => {
     const token = await registerAndLogin("import-doctype-telecom@controlfinance.dev");
     await makeProUser("import-doctype-telecom@controlfinance.dev");
